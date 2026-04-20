@@ -31,7 +31,8 @@
                         </svg>
                         Reports
                     </button>
-                    <span :class="dark ? 'text-slate-700' : 'text-slate-300'"
+                    <span
+                        :class="dark ? 'text-slate-700' : 'text-slate-300'"
                         >/</span
                     >
                     <input
@@ -90,6 +91,48 @@
 
                 <!-- Right: toolbar -->
                 <div class="flex items-center gap-1 shrink-0">
+                    <!-- Dark Mode -->
+                    <button
+                        @click="dark = !dark"
+                        :title="dark ? 'Light Mode' : 'Dark Mode'"
+                        class="p-1.5 rounded-lg transition-colors"
+                        :class="
+                            dark
+                                ? 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                        "
+                    >
+                        <svg
+                            v-if="dark"
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                            />
+                        </svg>
+                        <svg
+                            v-else
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                            />
+                        </svg>
+                    </button>
+
+                    <!-- Drag Mode -->
                     <button
                         @click="dragMode = !dragMode"
                         title="Drag Mode (D)"
@@ -117,10 +160,69 @@
                         </svg>
                         {{ dragMode ? "Drag ON" : "Drag" }}
                     </button>
+
+                    <!-- Grid Toggle -->
+                    <button
+                        @click="showGrid = !showGrid"
+                        :title="showGrid ? 'Hide Grid (G)' : 'Show Grid (G)'"
+                        class="p-1.5 rounded-lg transition-colors"
+                        :class="
+                            showGrid
+                                ? 'bg-indigo-100 text-indigo-600'
+                                : dark
+                                  ? 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                        "
+                    >
+                        <svg
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18"
+                            />
+                        </svg>
+                    </button>
+
+                    <!-- Rulers Toggle -->
+                    <button
+                        @click="showRulers = !showRulers"
+                        :title="showRulers ? 'Hide Rulers (R)' : 'Show Rulers (R)'"
+                        class="p-1.5 rounded-lg transition-colors"
+                        :class="
+                            showRulers
+                                ? 'bg-indigo-100 text-indigo-600'
+                                : dark
+                                  ? 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
+                                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                        "
+                    >
+                        <svg
+                            class="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 6h18M3 12h4m4 0h4m4 0h2M3 18h18M7 6v3m4 0V6m4 3V6m4 3V6"
+                            />
+                        </svg>
+                    </button>
+
                     <div
                         class="w-px h-5 mx-0.5"
                         :class="dark ? 'bg-slate-700' : 'bg-slate-200'"
                     ></div>
+
+                    <!-- Undo/Redo -->
                     <button
                         @click="undo"
                         :disabled="historyIndex <= 0"
@@ -171,49 +273,13 @@
                             />
                         </svg>
                     </button>
+
                     <div
                         class="w-px h-5 mx-0.5"
                         :class="dark ? 'bg-slate-700' : 'bg-slate-200'"
                     ></div>
-                    <button
-                        @click="dark = !dark"
-                        :title="dark ? 'Light Mode' : 'Dark Mode'"
-                        class="p-1.5 rounded-lg transition-colors"
-                        :class="
-                            dark
-                                ? 'text-slate-400 hover:text-slate-200 hover:bg-white/10'
-                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                        "
-                    >
-                        <svg
-                            v-if="dark"
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                            />
-                        </svg>
-                        <svg
-                            v-else
-                            class="w-3.5 h-3.5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                            />
-                        </svg>
-                    </button>
+
+                    <!-- Fullscreen -->
                     <button
                         @click="toggleFullscreen"
                         title="Fullscreen (F)"
@@ -238,10 +304,13 @@
                             />
                         </svg>
                     </button>
+
                     <div
                         class="w-px h-5 mx-0.5"
                         :class="dark ? 'bg-slate-700' : 'bg-slate-200'"
                     ></div>
+
+                    <!-- Save -->
                     <button
                         @click="saveReport"
                         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all"
@@ -265,6 +334,8 @@
                             /></svg
                         >Save
                     </button>
+
+                    <!-- Preview -->
                     <button
                         @click="previewReport"
                         class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition-all"
@@ -289,6 +360,8 @@
                             /></svg
                         >Preview
                     </button>
+
+                    <!-- Export -->
                     <div class="relative" ref="exportMenuRef">
                         <button
                             @click="showExportMenu = !showExportMenu"
@@ -324,7 +397,7 @@
                         <transition name="dropdown">
                             <div
                                 v-if="showExportMenu"
-                                class="absolute right-0 top-full mt-1 w-44 rounded-xl shadow-xl border overflow-hidden z-50"
+                                class="absolute right-0 top-full mt-1 w-48 rounded-xl shadow-xl border overflow-hidden z-50"
                                 :class="
                                     dark
                                         ? 'bg-slate-800 border-slate-700'
@@ -335,15 +408,26 @@
                                     v-for="fmt in EXPORT_FORMATS"
                                     :key="fmt.key"
                                     @click="exportAs(fmt.key)"
-                                    class="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-semibold transition-colors text-left"
+                                    class="w-full flex items-center gap-3 px-3 py-2.5 text-xs font-semibold transition-colors text-left"
                                     :class="
                                         dark
                                             ? 'text-slate-300 hover:bg-white/10'
                                             : 'text-slate-600 hover:bg-slate-50'
                                     "
                                 >
-                                    <span class="text-base">{{ fmt.icon }}</span
-                                    >{{ fmt.label }}
+                                    <span class="text-lg leading-none">{{
+                                        fmt.icon
+                                    }}</span>
+                                    <div>
+                                        <div class="font-bold">{{
+                                            fmt.label
+                                        }}</div>
+                                        <div
+                                            class="text-[10px] text-slate-400"
+                                        >
+                                            {{ fmt.desc }}
+                                        </div>
+                                    </div>
                                 </button>
                             </div>
                         </transition>
@@ -375,7 +459,7 @@
                         v-for="t in LEFT_TABS"
                         :key="t.id"
                         @click="leftTab = t.id"
-                        class="flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider transition-colors border-b-2"
+                        class="flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider transition-colors border-b-2 flex flex-col items-center gap-0.5"
                         :class="
                             leftTab === t.id
                                 ? 'border-indigo-500 text-indigo-500'
@@ -384,7 +468,8 @@
                                   : 'border-transparent text-slate-400 hover:text-slate-600'
                         "
                     >
-                        {{ t.label }}
+                        <span class="text-base leading-none">{{ t.icon }}</span>
+                        <span>{{ t.label }}</span>
                     </button>
                 </div>
 
@@ -410,7 +495,7 @@
                             </svg>
                             <input
                                 v-model="elementSearch"
-                                placeholder="Search elements…"
+                                placeholder="Search elements… (Ctrl+F)"
                                 class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                                 :class="
                                     dark
@@ -431,6 +516,7 @@
                                         : 'text-slate-400 hover:text-slate-600'
                                 "
                             >
+                                <span class="text-sm">{{ cat.icon }}</span>
                                 <span
                                     class="text-[9px] font-black uppercase tracking-widest flex-1 text-left"
                                     >{{ cat.name }}</span
@@ -659,16 +745,14 @@
                             class="text-[9px] font-black uppercase tracking-widest mb-2"
                             :class="dark ? 'text-slate-600' : 'text-slate-400'"
                         >
-                            Page {{ selectedPageIndex + 1 }} Layers
+                            Page {{ selectedPageIndex + 1 }} — {{ currentPage.elements.length }} Layers
                         </div>
                         <template v-if="currentPage.elements.length">
                             <div
-                                v-for="el in [
-                                    ...currentPage.elements,
-                                ].reverse()"
+                                v-for="el in [...currentPage.elements].reverse()"
                                 :key="el.id"
                                 @click="selectElement(el, selectedPageIndex)"
-                                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all group/layer"
+                                class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all group/layer mb-0.5"
                                 :class="
                                     selectedElement?.id === el.id
                                         ? 'bg-indigo-500/20 text-indigo-400'
@@ -677,9 +761,10 @@
                                           : 'hover:bg-slate-100 text-slate-600'
                                 "
                             >
-                                <span class="text-xs flex-shrink-0">{{
-                                    ELEMENT_META[el.type] || "▣"
-                                }}</span>
+                                <span
+                                    class="text-sm flex-shrink-0 w-5 text-center"
+                                    >{{ ELEMENT_META[el.type] || "▣" }}</span
+                                >
                                 <span
                                     class="flex-1 text-[11px] font-medium truncate"
                                     >{{ getElementLabel(el.type) }}</span
@@ -708,6 +793,37 @@
                                             stroke-linejoin="round"
                                             stroke-width="2"
                                             d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M3 3l18 18"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    @click.stop="lockElement(el)"
+                                    class="p-0.5 opacity-0 group-hover/layer:opacity-40 hover:!opacity-100 transition-opacity"
+                                    :class="
+                                        el.locked
+                                            ? 'text-amber-500 opacity-100!'
+                                            : ''
+                                    "
+                                >
+                                    <svg
+                                        class="w-3 h-3"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            v-if="el.locked"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                        />
+                                        <path
+                                            v-else
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"
                                         />
                                     </svg>
                                 </button>
@@ -766,6 +882,7 @@
                                 </option>
                             </select>
                         </div>
+
                         <!-- Orientation -->
                         <div>
                             <div
@@ -792,7 +909,7 @@
                                 >
                                     <svg
                                         v-if="o === 'portrait'"
-                                        class="w-2.5 h-3.5 mx-auto mb-0.5"
+                                        class="w-3 h-4 mx-auto mb-1"
                                         viewBox="0 0 10 14"
                                     >
                                         <rect
@@ -808,7 +925,7 @@
                                     </svg>
                                     <svg
                                         v-else
-                                        class="w-3.5 h-2.5 mx-auto mb-0.5"
+                                        class="w-4 h-3 mx-auto mb-1"
                                         viewBox="0 0 14 10"
                                     >
                                         <rect
@@ -826,6 +943,7 @@
                                 </button>
                             </div>
                         </div>
+
                         <!-- Brand Colors -->
                         <div>
                             <div
@@ -878,6 +996,7 @@
                                 </template>
                             </div>
                         </div>
+
                         <!-- Font -->
                         <div>
                             <div
@@ -898,7 +1017,8 @@
                                 </option>
                             </select>
                         </div>
-                        <!-- Margin -->
+
+                        <!-- Page Margin -->
                         <div>
                             <div
                                 class="text-[9px] font-black uppercase tracking-widest mb-1.5"
@@ -917,7 +1037,45 @@
                                 step="4"
                             />
                         </div>
-                        <!-- Header / Footer text -->
+
+                        <!-- Page Border Radius -->
+                        <div>
+                            <div
+                                class="text-[9px] font-black uppercase tracking-widest mb-1.5"
+                                :class="
+                                    dark ? 'text-slate-500' : 'text-slate-400'
+                                "
+                            >
+                                Canvas Border Radius (px)
+                            </div>
+                            <input
+                                type="number"
+                                v-model.number="rs.page_radius"
+                                :class="inputCls"
+                                min="0"
+                                max="32"
+                            />
+                        </div>
+
+                        <!-- Page Background Image -->
+                        <div>
+                            <div
+                                class="text-[9px] font-black uppercase tracking-widest mb-1.5"
+                                :class="
+                                    dark ? 'text-slate-500' : 'text-slate-400'
+                                "
+                            >
+                                Page BG Image URL
+                            </div>
+                            <input
+                                type="url"
+                                v-model="rs.bg_image"
+                                :class="inputCls"
+                                placeholder="https://…"
+                            />
+                        </div>
+
+                        <!-- Header / Footer -->
                         <div>
                             <div
                                 class="text-[9px] font-black uppercase tracking-widest mb-1.5"
@@ -950,6 +1108,7 @@
                                 placeholder="Confidential · GBRSP 2026"
                             />
                         </div>
+
                         <!-- Watermark -->
                         <div>
                             <div
@@ -967,6 +1126,7 @@
                                 placeholder="DRAFT · CONFIDENTIAL"
                             />
                         </div>
+
                         <!-- Grid Size -->
                         <div>
                             <div
@@ -986,7 +1146,8 @@
                                 step="5"
                             />
                         </div>
-                        <!-- Toggles -->
+
+                        <!-- Display Options -->
                         <div>
                             <div
                                 class="text-[9px] font-black uppercase tracking-widest mb-1.5"
@@ -997,16 +1158,46 @@
                                 Display Options
                             </div>
                             <div class="space-y-0">
-                                <SettingRow
+                                <div
                                     v-for="t in SETTING_TOGGLES"
                                     :key="t.key"
-                                    :label="t.label"
-                                    :dark="dark"
-                                    :model-value="getToggle(t.key)"
-                                    @update:model-value="
-                                        (v) => setToggle(t.key, v)
+                                    class="flex items-center justify-between py-1.5 border-b last:border-b-0"
+                                    :class="
+                                        dark
+                                            ? 'border-slate-800'
+                                            : 'border-slate-100'
                                     "
-                                />
+                                >
+                                    <label
+                                        class="text-xs font-semibold"
+                                        :class="
+                                            dark
+                                                ? 'text-slate-400'
+                                                : 'text-slate-600'
+                                        "
+                                        >{{ t.label }}</label
+                                    >
+                                    <button
+                                        @click="setToggle(t.key, !getToggle(t.key))"
+                                        class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                                        :class="
+                                            getToggle(t.key)
+                                                ? 'bg-indigo-600'
+                                                : dark
+                                                  ? 'bg-slate-700'
+                                                  : 'bg-slate-200'
+                                        "
+                                    >
+                                        <span
+                                            class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform"
+                                            :class="
+                                                getToggle(t.key)
+                                                    ? 'translate-x-5'
+                                                    : 'translate-x-1'
+                                            "
+                                        ></span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1090,7 +1281,7 @@
                             </svg>
                         </button>
                         <span
-                            class="text-xs font-black tabular-nums w-11 text-center"
+                            class="text-xs font-black tabular-nums w-12 text-center"
                             :class="dark ? 'text-slate-300' : 'text-slate-600'"
                             >{{ zoom }}%</span
                         >
@@ -1263,8 +1454,17 @@
 
                         <!-- Canvas -->
                         <div
-                            class="canvas-page relative shadow-2xl overflow-hidden select-none transition-colors"
+                            class="canvas-page relative shadow-2xl overflow-hidden select-none transition-all"
+                            :class="[
+                                isPageActive(pi)
+                                    ? 'ring-2 ring-indigo-400 ring-offset-2'
+                                    : '',
+                                isDragOver && dragTargetPage === pi
+                                    ? 'ring-2 ring-violet-400 ring-offset-2'
+                                    : '',
+                            ]"
                             :style="getCanvasStyle()"
+                            @contextmenu.prevent
                             @dragover.prevent="handleDragOver($event, pi)"
                             @dragleave="isDragOver = false"
                             @drop="handleDrop($event, pi)"
@@ -1276,14 +1476,14 @@
                                 v-if="rs.show_header && rs.header_text"
                                 class="absolute top-0 left-0 right-0 flex items-center px-4 z-10 pointer-events-none"
                                 :style="{
-                                    height: rs.margin / 2 + 'px',
+                                    height: Math.max(rs.margin / 2, 24) + 'px',
                                     backgroundColor:
                                         rs.header_color || '#1e293b',
                                     opacity: 0.92,
                                 }"
                             >
                                 <span
-                                    class="text-white text-[10px] font-bold tracking-widest uppercase opacity-70"
+                                    class="text-white text-[10px] font-bold tracking-widest uppercase opacity-80"
                                     >{{ rs.header_text }}</span
                                 >
                             </div>
@@ -1292,19 +1492,19 @@
                                 v-if="rs.show_footer && rs.footer_text"
                                 class="absolute bottom-0 left-0 right-0 flex items-center justify-between px-4 z-10 pointer-events-none"
                                 :style="{
-                                    height: rs.margin / 2 + 'px',
+                                    height: Math.max(rs.margin / 2, 24) + 'px',
                                     backgroundColor:
                                         rs.footer_color || '#1e293b',
                                     opacity: 0.92,
                                 }"
                             >
                                 <span
-                                    class="text-white text-[10px] opacity-50"
+                                    class="text-white text-[10px] opacity-60"
                                     >{{ rs.footer_text }}</span
                                 >
                                 <span
                                     v-if="rs.show_page_numbers"
-                                    class="text-white text-[10px] opacity-50"
+                                    class="text-white text-[10px] opacity-60"
                                     >{{ pi + 1 }}</span
                                 >
                             </div>
@@ -1383,7 +1583,7 @@
                             >
                                 <div class="text-center">
                                     <svg
-                                        class="w-8 h-8 text-indigo-400 mx-auto mb-2"
+                                        class="w-10 h-10 text-indigo-400 mx-auto mb-2"
                                         fill="none"
                                         stroke="currentColor"
                                         viewBox="0 0 24 24"
@@ -1396,8 +1596,8 @@
                                         />
                                     </svg>
                                     <span
-                                        class="text-indigo-400 text-sm font-bold"
-                                        >Drop here</span
+                                        class="text-indigo-500 text-sm font-bold"
+                                        >Drop element here</span
                                     >
                                 </div>
                             </div>
@@ -1413,28 +1613,34 @@
                                     'hover:ring-1 hover:ring-indigo-300/70':
                                         !selectedElement ||
                                         selectedElement.id !== el.id,
-                                    'cursor-move': dragMode,
+                                    'cursor-move':
+                                        dragMode && !el.locked,
+                                    'cursor-not-allowed opacity-70': el.locked,
+                                    'opacity-40': el.hidden,
                                 }"
                                 :style="getElementWrapperStyle(el)"
                                 @mousedown="startDrag($event, el, pi)"
                                 @click.stop="selectElement(el, pi)"
+                                @contextmenu.prevent="
+                                    openContextMenu($event, el, pi)
+                                "
                             >
-                                <!-- Handles -->
-                                <template v-if="selectedElement?.id === el.id">
+                                <!-- Resize & Rotate Handles -->
+                                <template
+                                    v-if="
+                                        selectedElement?.id === el.id && !el.locked
+                                    "
+                                >
                                     <div
                                         v-for="h in RESIZE_HANDLES"
                                         :key="h.dir"
                                         class="resize-handle absolute w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full z-[200] hover:scale-125 transition-transform shadow"
                                         :style="h.style"
-                                        @mousedown.stop="
-                                            startResize(h.dir, $event)
-                                        "
+                                        @mousedown.stop="startResize(h.dir, $event)"
                                     ></div>
                                     <div
-                                        class="absolute top-[-28px] left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-indigo-500 rounded-full cursor-crosshair z-[200] flex items-center justify-center shadow"
-                                        @mousedown.stop="
-                                            startRotation($event, el)
-                                        "
+                                        class="absolute top-[-30px] left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-indigo-500 rounded-full cursor-crosshair z-[200] flex items-center justify-center shadow"
+                                        @mousedown.stop="startRotation($event, el)"
                                         title="Rotate"
                                     >
                                         <svg
@@ -1451,8 +1657,9 @@
                                             />
                                         </svg>
                                     </div>
+                                    <!-- Quick action bar -->
                                     <div
-                                        class="absolute -top-6 left-0 flex items-center gap-1 z-[200]"
+                                        class="absolute -top-7 left-0 flex items-center gap-1 z-[200]"
                                     >
                                         <span
                                             class="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded font-black"
@@ -1460,11 +1667,57 @@
                                                 getElementLabel(el.type)
                                             }}</span
                                         >
+                                        <!-- Move to previous page -->
                                         <button
+                                            v-if="pi > 0"
                                             @click.stop="
-                                                duplicateElement(pi, el)
+                                                moveElementToPage(el, pi, pi - 1)
                                             "
-                                            class="bg-white/90 text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
+                                            class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
+                                            title="Move to previous page"
+                                        >
+                                            <svg
+                                                class="w-2.5 h-2.5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M15 19l-7-7 7-7"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <!-- Move to next page -->
+                                        <button
+                                            v-if="pi < pages.length - 1"
+                                            @click.stop="
+                                                moveElementToPage(el, pi, pi + 1)
+                                            "
+                                            class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
+                                            title="Move to next page"
+                                        >
+                                            <svg
+                                                class="w-2.5 h-2.5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M9 5l7 7-7 7"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <!-- Duplicate -->
+                                        <button
+                                            @click.stop="duplicateElement(pi, el)"
+                                            class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
+                                            title="Duplicate (Ctrl+D)"
                                         >
                                             <svg
                                                 class="w-2.5 h-2.5"
@@ -1480,11 +1733,36 @@
                                                 />
                                             </svg>
                                         </button>
+                                        <!-- Lock -->
                                         <button
-                                            @click.stop="
-                                                deleteElement(pi, el.id)
+                                            @click.stop="lockElement(el)"
+                                            class="text-[9px] px-1 py-0.5 rounded border transition-colors"
+                                            :class="
+                                                el.locked
+                                                    ? 'bg-amber-500 text-white border-amber-500'
+                                                    : 'bg-white text-slate-500 hover:text-amber-500 border-slate-200'
                                             "
+                                            title="Lock/Unlock"
+                                        >
+                                            <svg
+                                                class="w-2.5 h-2.5"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="2"
+                                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                                />
+                                            </svg>
+                                        </button>
+                                        <!-- Delete -->
+                                        <button
+                                            @click.stop="deleteElement(pi, el.id)"
                                             class="bg-red-500 text-white text-[9px] px-1 py-0.5 rounded hover:bg-red-600 transition-colors"
+                                            title="Delete (Del)"
                                         >
                                             <svg
                                                 class="w-2.5 h-2.5"
@@ -1507,6 +1785,7 @@
                                 <div
                                     :style="getElementContentStyle(el)"
                                     class="w-full h-full overflow-hidden"
+                                    @contextmenu.prevent
                                 >
                                     <!-- TEXT / HEADING / SUBHEADING -->
                                     <div
@@ -1518,7 +1797,8 @@
                                             ].includes(el.type)
                                         "
                                         :contenteditable="
-                                            selectedElement?.id === el.id
+                                            selectedElement?.id === el.id &&
+                                            !el.locked
                                         "
                                         :style="getTextStyle(el)"
                                         class="w-full h-full outline-none p-1"
@@ -1535,7 +1815,8 @@
                                     >
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id === el.id
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="w-full outline-none italic"
                                             @blur="onTextBlur(el, $event)"
@@ -1566,7 +1847,7 @@
                                             <div
                                                 :contenteditable="
                                                     selectedElement?.id ===
-                                                    el.id
+                                                        el.id && !el.locked
                                                 "
                                                 class="text-sm italic outline-none font-medium leading-relaxed"
                                                 :style="{
@@ -1597,7 +1878,8 @@
                                     >
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id === el.id
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
                                             "
                                             class="w-full outline-none font-semibold text-sm"
                                             :style="{
@@ -1635,7 +1917,7 @@
                                                 :key="i"
                                                 :contenteditable="
                                                     selectedElement?.id ===
-                                                    el.id
+                                                        el.id && !el.locked
                                                 "
                                                 @blur="
                                                     onListItemBlur(
@@ -1650,9 +1932,83 @@
                                             </li>
                                         </ul>
                                         <button
-                                            v-if="selectedElement?.id === el.id"
+                                            v-if="
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
+                                            "
                                             @click.stop="addListItem(el)"
                                             class="mt-1 text-xs text-indigo-500 hover:text-indigo-700"
+                                        >
+                                            + Add item
+                                        </button>
+                                    </div>
+
+                                    <!-- CHECKLIST -->
+                                    <div
+                                        v-else-if="el.type === 'checklist'"
+                                        :style="getTextStyle(el)"
+                                        class="w-full h-full overflow-auto p-2"
+                                    >
+                                        <div
+                                            v-for="(item, i) in el.items"
+                                            :key="i"
+                                            class="flex items-start gap-2 py-1"
+                                        >
+                                            <div
+                                                class="w-4 h-4 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-colors cursor-pointer"
+                                                :style="{
+                                                    borderColor:
+                                                        rs.primary_color,
+                                                    backgroundColor:
+                                                        item.checked
+                                                            ? rs.primary_color
+                                                            : 'transparent',
+                                                }"
+                                                @click.stop="
+                                                    item.checked = !item.checked
+                                                "
+                                            >
+                                                <svg
+                                                    v-if="item.checked"
+                                                    class="w-2.5 h-2.5 text-white"
+                                                    fill="currentColor"
+                                                    viewBox="0 0 20 20"
+                                                >
+                                                    <path
+                                                        fill-rule="evenodd"
+                                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                        clip-rule="evenodd"
+                                                    />
+                                                </svg>
+                                            </div>
+                                            <span
+                                                :contenteditable="
+                                                    selectedElement?.id ===
+                                                        el.id && !el.locked
+                                                "
+                                                class="flex-1 outline-none text-xs"
+                                                :class="
+                                                    item.checked
+                                                        ? 'line-through text-slate-400'
+                                                        : 'text-slate-700'
+                                                "
+                                                @blur="
+                                                    onChecklistItemBlur(
+                                                        el,
+                                                        i,
+                                                        $event,
+                                                    )
+                                                "
+                                                >{{ item.text }}</span
+                                            >
+                                        </div>
+                                        <button
+                                            v-if="
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
+                                            "
+                                            @click.stop="addChecklistItem(el)"
+                                            class="mt-1 text-xs text-indigo-500"
                                         >
                                             + Add item
                                         </button>
@@ -1679,7 +2035,7 @@
                                                 filter:
                                                     el.styles?.filter || 'none',
                                             }"
-                                            class="block"
+                                            class="block pointer-events-none"
                                         />
                                         <div
                                             v-else
@@ -1691,7 +2047,7 @@
                                             "
                                         >
                                             <svg
-                                                class="w-8 h-8 text-slate-400"
+                                                class="w-10 h-10 text-slate-300"
                                                 fill="none"
                                                 stroke="currentColor"
                                                 viewBox="0 0 24 24"
@@ -1718,18 +2074,18 @@
                                             :class="
                                                 el.src
                                                     ? 'opacity-0 hover:opacity-100'
-                                                    : 'opacity-100'
+                                                    : ''
                                             "
                                         >
                                             <div
                                                 v-if="el.src"
-                                                class="w-full h-full flex items-center justify-center bg-black/40 rounded backdrop-blur-sm transition-opacity"
+                                                class="w-full h-full flex items-center justify-center bg-black/40 rounded backdrop-blur-sm"
                                             >
                                                 <div
                                                     class="flex flex-col items-center gap-1 text-white"
                                                 >
                                                     <svg
-                                                        class="w-5 h-5"
+                                                        class="w-6 h-6"
                                                         fill="none"
                                                         stroke="currentColor"
                                                         viewBox="0 0 24 24"
@@ -1761,7 +2117,7 @@
                                             class="absolute inset-0 flex items-center justify-center bg-black/60 rounded"
                                         >
                                             <svg
-                                                class="w-6 h-6 animate-spin text-white"
+                                                class="w-8 h-8 animate-spin text-white"
                                                 fill="none"
                                                 viewBox="0 0 24 24"
                                             >
@@ -1779,6 +2135,41 @@
                                                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                                                 />
                                             </svg>
+                                        </div>
+                                    </div>
+
+                                    <!-- VIDEO -->
+                                    <div
+                                        v-else-if="el.type === 'video'"
+                                        class="w-full h-full relative bg-slate-900 rounded flex items-center justify-center overflow-hidden"
+                                    >
+                                        <iframe
+                                            v-if="el.src"
+                                            :src="el.src"
+                                            class="w-full h-full"
+                                            frameborder="0"
+                                            allowfullscreen
+                                        ></iframe>
+                                        <div
+                                            v-else
+                                            class="flex flex-col items-center gap-2 text-white/60"
+                                        >
+                                            <svg
+                                                class="w-10 h-10"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                    stroke-width="1.5"
+                                                    d="M15 10l4.553-2.069A1 1 0 0121 8.867V15.133a1 1 0 01-1.447.902L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                                />
+                                            </svg>
+                                            <span class="text-xs"
+                                                >Add video URL in properties</span
+                                            >
                                         </div>
                                     </div>
 
@@ -1811,7 +2202,7 @@
                                         >
                                             <span
                                                 v-if="el.icon"
-                                                class="text-xl"
+                                                class="text-2xl"
                                                 >{{ el.icon }}</span
                                             >
                                             <div
@@ -1885,7 +2276,22 @@
                                                                 '#fff',
                                                         }"
                                                     >
-                                                        {{ col }}
+                                                        <span
+                                                            :contenteditable="
+                                                                selectedElement?.id ===
+                                                                    el.id &&
+                                                                !el.locked
+                                                            "
+                                                            @blur="
+                                                                onTableHeaderBlur(
+                                                                    el,
+                                                                    col,
+                                                                    $event,
+                                                                )
+                                                            "
+                                                            class="outline-none"
+                                                            >{{ col }}</span
+                                                        >
                                                     </th>
                                                 </tr>
                                             </thead>
@@ -1912,7 +2318,7 @@
                                                         class="px-3 py-2 border-b border-slate-100"
                                                         :contenteditable="
                                                             selectedElement?.id ===
-                                                            el.id
+                                                                el.id && !el.locked
                                                         "
                                                         @blur="
                                                             onTableCellBlur(
@@ -1929,7 +2335,10 @@
                                             </tbody>
                                         </table>
                                         <div
-                                            v-if="selectedElement?.id === el.id"
+                                            v-if="
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
+                                            "
                                             class="flex gap-1.5 p-2 bg-slate-50 border-t border-slate-100"
                                         >
                                             <button
@@ -2021,6 +2430,25 @@
                                         ></div>
                                     </div>
 
+                                    <!-- STAR -->
+                                    <div
+                                        v-else-if="el.type === 'star'"
+                                        class="w-full h-full flex items-center justify-center"
+                                    >
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            class="w-full h-full"
+                                        >
+                                            <polygon
+                                                points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35"
+                                                :fill="
+                                                    el.styles?.backgroundColor ||
+                                                    rs.primary_color
+                                                "
+                                            />
+                                        </svg>
+                                    </div>
+
                                     <!-- LINE -->
                                     <svg
                                         v-else-if="el.type === 'line'"
@@ -2089,6 +2517,62 @@
                                         />
                                     </svg>
 
+                                    <!-- DOUBLE ARROW -->
+                                    <svg
+                                        v-else-if="el.type === 'double-arrow'"
+                                        class="w-full h-full"
+                                        preserveAspectRatio="none"
+                                    >
+                                        <defs>
+                                            <marker
+                                                id="dah-end"
+                                                markerWidth="10"
+                                                markerHeight="7"
+                                                refX="10"
+                                                refY="3.5"
+                                                orient="auto"
+                                            >
+                                                <polygon
+                                                    points="0 0,10 3.5,0 7"
+                                                    :fill="
+                                                        el.styles?.color ||
+                                                        '#6366f1'
+                                                    "
+                                                />
+                                            </marker>
+                                            <marker
+                                                id="dah-start"
+                                                markerWidth="10"
+                                                markerHeight="7"
+                                                refX="0"
+                                                refY="3.5"
+                                                orient="auto-start-reverse"
+                                            >
+                                                <polygon
+                                                    points="0 0,10 3.5,0 7"
+                                                    :fill="
+                                                        el.styles?.color ||
+                                                        '#6366f1'
+                                                    "
+                                                />
+                                            </marker>
+                                        </defs>
+                                        <line
+                                            x1="15"
+                                            y1="50%"
+                                            x2="calc(100% - 15px)"
+                                            y2="50%"
+                                            :stroke="
+                                                el.styles?.color || '#6366f1'
+                                            "
+                                            :stroke-width="
+                                                el.styles?.borderWidth || 2
+                                            "
+                                            marker-end="url(#dah-end)"
+                                            marker-start="url(#dah-start)"
+                                        />
+                                    </svg>
+
                                     <!-- PROGRESS -->
                                     <div
                                         v-else-if="el.type === 'progress'"
@@ -2143,6 +2627,65 @@
                                         </div>
                                     </div>
 
+                                    <!-- CIRCULAR PROGRESS -->
+                                    <div
+                                        v-else-if="
+                                            el.type === 'circular-progress'
+                                        "
+                                        class="w-full h-full flex flex-col items-center justify-center gap-1"
+                                    >
+                                        <svg
+                                            class="transform -rotate-90"
+                                            :style="{
+                                                width: '80%',
+                                                height: '80%',
+                                            }"
+                                            viewBox="0 0 36 36"
+                                        >
+                                            <circle
+                                                cx="18"
+                                                cy="18"
+                                                r="15.9"
+                                                fill="none"
+                                                :stroke="
+                                                    el.styles?.trackColor ||
+                                                    '#e2e8f0'
+                                                "
+                                                stroke-width="3.2"
+                                            />
+                                            <circle
+                                                cx="18"
+                                                cy="18"
+                                                r="15.9"
+                                                fill="none"
+                                                :stroke="
+                                                    el.styles?.color ||
+                                                    rs.primary_color
+                                                "
+                                                stroke-width="3.2"
+                                                :stroke-dasharray="`${el.value} ${100 - el.value}`"
+                                                stroke-linecap="round"
+                                            />
+                                        </svg>
+                                        <div class="text-center">
+                                            <div
+                                                class="font-black text-lg"
+                                                :style="{
+                                                    color:
+                                                        el.styles?.color ||
+                                                        rs.primary_color,
+                                                }"
+                                            >
+                                                {{ el.value }}%
+                                            </div>
+                                            <div
+                                                class="text-[10px] text-slate-400 font-semibold"
+                                            >
+                                                {{ el.label }}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- BADGE -->
                                     <div
                                         v-else-if="el.type === 'badge'"
@@ -2179,7 +2722,8 @@
                                         }}</span>
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id === el.id
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
                                             "
                                             class="flex-1 outline-none text-xs leading-relaxed"
                                             :style="{
@@ -2190,6 +2734,38 @@
                                             @blur="onTextBlur(el, $event)"
                                             v-html="
                                                 el.content || 'Callout text…'
+                                            "
+                                        ></div>
+                                    </div>
+
+                                    <!-- ALERT -->
+                                    <div
+                                        v-else-if="el.type === 'alert'"
+                                        class="w-full h-full flex items-center gap-3 px-4 rounded-xl"
+                                        :style="{
+                                            backgroundColor:
+                                                el.styles?.backgroundColor ||
+                                                '#fef3c7',
+                                            borderLeft: `4px solid ${el.styles?.borderColor || '#f59e0b'}`,
+                                        }"
+                                    >
+                                        <span class="text-xl flex-shrink-0">{{
+                                            el.icon || "⚠️"
+                                        }}</span>
+                                        <div
+                                            :contenteditable="
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
+                                            "
+                                            class="flex-1 outline-none text-sm font-semibold"
+                                            :style="{
+                                                color:
+                                                    el.styles?.color ||
+                                                    '#92400e',
+                                            }"
+                                            @blur="onTextBlur(el, $event)"
+                                            v-html="
+                                                el.content || 'Alert message here'
                                             "
                                         ></div>
                                     </div>
@@ -2239,7 +2815,8 @@
                                         <pre
                                             class="text-emerald-400 text-xs font-mono whitespace-pre-wrap"
                                             :contenteditable="
-                                                selectedElement?.id === el.id
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
                                             "
                                             @blur="onTextBlur(el, $event)"
                                             >{{ el.content }}</pre
@@ -2355,28 +2932,40 @@
                                         :style="getTextStyle(el)"
                                     >
                                         <div
-                                            class="text-sm font-black mb-2 pb-1 border-b"
+                                            :contenteditable="
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
+                                            "
+                                            class="text-sm font-black mb-2 pb-1 border-b outline-none"
                                             :style="{
                                                 borderColor: rs.primary_color,
                                                 color: rs.primary_color,
                                             }"
+                                            @blur="onTocTitleBlur(el, $event)"
                                         >
-                                            {{
-                                                el.title || "Table of Contents"
-                                            }}
+                                            {{ el.title || "Table of Contents" }}
                                         </div>
                                         <div
-                                            v-for="(item, i) in el.items || [
-                                                { label: 'Section 1', page: 1 },
-                                                { label: 'Section 2', page: 3 },
-                                                { label: 'Section 3', page: 5 },
-                                            ]"
+                                            v-for="(item, i) in el.items || []"
                                             :key="i"
                                             class="flex items-center gap-1 py-1 text-xs"
                                         >
-                                            <span class="flex-1">{{
-                                                item.label
-                                            }}</span>
+                                            <span
+                                                :contenteditable="
+                                                    selectedElement?.id ===
+                                                        el.id && !el.locked
+                                                "
+                                                class="outline-none"
+                                                @blur="
+                                                    onTocItemBlur(
+                                                        el,
+                                                        i,
+                                                        'label',
+                                                        $event,
+                                                    )
+                                                "
+                                                >{{ item.label }}</span
+                                            >
                                             <span
                                                 class="border-b border-dotted flex-1 mx-2"
                                                 :class="
@@ -2386,13 +2975,35 @@
                                                 "
                                             ></span>
                                             <span
-                                                class="font-bold"
+                                                :contenteditable="
+                                                    selectedElement?.id ===
+                                                        el.id && !el.locked
+                                                "
+                                                class="font-bold outline-none"
                                                 :style="{
                                                     color: rs.primary_color,
                                                 }"
+                                                @blur="
+                                                    onTocItemBlur(
+                                                        el,
+                                                        i,
+                                                        'page',
+                                                        $event,
+                                                    )
+                                                "
                                                 >{{ item.page }}</span
                                             >
                                         </div>
+                                        <button
+                                            v-if="
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
+                                            "
+                                            @click.stop="addTocItem(el)"
+                                            class="mt-1 text-xs text-indigo-500"
+                                        >
+                                            + Add entry
+                                        </button>
                                     </div>
 
                                     <!-- TIMELINE -->
@@ -2401,13 +3012,7 @@
                                         class="w-full h-full p-3 overflow-auto"
                                     >
                                         <div
-                                            v-for="(item, i) in el.items || [
-                                                {
-                                                    label: 'Milestone 1',
-                                                    date: '2024',
-                                                    desc: 'Description',
-                                                },
-                                            ]"
+                                            v-for="(item, i) in el.items || []"
                                             :key="i"
                                             class="flex gap-3 mb-3"
                                         >
@@ -2438,40 +3043,351 @@
                                             </div>
                                             <div class="flex-1 pb-2">
                                                 <div
-                                                    class="text-xs font-black"
+                                                    :contenteditable="
+                                                        selectedElement?.id ===
+                                                            el.id && !el.locked
+                                                    "
+                                                    class="text-xs font-black outline-none"
                                                     :style="{
                                                         color: rs.primary_color,
                                                     }"
+                                                    @blur="
+                                                        onTimelineBlur(
+                                                            el,
+                                                            i,
+                                                            'date',
+                                                            $event,
+                                                        )
+                                                    "
                                                 >
                                                     {{ item.date }}
                                                 </div>
                                                 <div
-                                                    class="text-xs font-bold"
+                                                    :contenteditable="
+                                                        selectedElement?.id ===
+                                                            el.id && !el.locked
+                                                    "
+                                                    class="text-xs font-bold outline-none"
                                                     :style="{
                                                         color:
                                                             el.styles?.color ||
                                                             rs.text_color,
                                                     }"
+                                                    @blur="
+                                                        onTimelineBlur(
+                                                            el,
+                                                            i,
+                                                            'label',
+                                                            $event,
+                                                        )
+                                                    "
                                                 >
                                                     {{ item.label }}
                                                 </div>
                                                 <div
-                                                    class="text-[10px] mt-0.5"
+                                                    :contenteditable="
+                                                        selectedElement?.id ===
+                                                            el.id && !el.locked
+                                                    "
+                                                    class="text-[10px] mt-0.5 outline-none"
                                                     :class="
                                                         dark
                                                             ? 'text-slate-500'
                                                             : 'text-slate-400'
+                                                    "
+                                                    @blur="
+                                                        onTimelineBlur(
+                                                            el,
+                                                            i,
+                                                            'desc',
+                                                            $event,
+                                                        )
                                                     "
                                                 >
                                                     {{ item.desc }}
                                                 </div>
                                             </div>
                                         </div>
+                                        <button
+                                            v-if="
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
+                                            "
+                                            @click.stop="addTimelineItem(el)"
+                                            class="text-xs text-indigo-500"
+                                        >
+                                            + Add milestone
+                                        </button>
+                                    </div>
+
+                                    <!-- SOCIAL CARD / PROFILE -->
+                                    <div
+                                        v-else-if="el.type === 'social-card'"
+                                        class="w-full h-full rounded-xl overflow-hidden flex flex-col"
+                                        :style="{
+                                            backgroundColor:
+                                                el.styles?.backgroundColor ||
+                                                '#fff',
+                                            border: `1px solid ${el.styles?.borderColor || '#e2e8f0'}`,
+                                        }"
+                                    >
+                                        <div
+                                            class="h-20 flex-shrink-0"
+                                            :style="{
+                                                backgroundColor: rs.primary_color,
+                                            }"
+                                        ></div>
+                                        <div class="p-4 flex-1">
+                                            <div
+                                                class="w-14 h-14 rounded-full border-4 border-white bg-slate-200 -mt-9 mb-2 overflow-hidden flex items-center justify-center"
+                                            >
+                                                <span class="text-2xl">{{
+                                                    el.avatar || "👤"
+                                                }}</span>
+                                            </div>
+                                            <div
+                                                :contenteditable="
+                                                    selectedElement?.id ===
+                                                        el.id && !el.locked
+                                                "
+                                                class="font-black text-sm text-slate-800 outline-none"
+                                                @blur="onTextBlur(el, $event)"
+                                                v-html="
+                                                    el.content || 'Name Here'
+                                                "
+                                            ></div>
+                                            <div class="text-xs text-slate-400 mt-0.5">
+                                                {{ el.subtitle || "Title / Organisation" }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- TESTIMONIAL -->
+                                    <div
+                                        v-else-if="el.type === 'testimonial'"
+                                        class="w-full h-full rounded-xl p-4 flex flex-col justify-between"
+                                        :style="{
+                                            backgroundColor:
+                                                el.styles?.backgroundColor ||
+                                                '#f8fafc',
+                                            border: `1px solid ${el.styles?.borderColor || '#e2e8f0'}`,
+                                        }"
+                                    >
+                                        <div
+                                            class="text-3xl text-slate-300 leading-none mb-2"
+                                        >
+                                            "
+                                        </div>
+                                        <div
+                                            :contenteditable="
+                                                selectedElement?.id ===
+                                                    el.id && !el.locked
+                                            "
+                                            class="flex-1 text-sm italic text-slate-600 outline-none"
+                                            @blur="onTextBlur(el, $event)"
+                                            v-html="
+                                                el.content ||
+                                                'Add testimonial text here…'
+                                            "
+                                        ></div>
+                                        <div class="mt-3 flex items-center gap-2">
+                                            <div
+                                                class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm"
+                                            >
+                                                {{ el.avatar || "👤" }}
+                                            </div>
+                                            <div>
+                                                <div
+                                                    class="text-xs font-bold text-slate-700"
+                                                >
+                                                    {{ el.author || "Author Name" }}
+                                                </div>
+                                                <div class="text-[10px] text-slate-400">
+                                                    {{ el.role || "Title" }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- PRICE CARD -->
+                                    <div
+                                        v-else-if="el.type === 'price-card'"
+                                        class="w-full h-full rounded-xl overflow-hidden flex flex-col"
+                                        :style="{
+                                            backgroundColor:
+                                                el.styles?.backgroundColor ||
+                                                '#fff',
+                                            border: `1px solid ${el.styles?.borderColor || '#e2e8f0'}`,
+                                        }"
+                                    >
+                                        <div
+                                            class="p-5 text-center"
+                                            :style="{
+                                                backgroundColor: el.highlighted
+                                                    ? rs.primary_color
+                                                    : '#f8fafc',
+                                            }"
+                                        >
+                                            <div
+                                                class="text-sm font-black"
+                                                :style="{
+                                                    color: el.highlighted
+                                                        ? '#fff'
+                                                        : rs.text_color,
+                                                }"
+                                            >
+                                                {{ el.plan || "Pro Plan" }}
+                                            </div>
+                                            <div
+                                                class="text-4xl font-black mt-2"
+                                                :style="{
+                                                    color: el.highlighted
+                                                        ? '#fff'
+                                                        : rs.primary_color,
+                                                }"
+                                            >
+                                                {{ el.price || "$0" }}
+                                            </div>
+                                            <div
+                                                class="text-xs mt-1"
+                                                :style="{
+                                                    color: el.highlighted
+                                                        ? 'rgba(255,255,255,0.7)'
+                                                        : '#94a3b8',
+                                                }"
+                                            >
+                                                {{ el.period || "per month" }}
+                                            </div>
+                                        </div>
+                                        <div class="p-4 flex-1">
+                                            <ul class="space-y-1.5">
+                                                <li
+                                                    v-for="(f, i) in el.features ||
+                                                        ['Feature 1', 'Feature 2']"
+                                                    :key="i"
+                                                    class="flex items-center gap-2 text-xs text-slate-600"
+                                                >
+                                                    <svg
+                                                        class="w-3.5 h-3.5 flex-shrink-0"
+                                                        :style="{
+                                                            color: rs.primary_color,
+                                                        }"
+                                                        fill="currentColor"
+                                                        viewBox="0 0 20 20"
+                                                    >
+                                                        <path
+                                                            fill-rule="evenodd"
+                                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                            clip-rule="evenodd"
+                                                        />
+                                                    </svg>
+                                                    {{ f }}
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- STAT ROW -->
+                                    <div
+                                        v-else-if="el.type === 'stat-row'"
+                                        class="w-full h-full grid gap-2 p-2"
+                                        :style="{
+                                            gridTemplateColumns: `repeat(${el.cols || 3}, 1fr)`,
+                                        }"
+                                    >
+                                        <div
+                                            v-for="(stat, i) in el.stats || [
+                                                { label: 'Stat 1', value: '0' },
+                                                { label: 'Stat 2', value: '0' },
+                                                { label: 'Stat 3', value: '0' },
+                                            ]"
+                                            :key="i"
+                                            class="flex flex-col items-center justify-center rounded-xl p-3 text-center"
+                                            :style="{
+                                                backgroundColor:
+                                                    rs.primary_color + '10',
+                                                border: `1px solid ${rs.primary_color}30`,
+                                            }"
+                                        >
+                                            <div
+                                                class="text-2xl font-black"
+                                                :style="{ color: rs.primary_color }"
+                                            >
+                                                {{ stat.value }}
+                                            </div>
+                                            <div
+                                                class="text-[10px] font-semibold text-slate-500 mt-0.5"
+                                            >
+                                                {{ stat.label }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- KANBAN CARD -->
+                                    <div
+                                        v-else-if="el.type === 'kanban'"
+                                        class="w-full h-full rounded-xl overflow-hidden border"
+                                        :style="{
+                                            backgroundColor:
+                                                el.styles?.backgroundColor ||
+                                                '#fff',
+                                            borderColor:
+                                                el.styles?.borderColor ||
+                                                '#e2e8f0',
+                                        }"
+                                    >
+                                        <div
+                                            class="h-1"
+                                            :style="{
+                                                backgroundColor:
+                                                    el.styles?.accentColor ||
+                                                    rs.primary_color,
+                                            }"
+                                        ></div>
+                                        <div class="p-3">
+                                            <div
+                                                :contenteditable="
+                                                    selectedElement?.id ===
+                                                        el.id && !el.locked
+                                                "
+                                                class="text-xs font-bold text-slate-700 outline-none mb-1.5"
+                                                @blur="onTextBlur(el, $event)"
+                                                v-html="
+                                                    el.content || 'Task Title'
+                                                "
+                                            ></div>
+                                            <div
+                                                class="flex items-center gap-2 mt-2"
+                                            >
+                                                <span
+                                                    class="text-[9px] px-2 py-0.5 rounded-full font-bold"
+                                                    :style="{
+                                                        backgroundColor:
+                                                            (el.styles
+                                                                ?.accentColor ||
+                                                                rs.primary_color) +
+                                                            '20',
+                                                        color:
+                                                            el.styles
+                                                                ?.accentColor ||
+                                                            rs.primary_color,
+                                                    }"
+                                                    >{{
+                                                        el.status ||
+                                                        "In Progress"
+                                                    }}</span
+                                                >
+                                                <span
+                                                    class="text-[9px] text-slate-400 ml-auto"
+                                                    >{{ el.due || "Due date" }}</span
+                                                >
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- Page number -->
+                            <!-- Page number footer -->
                             <div
                                 v-if="rs.show_page_numbers && !rs.show_footer"
                                 class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none z-[1]"
@@ -2534,11 +3450,11 @@
                     class="flex-1 flex flex-col items-center justify-center p-6 gap-4"
                 >
                     <div
-                        class="w-12 h-12 rounded-2xl flex items-center justify-center"
+                        class="w-14 h-14 rounded-2xl flex items-center justify-center"
                         :class="dark ? 'bg-slate-800' : 'bg-slate-100'"
                     >
                         <svg
-                            class="w-6 h-6 text-slate-400"
+                            class="w-7 h-7 text-slate-300"
                             fill="none"
                             stroke="currentColor"
                             viewBox="0 0 24 24"
@@ -2565,6 +3481,42 @@
                             Click an element or drag from the panel
                         </p>
                     </div>
+                    <!-- Keyboard shortcuts reference -->
+                    <div
+                        class="w-full p-3 rounded-xl"
+                        :class="
+                            dark
+                                ? 'bg-slate-800/50 border border-slate-700'
+                                : 'bg-slate-50 border border-slate-100'
+                        "
+                    >
+                        <div
+                            class="text-[9px] font-black uppercase tracking-widest mb-2"
+                            :class="dark ? 'text-slate-600' : 'text-slate-400'"
+                        >
+                            Keyboard Shortcuts
+                        </div>
+                        <div class="space-y-1 text-[10px]">
+                            <div
+                                v-for="s in SHORTCUTS"
+                                :key="s.key"
+                                class="flex items-center justify-between"
+                                :class="dark ? 'text-slate-500' : 'text-slate-500'"
+                            >
+                                <span>{{ s.desc }}</span>
+                                <kbd
+                                    class="px-1.5 py-0.5 rounded text-[9px] font-mono shadow-sm"
+                                    :class="
+                                        dark
+                                            ? 'bg-slate-700 border border-slate-600 text-slate-300'
+                                            : 'bg-white border border-slate-200 text-slate-600'
+                                    "
+                                    >{{ s.key }}</kbd
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Quick add -->
                     <div class="w-full space-y-1 mt-1">
                         <p
                             class="text-[9px] font-black uppercase tracking-widest mb-2"
@@ -2583,7 +3535,7 @@
                                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50'
                             "
                         >
-                            <span>{{ qt.icon }}</span
+                            <span class="text-base">{{ qt.icon }}</span
                             >{{ qt.label }}
                         </button>
                     </div>
@@ -2768,6 +3720,59 @@
                                     :dark="dark"
                                 />
                             </div>
+                            <div
+                                class="flex items-center justify-between mt-1.5"
+                            >
+                                <label
+                                    class="text-[11px] font-semibold"
+                                    :class="
+                                        dark
+                                            ? 'text-slate-400'
+                                            : 'text-slate-500'
+                                    "
+                                    >Locked</label
+                                >
+                                <Tog
+                                    v-model="selectedElement.locked"
+                                    @update:model-value="pushHistory"
+                                    :dark="dark"
+                                />
+                            </div>
+                            <!-- Move to Page -->
+                            <div
+                                v-if="pages.length > 1"
+                                class="mt-2 pt-2 border-t"
+                                :class="
+                                    dark
+                                        ? 'border-slate-800'
+                                        : 'border-slate-100'
+                                "
+                            >
+                                <label class="prop-label">Move to Page</label>
+                                <div class="flex gap-1 mt-1 flex-wrap">
+                                    <button
+                                        v-for="(page, pi2) in pages"
+                                        :key="pi2"
+                                        @click="
+                                            moveElementToPage(
+                                                selectedElement,
+                                                selectedPageIndex,
+                                                pi2,
+                                            )
+                                        "
+                                        class="text-[10px] px-2 py-1 rounded border font-bold transition-colors"
+                                        :class="
+                                            pi2 === selectedPageIndex
+                                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                                : dark
+                                                  ? 'bg-slate-800 text-slate-400 border-slate-700 hover:border-indigo-500 hover:text-indigo-400'
+                                                  : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-400 hover:text-indigo-600'
+                                        "
+                                    >
+                                        Page {{ pi2 + 1 }}
+                                    </button>
+                                </div>
+                            </div>
                         </PropSec>
 
                         <!-- TYPOGRAPHY -->
@@ -2845,38 +3850,6 @@
                                             :class="inputCls"
                                             @change="pushHistory"
                                     /></PF>
-                                    <PF label="Word Spacing" :dark="dark"
-                                        ><input
-                                            type="number"
-                                            step="1"
-                                            v-model.number="
-                                                selectedElement.styles
-                                                    .wordSpacing
-                                            "
-                                            :class="inputCls"
-                                            @change="pushHistory"
-                                    /></PF>
-                                    <PF label="Transform" :dark="dark">
-                                        <select
-                                            v-model="
-                                                selectedElement.styles
-                                                    .textTransform
-                                            "
-                                            :class="inputCls"
-                                            @change="pushHistory"
-                                        >
-                                            <option value="">None</option>
-                                            <option value="uppercase">
-                                                UPPERCASE
-                                            </option>
-                                            <option value="lowercase">
-                                                lowercase
-                                            </option>
-                                            <option value="capitalize">
-                                                Capitalize
-                                            </option>
-                                        </select>
-                                    </PF>
                                 </div>
                                 <!-- Alignment -->
                                 <div>
@@ -2987,6 +3960,34 @@
                                         </button>
                                     </div>
                                 </div>
+                                <!-- Text color -->
+                                <PF label="Text Color" :dark="dark">
+                                    <div class="flex items-center gap-2">
+                                        <input
+                                            type="color"
+                                            v-model="
+                                                selectedElement.styles.color
+                                            "
+                                            class="w-8 h-8 rounded-lg border cursor-pointer p-0.5"
+                                            :class="
+                                                dark
+                                                    ? 'border-slate-700 bg-slate-800'
+                                                    : 'border-slate-200'
+                                            "
+                                            @change="pushHistory"
+                                        />
+                                        <input
+                                            type="text"
+                                            v-model="
+                                                selectedElement.styles.color
+                                            "
+                                            :class="[
+                                                inputCls,
+                                                'flex-1 font-mono',
+                                            ]"
+                                        />
+                                    </div>
+                                </PF>
                                 <!-- Text shadow -->
                                 <PF label="Text Shadow" :dark="dark">
                                     <select
@@ -3018,44 +4019,11 @@
                                             Glow Indigo
                                         </option>
                                         <option
-                                            value="0 0 10px rgba(16,185,129,0.8)"
-                                        >
-                                            Glow Emerald
-                                        </option>
-                                        <option
                                             value="0 0 10px rgba(245,158,11,0.8)"
                                         >
                                             Glow Gold
                                         </option>
                                     </select>
-                                </PF>
-                                <!-- Text color -->
-                                <PF label="Text Color" :dark="dark">
-                                    <div class="flex items-center gap-2">
-                                        <input
-                                            type="color"
-                                            v-model="
-                                                selectedElement.styles.color
-                                            "
-                                            class="w-8 h-8 rounded-lg border cursor-pointer p-0.5"
-                                            :class="
-                                                dark
-                                                    ? 'border-slate-700 bg-slate-800'
-                                                    : 'border-slate-200'
-                                            "
-                                            @change="pushHistory"
-                                        />
-                                        <input
-                                            type="text"
-                                            v-model="
-                                                selectedElement.styles.color
-                                            "
-                                            :class="[
-                                                inputCls,
-                                                'flex-1 font-mono',
-                                            ]"
-                                        />
-                                    </div>
                                 </PF>
                             </div>
                         </PropSec>
@@ -3175,11 +4143,6 @@
                                         <option value="invert(100%)">
                                             Invert
                                         </option>
-                                        <option
-                                            value="drop-shadow(4px 4px 8px rgba(0,0,0,0.4))"
-                                        >
-                                            Drop Shadow
-                                        </option>
                                     </select>
                                 </PF>
                                 <PF label="Corner Radius" :dark="dark"
@@ -3194,6 +4157,24 @@
                                         @change="pushHistory"
                                 /></PF>
                             </div>
+                        </PropSec>
+
+                        <!-- VIDEO -->
+                        <PropSec
+                            v-if="selectedElement.type === 'video'"
+                            title="Video"
+                            id="video"
+                            v-bind="secBind('video')"
+                        >
+                            <PF label="Embed URL (YouTube/Vimeo)" :dark="dark">
+                                <input
+                                    type="url"
+                                    v-model="selectedElement.src"
+                                    :class="inputCls"
+                                    placeholder="https://www.youtube.com/embed/…"
+                                    @change="pushHistory"
+                                />
+                            </PF>
                         </PropSec>
 
                         <!-- METRIC -->
@@ -3317,10 +4298,13 @@
                             </div>
                         </PropSec>
 
-                        <!-- PROGRESS -->
+                        <!-- PROGRESS / CIRCULAR PROGRESS -->
                         <PropSec
-                            v-if="selectedElement.type === 'progress'"
-                            title="Progress Bar"
+                            v-if="
+                                selectedElement.type === 'progress' ||
+                                selectedElement.type === 'circular-progress'
+                            "
+                            title="Progress"
                             id="progress"
                             v-bind="secBind('progress')"
                         >
@@ -3346,7 +4330,12 @@
                                         @change="pushHistory"
                                     />
                                 </div>
-                                <PF label="Track Height (px)" :dark="dark"
+                                <PF
+                                    v-if="
+                                        selectedElement.type === 'progress'
+                                    "
+                                    label="Track Height (px)"
+                                    :dark="dark"
                                     ><input
                                         type="number"
                                         v-model.number="
@@ -3357,18 +4346,6 @@
                                         max="48"
                                         @change="pushHistory"
                                 /></PF>
-                                <PF label="Shape" :dark="dark">
-                                    <select
-                                        v-model="
-                                            selectedElement.styles.progressShape
-                                        "
-                                        :class="inputCls"
-                                        @change="pushHistory"
-                                    >
-                                        <option value="">Rounded (pill)</option>
-                                        <option value="square">Square</option>
-                                    </select>
-                                </PF>
                                 <PF label="Bar Color" :dark="dark">
                                     <div class="flex gap-2">
                                         <input
@@ -3492,7 +4469,7 @@
                                         :class="inputCls"
                                         @blur="updateChartData"
                                 /></PF>
-                                <PF label="Bar / Line Color" :dark="dark">
+                                <PF label="Color" :dark="dark">
                                     <div class="flex gap-2">
                                         <input
                                             type="color"
@@ -3522,7 +4499,7 @@
                                             'doughnut-chart',
                                         ].includes(selectedElement.type)
                                     "
-                                    label="Segment Colors (hex, comma sep.)"
+                                    label="Segment Colors (hex, comma)"
                                     :dark="dark"
                                 >
                                     <input
@@ -3546,24 +4523,6 @@
                                         <option value="none">Hidden</option>
                                     </select>
                                 </PF>
-                                <div class="flex items-center justify-between">
-                                    <label
-                                        class="text-[11px] font-semibold"
-                                        :class="
-                                            dark
-                                                ? 'text-slate-400'
-                                                : 'text-slate-500'
-                                        "
-                                        >Data Labels</label
-                                    >
-                                    <Tog
-                                        v-model="selectedElement.showDataLabels"
-                                        @update:model-value="
-                                            refreshChart(selectedElement)
-                                        "
-                                        :dark="dark"
-                                    />
-                                </div>
                                 <button
                                     @click="refreshChart(selectedElement)"
                                     class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl transition-colors"
@@ -3607,7 +4566,7 @@
                             v-bind="secBind('table')"
                         >
                             <div class="space-y-2">
-                                <PF label="Header Background" :dark="dark">
+                                <PF label="Header BG" :dark="dark">
                                     <div class="flex gap-2">
                                         <input
                                             type="color"
@@ -3634,7 +4593,7 @@
                                         />
                                     </div>
                                 </PF>
-                                <PF label="Header Text Color" :dark="dark">
+                                <PF label="Header Color" :dark="dark">
                                     <div class="flex gap-2">
                                         <input
                                             type="color"
@@ -3701,39 +4660,17 @@
                                         />
                                     </div>
                                 </div>
-                                <div class="flex items-center justify-between">
-                                    <label
-                                        class="text-[11px] font-semibold"
-                                        :class="
-                                            dark
-                                                ? 'text-slate-400'
-                                                : 'text-slate-500'
-                                        "
-                                        >Striped Rows</label
-                                    >
-                                    <Tog
-                                        v-model="selectedElement.styles.striped"
-                                        :dark="dark"
-                                    />
-                                </div>
-                                <PF label="Cell Font Size" :dark="dark"
-                                    ><input
-                                        type="number"
-                                        v-model.number="
-                                            selectedElement.styles.fontSize
-                                        "
-                                        :class="inputCls"
-                                        min="8"
-                                        max="24"
-                                        @change="pushHistory"
-                                /></PF>
                             </div>
                         </PropSec>
 
-                        <!-- CALLOUT -->
+                        <!-- CALLOUT / ALERT -->
                         <PropSec
-                            v-if="selectedElement.type === 'callout'"
-                            title="Callout"
+                            v-if="
+                                ['callout', 'alert'].includes(
+                                    selectedElement.type,
+                                )
+                            "
+                            title="Callout / Alert"
                             id="callout"
                             v-bind="secBind('callout')"
                         >
@@ -3823,73 +4760,6 @@
                                         :dark="dark"
                                     />
                                 </div>
-                            </div>
-                        </PropSec>
-
-                        <!-- DIVIDER / LINE / ARROW -->
-                        <PropSec
-                            v-if="
-                                ['divider', 'line', 'arrow'].includes(
-                                    selectedElement.type,
-                                )
-                            "
-                            title="Line Settings"
-                            id="line"
-                            v-bind="secBind('line')"
-                        >
-                            <div class="space-y-2">
-                                <PF label="Thickness (px)" :dark="dark"
-                                    ><input
-                                        type="number"
-                                        v-model.number="
-                                            selectedElement.styles.borderWidth
-                                        "
-                                        :class="inputCls"
-                                        min="1"
-                                        max="30"
-                                        @change="pushHistory"
-                                /></PF>
-                                <PF label="Style" :dark="dark">
-                                    <select
-                                        v-model="
-                                            selectedElement.styles.borderStyle
-                                        "
-                                        :class="inputCls"
-                                        @change="pushHistory"
-                                    >
-                                        <option value="solid">Solid</option>
-                                        <option value="dashed">Dashed</option>
-                                        <option value="dotted">Dotted</option>
-                                        <option value="double">Double</option>
-                                    </select>
-                                </PF>
-                                <PF label="Color" :dark="dark">
-                                    <div class="flex gap-2">
-                                        <input
-                                            type="color"
-                                            v-model="
-                                                selectedElement.styles.color
-                                            "
-                                            class="w-8 h-8 rounded border cursor-pointer p-0.5"
-                                            :class="
-                                                dark
-                                                    ? 'border-slate-700'
-                                                    : 'border-slate-200'
-                                            "
-                                            @change="pushHistory"
-                                        />
-                                        <input
-                                            type="text"
-                                            v-model="
-                                                selectedElement.styles.color
-                                            "
-                                            :class="[
-                                                inputCls,
-                                                'flex-1 font-mono',
-                                            ]"
-                                        />
-                                    </div>
-                                </PF>
                             </div>
                         </PropSec>
 
@@ -4107,6 +4977,73 @@
                             /></PF>
                         </PropSec>
 
+                        <!-- DIVIDER / LINE / ARROW -->
+                        <PropSec
+                            v-if="
+                                ['divider', 'line', 'arrow', 'double-arrow'].includes(
+                                    selectedElement.type,
+                                )
+                            "
+                            title="Line Settings"
+                            id="line"
+                            v-bind="secBind('line')"
+                        >
+                            <div class="space-y-2">
+                                <PF label="Thickness (px)" :dark="dark"
+                                    ><input
+                                        type="number"
+                                        v-model.number="
+                                            selectedElement.styles.borderWidth
+                                        "
+                                        :class="inputCls"
+                                        min="1"
+                                        max="30"
+                                        @change="pushHistory"
+                                /></PF>
+                                <PF label="Style" :dark="dark">
+                                    <select
+                                        v-model="
+                                            selectedElement.styles.borderStyle
+                                        "
+                                        :class="inputCls"
+                                        @change="pushHistory"
+                                    >
+                                        <option value="solid">Solid</option>
+                                        <option value="dashed">Dashed</option>
+                                        <option value="dotted">Dotted</option>
+                                        <option value="double">Double</option>
+                                    </select>
+                                </PF>
+                                <PF label="Color" :dark="dark">
+                                    <div class="flex gap-2">
+                                        <input
+                                            type="color"
+                                            v-model="
+                                                selectedElement.styles.color
+                                            "
+                                            class="w-8 h-8 rounded border cursor-pointer p-0.5"
+                                            :class="
+                                                dark
+                                                    ? 'border-slate-700'
+                                                    : 'border-slate-200'
+                                            "
+                                            @change="pushHistory"
+                                        />
+                                        <input
+                                            type="text"
+                                            v-model="
+                                                selectedElement.styles.color
+                                            "
+                                            :class="[
+                                                inputCls,
+                                                'flex-1 font-mono',
+                                            ]"
+                                        />
+                                    </div>
+                                </PF>
+                            </div>
+                        </PropSec>
+
                         <!-- APPEARANCE -->
                         <PropSec
                             title="Appearance"
@@ -4215,7 +5152,7 @@
                                             max="20"
                                             @change="pushHistory"
                                     /></PF>
-                                    <PF label="Corner Radius" :dark="dark"
+                                    <PF label="Radius (px)" :dark="dark"
                                         ><input
                                             type="number"
                                             v-model.number="
@@ -4300,13 +5237,13 @@
                                         <option value="2xl">2XL</option>
                                         <option value="inner">Inner</option>
                                         <option value="glow-indigo">
-                                            Glow (Indigo)
+                                            Glow Indigo
                                         </option>
                                         <option value="glow-emerald">
-                                            Glow (Emerald)
+                                            Glow Emerald
                                         </option>
                                         <option value="glow-gold">
-                                            Glow (Gold)
+                                            Glow Gold
                                         </option>
                                     </select>
                                 </PF>
@@ -4342,14 +5279,14 @@
                                     class="layer-btn"
                                     :class="layerBtnCls"
                                 >
-                                    ↑↑ To Front
+                                    ↑↑ Front
                                 </button>
                                 <button
                                     @click="sendToBack"
                                     class="layer-btn"
                                     :class="layerBtnCls"
                                 >
-                                    ↓↓ To Back
+                                    ↓↓ Back
                                 </button>
                                 <button
                                     @click="bringForward"
@@ -4410,12 +5347,61 @@
                                     d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                 />
                             </svg>
-                            Delete Element
+                            Delete Element (Del)
                         </button>
                     </div>
                 </template>
             </aside>
         </div>
+
+        <!-- Context Menu -->
+        <transition name="dropdown">
+            <div
+                v-if="contextMenu.show"
+                class="fixed z-[9999] w-48 rounded-xl shadow-xl border overflow-hidden py-1"
+                :class="
+                    dark
+                        ? 'bg-slate-800 border-slate-700'
+                        : 'bg-white border-slate-200'
+                "
+                :style="{
+                    left: contextMenu.x + 'px',
+                    top: contextMenu.y + 'px',
+                }"
+            >
+                <button
+                    v-for="item in contextMenuItems"
+                    :key="item.label"
+                    @click="
+                        item.action();
+                        contextMenu.show = false;
+                    "
+                    class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-left transition-colors"
+                    :class="
+                        item.danger
+                            ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
+                            : dark
+                              ? 'text-slate-300 hover:bg-white/10'
+                              : 'text-slate-600 hover:bg-slate-50'
+                    "
+                >
+                    <span class="text-base leading-none w-5 text-center">{{
+                        item.icon
+                    }}</span>
+                    <span class="flex-1">{{ item.label }}</span>
+                    <kbd
+                        v-if="item.key"
+                        class="text-[9px] font-mono"
+                        :class="
+                            dark
+                                ? 'text-slate-500 bg-slate-700 px-1 rounded'
+                                : 'text-slate-400 bg-slate-100 px-1 rounded'
+                        "
+                        >{{ item.key }}</kbd
+                    >
+                </button>
+            </div>
+        </transition>
 
         <!-- Toast -->
         <transition name="toast">
@@ -4567,51 +5553,22 @@ const PropSec = defineComponent({
     },
 });
 
-const SettingRow = defineComponent({
-    props: ["modelValue", "label", "dark"],
-    emits: ["update:modelValue"],
-    setup(props, { emit }) {
-        return () =>
-            h(
-                "div",
-                {
-                    class: `flex items-center justify-between py-1.5 border-b last:border-b-0 ${props.dark ? "border-slate-800" : "border-slate-100"}`,
-                },
-                [
-                    h(
-                        "label",
-                        {
-                            class: `text-xs font-semibold ${props.dark ? "text-slate-400" : "text-slate-600"}`,
-                        },
-                        props.label,
-                    ),
-                    h(Tog, {
-                        modelValue: props.modelValue,
-                        dark: props.dark,
-                        "onUpdate:modelValue": (v) =>
-                            emit("update:modelValue", v),
-                    }),
-                ],
-            );
-    },
-});
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 const props = defineProps({ report: Object });
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const LEFT_TABS = [
-    { id: "elements", label: "Elements" },
-    { id: "pages", label: "Pages" },
-    { id: "layers", label: "Layers" },
-    { id: "settings", label: "Settings" },
+    { id: "elements", label: "Elements", icon: "🧩" },
+    { id: "pages", label: "Pages", icon: "📄" },
+    { id: "layers", label: "Layers", icon: "🗂️" },
+    { id: "settings", label: "Settings", icon: "⚙️" },
 ];
 
 const EXPORT_FORMATS = [
-    { key: "pdf", label: "Export as PDF", icon: "📄" },
-    { key: "xlsx", label: "Export as Excel", icon: "📊" },
-    { key: "csv", label: "Export as CSV", icon: "📋" },
-    { key: "png", label: "Export as Image", icon: "🖼️" },
+    { key: "pdf", label: "PDF Document", desc: "Print-ready PDF", icon: "📄" },
+    { key: "xlsx", label: "Excel Sheet", desc: "Data in .xlsx", icon: "📊" },
+    { key: "csv", label: "CSV File", desc: "Raw data export", icon: "📋" },
+    { key: "png", label: "PNG Image", desc: "High-res image", icon: "🖼️" },
 ];
 
 const PAGE_SIZES = [
@@ -4695,15 +5652,33 @@ const CODE_LANGS = [
     "Ruby",
     "YAML",
     "Markdown",
+    "Vue",
 ];
 
 const QUICK_ADD = [
-    { type: "heading", label: "Heading", icon: "H1" },
+    { type: "heading", label: "Heading", icon: "🔤" },
     { type: "text", label: "Paragraph", icon: "¶" },
-    { type: "metric", label: "KPI Card", icon: "▣" },
+    { type: "metric", label: "KPI Card", icon: "📈" },
     { type: "bar-chart", label: "Bar Chart", icon: "📊" },
     { type: "table", label: "Table", icon: "📋" },
     { type: "image", label: "Image", icon: "🖼️" },
+    { type: "checklist", label: "Checklist", icon: "✅" },
+    { type: "progress", label: "Progress", icon: "▬" },
+];
+
+const SHORTCUTS = [
+    { key: "Ctrl+Z", desc: "Undo" },
+    { key: "Ctrl+Y", desc: "Redo" },
+    { key: "Ctrl+S", desc: "Save" },
+    { key: "Ctrl+D", desc: "Duplicate" },
+    { key: "Del", desc: "Delete element" },
+    { key: "D", desc: "Toggle Drag" },
+    { key: "G", desc: "Toggle Grid" },
+    { key: "R", desc: "Toggle Rulers" },
+    { key: "F", desc: "Fullscreen" },
+    { key: "Esc", desc: "Deselect" },
+    { key: "←↑→↓", desc: "Nudge 1px" },
+    { key: "Shift+←", desc: "Nudge 10px" },
 ];
 
 const ELEMENT_META = {
@@ -4712,15 +5687,17 @@ const ELEMENT_META = {
     text: "¶",
     quote: "❝",
     blockquote: "❞",
+    highlight: "🖊",
     list: "≡",
+    checklist: "✅",
     link: "🔗",
     badge: "🏷",
     code: "<>",
     callout: "ℹ",
+    alert: "⚠️",
     date: "📅",
     pagenum: "#",
     signature: "✍",
-    highlight: "🖊",
     icon: "★",
     rating: "⭐",
     toc: "📑",
@@ -4732,16 +5709,25 @@ const ELEMENT_META = {
     "doughnut-chart": "○",
     "area-chart": "▨",
     "radar-chart": "✦",
-    metric: "▣",
+    metric: "📈",
     progress: "▬",
+    "circular-progress": "◐",
     image: "🖼",
+    video: "🎬",
     rectangle: "▭",
     circle: "●",
     triangle: "▲",
+    star: "★",
     line: "—",
     arrow: "→",
+    "double-arrow": "↔",
     divider: "─",
     spacer: "□",
+    "social-card": "👤",
+    testimonial: "💬",
+    "price-card": "💰",
+    "stat-row": "📊",
+    kanban: "📌",
 };
 
 const RESIZE_HANDLES = [
@@ -4792,6 +5778,104 @@ const CALLOUT_PRESETS = {
     purple: { bg: "#faf5ff", border: "#e9d5ff", color: "#6b21a8", emoji: "💡" },
 };
 
+// ─── Element Categories ───────────────────────────────────────────────────────
+const elementCategories = [
+    {
+        name: "Text & Content",
+        icon: "📝",
+        items: [
+            {
+                type: "heading",
+                name: "Heading H1",
+                icon: '<strong style="font-size:14px;color:#1e293b">H1</strong>',
+            },
+            {
+                type: "subheading",
+                name: "Heading H2",
+                icon: '<strong style="font-size:11px;color:#1e293b">H2</strong>',
+            },
+            { type: "text", name: "Paragraph", icon: "¶" },
+            { type: "quote", name: "Quote", icon: "❝" },
+            { type: "blockquote", name: "Block Quote", icon: "❞" },
+            { type: "highlight", name: "Highlight", icon: "🖊️" },
+            { type: "list", name: "List", icon: "≡" },
+            { type: "checklist", name: "Checklist", icon: "✅" },
+            { type: "link", name: "Hyperlink", icon: "🔗" },
+            { type: "badge", name: "Badge", icon: "🏷️" },
+            { type: "callout", name: "Callout", icon: "ℹ️" },
+            { type: "alert", name: "Alert Banner", icon: "⚠️" },
+            {
+                type: "code",
+                name: "Code Block",
+                icon: '<code style="font-size:10px">&lt;/&gt;</code>',
+            },
+            { type: "icon", name: "Icon / Emoji", icon: "★" },
+            { type: "rating", name: "Star Rating", icon: "⭐" },
+            { type: "toc", name: "Table of Contents", icon: "📑" },
+        ],
+    },
+    {
+        name: "Data & Charts",
+        icon: "📊",
+        items: [
+            { type: "table", name: "Table", icon: "📋" },
+            { type: "bar-chart", name: "Bar Chart", icon: "📊" },
+            { type: "line-chart", name: "Line Chart", icon: "📈" },
+            { type: "pie-chart", name: "Pie Chart", icon: "🥧" },
+            { type: "doughnut-chart", name: "Doughnut", icon: "○" },
+            { type: "area-chart", name: "Area Chart", icon: "▨" },
+            { type: "radar-chart", name: "Radar", icon: "✦" },
+            { type: "metric", name: "KPI Card", icon: "💹" },
+            { type: "progress", name: "Progress Bar", icon: "▬" },
+            { type: "circular-progress", name: "Circular Progress", icon: "◐" },
+            { type: "stat-row", name: "Stats Row", icon: "🔢" },
+            { type: "timeline", name: "Timeline", icon: "⏱️" },
+        ],
+    },
+    {
+        name: "Media",
+        icon: "🖼️",
+        items: [
+            { type: "image", name: "Image", icon: "🖼️" },
+            { type: "video", name: "Video Embed", icon: "🎬" },
+        ],
+    },
+    {
+        name: "Shapes & Layout",
+        icon: "🔷",
+        items: [
+            { type: "rectangle", name: "Rectangle", icon: "▭" },
+            { type: "circle", name: "Circle", icon: "●" },
+            { type: "triangle", name: "Triangle", icon: "▲" },
+            { type: "star", name: "Star", icon: "★" },
+            { type: "line", name: "Line", icon: "—" },
+            { type: "arrow", name: "Arrow →", icon: "→" },
+            { type: "double-arrow", name: "Double ↔", icon: "↔" },
+            { type: "divider", name: "Divider", icon: "─" },
+            { type: "spacer", name: "Spacer", icon: "□" },
+        ],
+    },
+    {
+        name: "Cards & Components",
+        icon: "🃏",
+        items: [
+            { type: "social-card", name: "Profile Card", icon: "👤" },
+            { type: "testimonial", name: "Testimonial", icon: "💬" },
+            { type: "kanban", name: "Kanban Card", icon: "📌" },
+            { type: "price-card", name: "Price Card", icon: "💰" },
+        ],
+    },
+    {
+        name: "Report Elements",
+        icon: "📋",
+        items: [
+            { type: "pagenum", name: "Page Number", icon: "#️⃣" },
+            { type: "date", name: "Date", icon: "📅" },
+            { type: "signature", name: "Signature", icon: "✍️" },
+        ],
+    },
+];
+
 // ─── State ────────────────────────────────────────────────────────────────────
 const pages = ref(
     props.report?.content?.length
@@ -4822,7 +5906,7 @@ const showExportMenu = ref(false);
 const exportMenuRef = ref(null);
 const canvasArea = ref(null);
 const toast = reactive({ show: false, message: "", type: "success" });
-
+const contextMenu = reactive({ show: false, x: 0, y: 0, el: null, pi: null });
 const chartLabelsInput = ref("");
 const chartValuesInput = ref("");
 const chartDatasetLabel = ref("Dataset 1");
@@ -4836,7 +5920,8 @@ const rs = reactive({
     background_color: props.report?.settings?.background_color || "#ffffff",
     accent_color: props.report?.settings?.accent_color || "#8b5cf6",
     text_color: props.report?.settings?.text_color || "#0f172a",
-    font_family: props.report?.settings?.font_family || "'DM Sans', sans-serif",
+    font_family:
+        props.report?.settings?.font_family || "'DM Sans', sans-serif",
     margin: props.report?.settings?.margin || 40,
     show_page_numbers: props.report?.settings?.show_page_numbers ?? false,
     show_header: props.report?.settings?.show_header ?? false,
@@ -4847,6 +5932,8 @@ const rs = reactive({
     footer_color: props.report?.settings?.footer_color || "#1e293b",
     watermark: props.report?.settings?.watermark || "",
     rtl: props.report?.settings?.rtl ?? false,
+    bg_image: props.report?.settings?.bg_image || "",
+    page_radius: props.report?.settings?.page_radius || 0,
 });
 
 const form = useForm({ title: props.report?.title || "Untitled Report" });
@@ -4894,121 +5981,12 @@ const layerBtnCls = computed(() =>
         : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300",
 );
 
-// PropSec bind helper — avoids repeating collapsedSections + dark + onToggle in every usage
 const secBind = (id) => ({
     id,
     collapsedSections: collapsedSections.value,
     dark: dark.value,
     onToggle: togglePropSection,
 });
-
-// ─── Settings toggle helpers (for unified SETTING_TOGGLES array) ─────────────
-const TOGGLE_MAP = {
-    show_page_numbers: () => [
-        rs.show_page_numbers,
-        (v) => (rs.show_page_numbers = v),
-    ],
-    show_header: () => [rs.show_header, (v) => (rs.show_header = v)],
-    show_footer: () => [rs.show_footer, (v) => (rs.show_footer = v)],
-    showGrid: () => [showGrid.value, (v) => (showGrid.value = v)],
-    snapToGrid: () => [snapToGrid.value, (v) => (snapToGrid.value = v)],
-    showRulers: () => [showRulers.value, (v) => (showRulers.value = v)],
-    showGuides: () => [showGuides.value, (v) => (showGuides.value = v)],
-    rtl: () => [rs.rtl, (v) => (rs.rtl = v)],
-};
-const getToggle = (key) => TOGGLE_MAP[key]?.()?.[0] ?? false;
-const setToggle = (key, v) => TOGGLE_MAP[key]?.()?.[1]?.(v);
-
-// ─── Element Library ─────────────────────────────────────────────────────────
-const elementCategories = [
-    {
-        name: "Text",
-        items: [
-            {
-                type: "heading",
-                name: "Heading",
-                icon: '<strong style="font-size:13px;color:#1e293b">H1</strong>',
-            },
-            {
-                type: "subheading",
-                name: "Subheading",
-                icon: '<strong style="font-size:10px;color:#1e293b">H2</strong>',
-            },
-            {
-                type: "text",
-                name: "Paragraph",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>',
-            },
-            { type: "quote", name: "Quote", icon: "❝" },
-            { type: "blockquote", name: "Block Quote", icon: "❞" },
-            { type: "highlight", name: "Highlight", icon: "🖊️" },
-            {
-                type: "list",
-                name: "List",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>',
-            },
-            { type: "link", name: "Hyperlink", icon: "🔗" },
-            { type: "badge", name: "Badge", icon: "🏷️" },
-            {
-                type: "code",
-                name: "Code Block",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
-            },
-            { type: "callout", name: "Callout", icon: "ℹ️" },
-            { type: "icon", name: "Icon / Emoji", icon: "★" },
-            { type: "rating", name: "Star Rating", icon: "⭐" },
-        ],
-    },
-    {
-        name: "Data & Charts",
-        items: [
-            {
-                type: "table",
-                name: "Table",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M10 6v12M3 6h18v12H3z"/></svg>',
-            },
-            { type: "bar-chart", name: "Bar Chart", icon: "📊" },
-            { type: "line-chart", name: "Line Chart", icon: "📈" },
-            { type: "pie-chart", name: "Pie Chart", icon: "🥧" },
-            { type: "doughnut-chart", name: "Doughnut", icon: "○" },
-            { type: "area-chart", name: "Area Chart", icon: "▨" },
-            { type: "radar-chart", name: "Radar", icon: "✦" },
-            { type: "metric", name: "KPI Card", icon: "▣" },
-            { type: "progress", name: "Progress Bar", icon: "▬" },
-        ],
-    },
-    { name: "Media", items: [{ type: "image", name: "Image", icon: "🖼️" }] },
-    {
-        name: "Shapes & Layout",
-        items: [
-            {
-                type: "rectangle",
-                name: "Rectangle",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/></svg>',
-            },
-            {
-                type: "circle",
-                name: "Circle",
-                icon: '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-width="2"/></svg>',
-            },
-            { type: "triangle", name: "Triangle", icon: "▲" },
-            { type: "line", name: "Line", icon: "—" },
-            { type: "arrow", name: "Arrow", icon: "→" },
-            { type: "divider", name: "Divider", icon: "─" },
-            { type: "spacer", name: "Spacer", icon: "□" },
-        ],
-    },
-    {
-        name: "Report & Document",
-        items: [
-            { type: "pagenum", name: "Page Number", icon: "#" },
-            { type: "date", name: "Date", icon: "📅" },
-            { type: "signature", name: "Signature", icon: "✍️" },
-            { type: "toc", name: "Table of Contents", icon: "📑" },
-            { type: "timeline", name: "Timeline", icon: "⏱️" },
-        ],
-    },
-];
 
 const filteredCategories = computed(() => {
     if (!elementSearch.value.trim()) return elementCategories;
@@ -5023,14 +6001,43 @@ const filteredCategories = computed(() => {
         .filter((c) => c.items.length);
 });
 
+// ─── Settings toggle helpers ─────────────────────────────────────────────────
+const TOGGLE_MAP = {
+    show_page_numbers: () => [rs.show_page_numbers, (v) => (rs.show_page_numbers = v)],
+    show_header: () => [rs.show_header, (v) => (rs.show_header = v)],
+    show_footer: () => [rs.show_footer, (v) => (rs.show_footer = v)],
+    showGrid: () => [showGrid.value, (v) => (showGrid.value = v)],
+    snapToGrid: () => [snapToGrid.value, (v) => (snapToGrid.value = v)],
+    showRulers: () => [showRulers.value, (v) => (showRulers.value = v)],
+    showGuides: () => [showGuides.value, (v) => (showGuides.value = v)],
+    rtl: () => [rs.rtl, (v) => (rs.rtl = v)],
+};
+
+const getToggle = (key) => TOGGLE_MAP[key]?.()?.[0] ?? false;
+const setToggle = (key, v) => TOGGLE_MAP[key]?.()?.[1]?.(v);
+
 // ─── Canvas helpers ───────────────────────────────────────────────────────────
-const getCanvasStyle = () => ({
-    width: canvasDimensions.value.width * (zoom.value / 100) + "px",
-    height: canvasDimensions.value.height * (zoom.value / 100) + "px",
-    backgroundColor: rs.background_color,
-    fontFamily: rs.font_family,
-    direction: rs.rtl ? "rtl" : "ltr",
-});
+const isPageActive = (pi) => {
+    if (!selectedElement.value) return false;
+    return selectedPageIndex.value === pi;
+};
+
+const getCanvasStyle = () => {
+    const style = {
+        width: canvasDimensions.value.width * (zoom.value / 100) + "px",
+        height: canvasDimensions.value.height * (zoom.value / 100) + "px",
+        backgroundColor: rs.background_color,
+        fontFamily: rs.font_family,
+        direction: rs.rtl ? "rtl" : "ltr",
+        borderRadius: (rs.page_radius || 0) + "px",
+    };
+    if (rs.bg_image) {
+        style.backgroundImage = `url('${rs.bg_image}')`;
+        style.backgroundSize = "cover";
+        style.backgroundPosition = "center";
+    }
+    return style;
+};
 
 const getElementWrapperStyle = (el) => {
     const s = el.styles || {};
@@ -5044,7 +6051,7 @@ const getElementWrapperStyle = (el) => {
         zIndex: s.zIndex || 1,
         opacity: s.opacity !== undefined ? s.opacity / 100 : 1,
         display: el.hidden ? "none" : undefined,
-        cursor: dragMode.value ? "move" : "default",
+        cursor: el.locked ? "not-allowed" : dragMode.value ? "move" : "default",
     };
 };
 
@@ -5085,15 +6092,104 @@ const getTextStyle = (el) => {
 const formatDateEl = (el) => {
     if (el.format === "custom" && el.customDate) return el.customDate;
     const d = new Date();
+    if (el.format === "iso") return d.toISOString().split("T")[0];
     const opts = {
         long: { year: "numeric", month: "long", day: "numeric" },
         short: { year: "numeric", month: "short", day: "numeric" },
         numeric: { year: "numeric", month: "2-digit", day: "2-digit" },
-        iso: null,
     };
-    if (el.format === "iso") return d.toISOString().split("T")[0];
     return d.toLocaleDateString("en-US", opts[el.format] || opts.long);
 };
+
+// ─── Context Menu ────────────────────────────────────────────────────────────
+const openContextMenu = (e, el, pi) => {
+    contextMenu.show = true;
+    contextMenu.x = Math.min(e.clientX, window.innerWidth - 200);
+    contextMenu.y = Math.min(e.clientY, window.innerHeight - 300);
+    contextMenu.el = el;
+    contextMenu.pi = pi;
+    selectElement(el, pi);
+};
+
+const contextMenuItems = computed(() => {
+    if (!contextMenu.el) return [];
+    const el = contextMenu.el;
+    const pi = contextMenu.pi;
+    return [
+        {
+            icon: "✏️",
+            label: "Edit",
+            key: "DblClick",
+            action: () => {
+                if (
+                    !selectedElement.value ||
+                    selectedElement.value.id !== el.id
+                )
+                    selectElement(el, pi);
+            },
+        },
+        {
+            icon: "📋",
+            label: "Duplicate",
+            key: "Ctrl+D",
+            action: () => duplicateElement(pi, el),
+        },
+        {
+            icon: "🔝",
+            label: "Bring to Front",
+            key: null,
+            action: () => bringToFront(),
+        },
+        {
+            icon: "🔙",
+            label: "Send to Back",
+            key: null,
+            action: () => sendToBack(),
+        },
+        {
+            icon: "👁",
+            label: el.hidden ? "Show Element" : "Hide Element",
+            key: null,
+            action: () => {
+                el.hidden = !el.hidden;
+                pushHistory();
+            },
+        },
+        {
+            icon: "🔒",
+            label: el.locked ? "Unlock" : "Lock",
+            key: null,
+            action: () => lockElement(el),
+        },
+        ...(pi > 0
+            ? [
+                  {
+                      icon: "⬆️",
+                      label: "Move to Prev Page",
+                      key: null,
+                      action: () => moveElementToPage(el, pi, pi - 1),
+                  },
+              ]
+            : []),
+        ...(pi < pages.value.length - 1
+            ? [
+                  {
+                      icon: "⬇️",
+                      label: "Move to Next Page",
+                      key: null,
+                      action: () => moveElementToPage(el, pi, pi + 1),
+                  },
+              ]
+            : []),
+        {
+            icon: "🗑",
+            label: "Delete",
+            key: "Del",
+            action: () => deleteElement(pi, el.id),
+            danger: true,
+        },
+    ];
+});
 
 // ─── Drag from sidebar ────────────────────────────────────────────────────────
 const handleDragStart = (e, el) =>
@@ -5230,6 +6326,19 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 color: "#334155",
             },
         },
+        checklist: {
+            items: [
+                { text: "Task one", checked: false },
+                { text: "Task two", checked: true },
+                { text: "Task three", checked: false },
+            ],
+            styles: {
+                ...base.styles,
+                width: 300,
+                height: 140,
+                fontSize: 13,
+            },
+        },
         link: {
             content: "Click here",
             href: "https://example.com",
@@ -5246,12 +6355,6 @@ const createDefaultElement = (type, x = 60, y = 60) => {
             content: "Status",
             styles: { ...base.styles, width: 90, height: 36 },
         },
-        code: {
-            content:
-                'const greeting = "Hello, World!";\nconsole.log(greeting);',
-            language: "JavaScript",
-            styles: { ...base.styles, width: 380, height: 120 },
-        },
         callout: {
             content: "Add your callout note here.",
             emoji: "ℹ️",
@@ -5265,6 +6368,23 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 borderWidth: 1,
                 borderRadius: 10,
             },
+        },
+        alert: {
+            content: "Important alert message.",
+            emoji: "⚠️",
+            styles: {
+                ...base.styles,
+                width: 380,
+                height: 70,
+                backgroundColor: "#fef3c7",
+                borderColor: "#f59e0b",
+                color: "#92400e",
+            },
+        },
+        code: {
+            content: 'const x = "Hello, World!";\nconsole.log(x);',
+            language: "JavaScript",
+            styles: { ...base.styles, width: 380, height: 120 },
         },
         icon: {
             content: "★",
@@ -5334,7 +6454,7 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 {
                     label: "Milestone 1",
                     date: "2024 Q1",
-                    desc: "Kickoff & planning phase",
+                    desc: "Kickoff & planning",
                 },
                 {
                     label: "Milestone 2",
@@ -5358,6 +6478,10 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 height: 220,
                 borderRadius: 8,
             },
+        },
+        video: {
+            src: "",
+            styles: { ...base.styles, width: 360, height: 220, borderRadius: 8 },
         },
         table: {
             columns: ["Name", "Value", "Change"],
@@ -5396,12 +6520,7 @@ const createDefaultElement = (type, x = 60, y = 60) => {
         },
         "pie-chart": {
             chartData: {
-                labels: [
-                    "Category A",
-                    "Category B",
-                    "Category C",
-                    "Category D",
-                ],
+                labels: ["Category A", "Category B", "Category C", "Category D"],
                 values: [35, 25, 22, 18],
             },
             chartTitle: "Distribution",
@@ -5428,17 +6547,10 @@ const createDefaultElement = (type, x = 60, y = 60) => {
         },
         "radar-chart": {
             chartData: {
-                labels: [
-                    "Speed",
-                    "Accuracy",
-                    "Efficiency",
-                    "Quality",
-                    "Innovation",
-                    "Support",
-                ],
-                values: [80, 92, 75, 88, 70, 95],
+                labels: ["Speed", "Accuracy", "Efficiency", "Quality", "Innovation"],
+                values: [80, 92, 75, 88, 70],
             },
-            chartTitle: "Performance Radar",
+            chartTitle: "Performance",
             legendPosition: "bottom",
             styles: { ...base.styles, width: 340, height: 320 },
         },
@@ -5470,6 +6582,26 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 trackHeight: 8,
             },
         },
+        "circular-progress": {
+            label: "Progress",
+            value: 72,
+            styles: {
+                ...base.styles,
+                width: 180,
+                height: 200,
+                color: P,
+                trackColor: "#e2e8f0",
+            },
+        },
+        "stat-row": {
+            cols: 3,
+            stats: [
+                { label: "Revenue", value: "$48K" },
+                { label: "Users", value: "8.4K" },
+                { label: "Growth", value: "+12%" },
+            ],
+            styles: { ...base.styles, width: 460, height: 100 },
+        },
         rectangle: {
             styles: {
                 ...base.styles,
@@ -5495,6 +6627,14 @@ const createDefaultElement = (type, x = 60, y = 60) => {
                 backgroundColor: "#f59e0b",
             },
         },
+        star: {
+            styles: {
+                ...base.styles,
+                width: 80,
+                height: 80,
+                backgroundColor: P,
+            },
+        },
         line: {
             styles: {
                 ...base.styles,
@@ -5505,6 +6645,15 @@ const createDefaultElement = (type, x = 60, y = 60) => {
             },
         },
         arrow: {
+            styles: {
+                ...base.styles,
+                width: 200,
+                height: 30,
+                borderWidth: 2,
+                color: P,
+            },
+        },
+        "double-arrow": {
             styles: {
                 ...base.styles,
                 width: 200,
@@ -5524,6 +6673,64 @@ const createDefaultElement = (type, x = 60, y = 60) => {
             },
         },
         spacer: { styles: { ...base.styles, width: 200, height: 40 } },
+        "social-card": {
+            content: "Name Here",
+            subtitle: "Title / Organisation",
+            avatar: "👤",
+            styles: {
+                ...base.styles,
+                width: 240,
+                height: 200,
+                backgroundColor: "#fff",
+                borderColor: "#e2e8f0",
+                borderWidth: 1,
+                borderRadius: 16,
+            },
+        },
+        testimonial: {
+            content: "Amazing product! Highly recommend.",
+            author: "John Doe",
+            role: "CEO, Acme Corp",
+            avatar: "👤",
+            styles: {
+                ...base.styles,
+                width: 300,
+                height: 180,
+                backgroundColor: "#f8fafc",
+                borderColor: "#e2e8f0",
+                borderWidth: 1,
+                borderRadius: 16,
+            },
+        },
+        kanban: {
+            content: "Task Title",
+            status: "In Progress",
+            due: "Dec 31",
+            styles: {
+                ...base.styles,
+                width: 220,
+                height: 100,
+                backgroundColor: "#fff",
+                borderColor: "#e2e8f0",
+                accentColor: P,
+            },
+        },
+        "price-card": {
+            plan: "Pro Plan",
+            price: "$29",
+            period: "per month",
+            features: ["Feature 1", "Feature 2", "Feature 3"],
+            highlighted: false,
+            styles: {
+                ...base.styles,
+                width: 220,
+                height: 280,
+                backgroundColor: "#fff",
+                borderColor: "#e2e8f0",
+                borderWidth: 1,
+                borderRadius: 16,
+            },
+        },
     };
     const d = presets[type] || {};
     return { ...base, ...d, styles: { ...base.styles, ...(d.styles || {}) } };
@@ -5550,7 +6757,7 @@ const deleteElement = (pi, id) => {
 };
 
 const deleteSelectedElement = () => {
-    if (!selectedElement.value || selectedPageIndex.value === null) return;
+    if (!selectedElement.value) return;
     deleteElement(selectedPageIndex.value, selectedElement.value.id);
 };
 
@@ -5570,6 +6777,26 @@ const deselectAll = () => {
     selectedElement.value = null;
 };
 
+const lockElement = (el) => {
+    el.locked = !el.locked;
+    pushHistory();
+};
+
+const moveElementToPage = (el, fromPi, toPi) => {
+    if (toPi < 0 || toPi >= pages.value.length || toPi === fromPi) return;
+    pages.value[fromPi].elements = pages.value[fromPi].elements.filter(
+        (e) => e.id !== el.id,
+    );
+    const clone = { ...el, id: el.id };
+    pages.value[toPi].elements.push(clone);
+    selectedPageIndex.value = toPi;
+    nextTick(() => {
+        if (isChartType(el.type)) initChart(el);
+    });
+    pushHistory();
+    showToast(`Moved to Page ${toPi + 1}`);
+};
+
 // ─── Drag on canvas ───────────────────────────────────────────────────────────
 let isDraggingEl = false,
     dSX = 0,
@@ -5578,7 +6805,7 @@ let isDraggingEl = false,
     eSY = 0;
 
 const startDrag = (e, el, pi) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || el.locked) return;
     selectElement(el, pi);
     isDraggingEl = true;
     dSX = e.clientX;
@@ -5683,7 +6910,7 @@ const startRotation = (e, el) => {
     e.preventDefault();
 };
 
-// ─── Text / table editing ─────────────────────────────────────────────────────
+// ─── Text editing ─────────────────────────────────────────────────────────────
 const onTextBlur = (el, e) => {
     el.content = e.target.innerHTML || e.target.innerText;
     pushHistory();
@@ -5705,8 +6932,30 @@ const addListItem = (el) => {
     el.items.push("New item");
     pushHistory();
 };
+const onChecklistItemBlur = (el, i, e) => {
+    el.items[i].text = e.target.innerText;
+    pushHistory();
+};
+const addChecklistItem = (el) => {
+    el.items.push({ text: "New task", checked: false });
+    pushHistory();
+};
 const onTableCellBlur = (el, ri, ci, e) => {
     el.data[ri][el.columns[ci]] = e.target.innerText;
+    pushHistory();
+};
+const onTableHeaderBlur = (el, col, e) => {
+    const newName = e.target.innerText.trim() || col;
+    if (newName !== col) {
+        const idx = el.columns.indexOf(col);
+        if (idx > -1) {
+            el.columns[idx] = newName;
+            el.data.forEach((r) => {
+                r[newName] = r[col];
+                delete r[col];
+            });
+        }
+    }
     pushHistory();
 };
 const addTableRow = (el) => {
@@ -5734,6 +6983,30 @@ const removeTableColumn = (el) => {
         pushHistory();
     }
 };
+const onTocTitleBlur = (el, e) => {
+    el.title = e.target.innerText;
+    pushHistory();
+};
+const onTocItemBlur = (el, i, field, e) => {
+    el.items[i][field] = e.target.innerText;
+    pushHistory();
+};
+const addTocItem = (el) => {
+    el.items.push({ label: `Section ${el.items.length + 1}`, page: 1 });
+    pushHistory();
+};
+const onTimelineBlur = (el, i, field, e) => {
+    el.items[i][field] = e.target.innerText;
+    pushHistory();
+};
+const addTimelineItem = (el) => {
+    el.items.push({
+        label: "New Milestone",
+        date: "2026",
+        desc: "Description",
+    });
+    pushHistory();
+};
 
 const toggleTextStyle = (style) => {
     if (!selectedElement.value) return;
@@ -5757,9 +7030,11 @@ const applyCalloutStyle = () => {
     const s =
         CALLOUT_PRESETS[selectedElement.value.calloutStyle] ||
         CALLOUT_PRESETS.info;
-    selectedElement.value.styles.backgroundColor = s.bg;
-    selectedElement.value.styles.borderColor = s.border;
-    selectedElement.value.styles.color = s.color;
+    Object.assign(selectedElement.value.styles, {
+        backgroundColor: s.bg,
+        borderColor: s.border,
+        color: s.color,
+    });
     if (!selectedElement.value.emoji) selectedElement.value.emoji = s.emoji;
     pushHistory();
 };
@@ -5805,7 +7080,7 @@ const initChart = (el) => {
                   "#ec4899",
               ];
         const isArea = el.type === "area-chart";
-        const chart = new Chart(canvas.getContext("2d"), {
+        new Chart(canvas.getContext("2d"), {
             type,
             data: {
                 labels: el.chartData?.labels || [],
@@ -5913,11 +7188,9 @@ const uploadImage = async (e, el) => {
         showToast("Image must be under 10 MB.", "error");
         return;
     }
-
     const localUrl = URL.createObjectURL(file);
     el.src = localUrl;
     el._uploading = true;
-
     try {
         const fd = new FormData();
         fd.append("image", file);
@@ -5929,7 +7202,7 @@ const uploadImage = async (e, el) => {
         showToast("Image uploaded!");
         pushHistory();
     } catch {
-        showToast("Upload failed — using local preview.", "error");
+        showToast("Upload failed — local preview only.", "error");
     } finally {
         el._uploading = false;
         if (e.target) e.target.value = "";
@@ -5977,7 +7250,7 @@ const sendBackward = () => {
     pushHistory();
 };
 const bringToFront = () => {
-    if (!selectedElement.value || selectedPageIndex.value === null) return;
+    if (!selectedElement.value) return;
     const maxZ = Math.max(
         ...pages.value[selectedPageIndex.value].elements.map(
             (e) => e.styles?.zIndex || 1,
@@ -5987,7 +7260,7 @@ const bringToFront = () => {
     pushHistory();
 };
 const sendToBack = () => {
-    if (!selectedElement.value || selectedPageIndex.value === null) return;
+    if (!selectedElement.value) return;
     const minZ = Math.min(
         ...pages.value[selectedPageIndex.value].elements.map(
             (e) => e.styles?.zIndex || 1,
@@ -6021,7 +7294,7 @@ const pushHistory = () => {
     history.value = history.value.slice(0, historyIndex.value + 1);
     history.value.push(snap);
     historyIndex.value = history.value.length - 1;
-    if (history.value.length > 80) {
+    if (history.value.length > 100) {
         history.value.shift();
         historyIndex.value--;
     }
@@ -6114,6 +7387,11 @@ const getElementLabel = (type) => {
         highlight: "Highlight",
         toc: "Table of Contents",
         timeline: "Timeline",
+        "stat-row": "Stats Row",
+        "social-card": "Profile Card",
+        "price-card": "Price Card",
+        "double-arrow": "Double Arrow",
+        "circular-progress": "Circular Progress",
     };
     return (
         map[type] ||
@@ -6184,8 +7462,15 @@ const handleKeyDown = (e) => {
     }
     if (e.key === "D" && !e.ctrlKey && !e.metaKey)
         dragMode.value = !dragMode.value;
+    if (e.key === "G" && !e.ctrlKey && !e.metaKey)
+        showGrid.value = !showGrid.value;
+    if (e.key === "R" && !e.ctrlKey && !e.metaKey)
+        showRulers.value = !showRulers.value;
     if (e.key === "F" && !e.ctrlKey && !e.metaKey) toggleFullscreen();
-    if (e.key === "Escape") deselectAll();
+    if (e.key === "Escape") {
+        deselectAll();
+        contextMenu.show = false;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedElement.value) deleteSelectedElement();
     }
@@ -6213,16 +7498,34 @@ const handleKeyDown = (e) => {
         e.preventDefault();
         zoom.value = 100;
     }
+    if (selectedElement.value) {
+        if (e.key === "[" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            sendBackward();
+        }
+        if (e.key === "]" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            bringForward();
+        }
+    }
+};
+
+const handleContextMenu = (e) => {
+    const isCanvas = e.target.closest(".canvas-page");
+    if (isCanvas) e.preventDefault();
 };
 
 const handleOutsideClick = (e) => {
     if (exportMenuRef.value && !exportMenuRef.value.contains(e.target))
         showExportMenu.value = false;
+    if (contextMenu.show && !e.target.closest(".context-menu"))
+        contextMenu.show = false;
 };
 
 onMounted(() => {
     window.addEventListener("keydown", handleKeyDown);
     document.addEventListener("click", handleOutsideClick);
+    document.addEventListener("contextmenu", handleContextMenu);
     nextTick(reinitAllCharts);
     dark.value = localStorage.getItem("rb-dark") === "1";
 });
@@ -6230,6 +7533,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     window.removeEventListener("keydown", handleKeyDown);
     document.removeEventListener("click", handleOutsideClick);
+    document.removeEventListener("contextmenu", handleContextMenu);
     chartInstances.forEach((c) => c.destroy());
     if (saveTimeout) clearTimeout(saveTimeout);
 });
