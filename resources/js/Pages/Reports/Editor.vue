@@ -31,8 +31,7 @@
                         </svg>
                         Reports
                     </button>
-                    <span
-                        :class="dark ? 'text-slate-700' : 'text-slate-300'"
+                    <span :class="dark ? 'text-slate-700' : 'text-slate-300'"
                         >/</span
                     >
                     <input
@@ -192,7 +191,9 @@
                     <!-- Rulers Toggle -->
                     <button
                         @click="showRulers = !showRulers"
-                        :title="showRulers ? 'Hide Rulers (R)' : 'Show Rulers (R)'"
+                        :title="
+                            showRulers ? 'Hide Rulers (R)' : 'Show Rulers (R)'
+                        "
                         class="p-1.5 rounded-lg transition-colors"
                         :class="
                             showRulers
@@ -419,12 +420,10 @@
                                         fmt.icon
                                     }}</span>
                                     <div>
-                                        <div class="font-bold">{{
-                                            fmt.label
-                                        }}</div>
-                                        <div
-                                            class="text-[10px] text-slate-400"
-                                        >
+                                        <div class="font-bold">
+                                            {{ fmt.label }}
+                                        </div>
+                                        <div class="text-[10px] text-slate-400">
                                             {{ fmt.desc }}
                                         </div>
                                     </div>
@@ -745,11 +744,14 @@
                             class="text-[9px] font-black uppercase tracking-widest mb-2"
                             :class="dark ? 'text-slate-600' : 'text-slate-400'"
                         >
-                            Page {{ selectedPageIndex + 1 }} — {{ currentPage.elements.length }} Layers
+                            Page {{ selectedPageIndex + 1 }} —
+                            {{ currentPage.elements.length }} Layers
                         </div>
                         <template v-if="currentPage.elements.length">
                             <div
-                                v-for="el in [...currentPage.elements].reverse()"
+                                v-for="el in [
+                                    ...currentPage.elements,
+                                ].reverse()"
                                 :key="el.id"
                                 @click="selectElement(el, selectedPageIndex)"
                                 class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all group/layer mb-0.5"
@@ -1178,7 +1180,9 @@
                                         >{{ t.label }}</label
                                     >
                                     <button
-                                        @click="setToggle(t.key, !getToggle(t.key))"
+                                        @click="
+                                            setToggle(t.key, !getToggle(t.key))
+                                        "
                                         class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
                                         :class="
                                             getToggle(t.key)
@@ -1613,8 +1617,7 @@
                                     'hover:ring-1 hover:ring-indigo-300/70':
                                         !selectedElement ||
                                         selectedElement.id !== el.id,
-                                    'cursor-move':
-                                        dragMode && !el.locked,
+                                    'cursor-move': dragMode && !el.locked,
                                     'cursor-not-allowed opacity-70': el.locked,
                                     'opacity-40': el.hidden,
                                 }"
@@ -1628,7 +1631,8 @@
                                 <!-- Resize & Rotate Handles -->
                                 <template
                                     v-if="
-                                        selectedElement?.id === el.id && !el.locked
+                                        selectedElement?.id === el.id &&
+                                        !el.locked
                                     "
                                 >
                                     <div
@@ -1636,11 +1640,15 @@
                                         :key="h.dir"
                                         class="resize-handle absolute w-2.5 h-2.5 bg-white border-2 border-indigo-500 rounded-full z-[200] hover:scale-125 transition-transform shadow"
                                         :style="h.style"
-                                        @mousedown.stop="startResize(h.dir, $event)"
+                                        @mousedown.stop="
+                                            startResize(h.dir, $event)
+                                        "
                                     ></div>
                                     <div
                                         class="absolute top-[-30px] left-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-indigo-500 rounded-full cursor-crosshair z-[200] flex items-center justify-center shadow"
-                                        @mousedown.stop="startRotation($event, el)"
+                                        @mousedown.stop="
+                                            startRotation($event, el)
+                                        "
                                         title="Rotate"
                                     >
                                         <svg
@@ -1671,7 +1679,11 @@
                                         <button
                                             v-if="pi > 0"
                                             @click.stop="
-                                                moveElementToPage(el, pi, pi - 1)
+                                                moveElementToPage(
+                                                    el,
+                                                    pi,
+                                                    pi - 1,
+                                                )
                                             "
                                             class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
                                             title="Move to previous page"
@@ -1694,7 +1706,11 @@
                                         <button
                                             v-if="pi < pages.length - 1"
                                             @click.stop="
-                                                moveElementToPage(el, pi, pi + 1)
+                                                moveElementToPage(
+                                                    el,
+                                                    pi,
+                                                    pi + 1,
+                                                )
                                             "
                                             class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
                                             title="Move to next page"
@@ -1715,7 +1731,9 @@
                                         </button>
                                         <!-- Duplicate -->
                                         <button
-                                            @click.stop="duplicateElement(pi, el)"
+                                            @click.stop="
+                                                duplicateElement(pi, el)
+                                            "
                                             class="bg-white text-slate-500 hover:text-indigo-600 text-[9px] px-1 py-0.5 rounded border border-slate-200 transition-colors"
                                             title="Duplicate (Ctrl+D)"
                                         >
@@ -1760,7 +1778,9 @@
                                         </button>
                                         <!-- Delete -->
                                         <button
-                                            @click.stop="deleteElement(pi, el.id)"
+                                            @click.stop="
+                                                deleteElement(pi, el.id)
+                                            "
                                             class="bg-red-500 text-white text-[9px] px-1 py-0.5 rounded hover:bg-red-600 transition-colors"
                                             title="Delete (Del)"
                                         >
@@ -1878,8 +1898,8 @@
                                     >
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="w-full outline-none font-semibold text-sm"
                                             :style="{
@@ -2168,7 +2188,8 @@
                                                 />
                                             </svg>
                                             <span class="text-xs"
-                                                >Add video URL in properties</span
+                                                >Add video URL in
+                                                properties</span
                                             >
                                         </div>
                                     </div>
@@ -2318,7 +2339,8 @@
                                                         class="px-3 py-2 border-b border-slate-100"
                                                         :contenteditable="
                                                             selectedElement?.id ===
-                                                                el.id && !el.locked
+                                                                el.id &&
+                                                            !el.locked
                                                         "
                                                         @blur="
                                                             onTableCellBlur(
@@ -2442,7 +2464,8 @@
                                             <polygon
                                                 points="50,5 61,35 95,35 68,57 79,91 50,70 21,91 32,57 5,35 39,35"
                                                 :fill="
-                                                    el.styles?.backgroundColor ||
+                                                    el.styles
+                                                        ?.backgroundColor ||
                                                     rs.primary_color
                                                 "
                                             />
@@ -2722,8 +2745,8 @@
                                         }}</span>
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="flex-1 outline-none text-xs leading-relaxed"
                                             :style="{
@@ -2754,8 +2777,8 @@
                                         }}</span>
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="flex-1 outline-none text-sm font-semibold"
                                             :style="{
@@ -2765,7 +2788,8 @@
                                             }"
                                             @blur="onTextBlur(el, $event)"
                                             v-html="
-                                                el.content || 'Alert message here'
+                                                el.content ||
+                                                'Alert message here'
                                             "
                                         ></div>
                                     </div>
@@ -2815,8 +2839,8 @@
                                         <pre
                                             class="text-emerald-400 text-xs font-mono whitespace-pre-wrap"
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             @blur="onTextBlur(el, $event)"
                                             >{{ el.content }}</pre
@@ -2933,8 +2957,8 @@
                                     >
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="text-sm font-black mb-2 pb-1 border-b outline-none"
                                             :style="{
@@ -2943,7 +2967,9 @@
                                             }"
                                             @blur="onTocTitleBlur(el, $event)"
                                         >
-                                            {{ el.title || "Table of Contents" }}
+                                            {{
+                                                el.title || "Table of Contents"
+                                            }}
                                         </div>
                                         <div
                                             v-for="(item, i) in el.items || []"
@@ -3134,7 +3160,8 @@
                                         <div
                                             class="h-20 flex-shrink-0"
                                             :style="{
-                                                backgroundColor: rs.primary_color,
+                                                backgroundColor:
+                                                    rs.primary_color,
                                             }"
                                         ></div>
                                         <div class="p-4 flex-1">
@@ -3156,8 +3183,13 @@
                                                     el.content || 'Name Here'
                                                 "
                                             ></div>
-                                            <div class="text-xs text-slate-400 mt-0.5">
-                                                {{ el.subtitle || "Title / Organisation" }}
+                                            <div
+                                                class="text-xs text-slate-400 mt-0.5"
+                                            >
+                                                {{
+                                                    el.subtitle ||
+                                                    "Title / Organisation"
+                                                }}
                                             </div>
                                         </div>
                                     </div>
@@ -3180,8 +3212,8 @@
                                         </div>
                                         <div
                                             :contenteditable="
-                                                selectedElement?.id ===
-                                                    el.id && !el.locked
+                                                selectedElement?.id === el.id &&
+                                                !el.locked
                                             "
                                             class="flex-1 text-sm italic text-slate-600 outline-none"
                                             @blur="onTextBlur(el, $event)"
@@ -3190,7 +3222,9 @@
                                                 'Add testimonial text here…'
                                             "
                                         ></div>
-                                        <div class="mt-3 flex items-center gap-2">
+                                        <div
+                                            class="mt-3 flex items-center gap-2"
+                                        >
                                             <div
                                                 class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm"
                                             >
@@ -3200,9 +3234,14 @@
                                                 <div
                                                     class="text-xs font-bold text-slate-700"
                                                 >
-                                                    {{ el.author || "Author Name" }}
+                                                    {{
+                                                        el.author ||
+                                                        "Author Name"
+                                                    }}
                                                 </div>
-                                                <div class="text-[10px] text-slate-400">
+                                                <div
+                                                    class="text-[10px] text-slate-400"
+                                                >
                                                     {{ el.role || "Title" }}
                                                 </div>
                                             </div>
@@ -3262,8 +3301,12 @@
                                         <div class="p-4 flex-1">
                                             <ul class="space-y-1.5">
                                                 <li
-                                                    v-for="(f, i) in el.features ||
-                                                        ['Feature 1', 'Feature 2']"
+                                                    v-for="(
+                                                        f, i
+                                                    ) in el.features || [
+                                                        'Feature 1',
+                                                        'Feature 2',
+                                                    ]"
                                                     :key="i"
                                                     class="flex items-center gap-2 text-xs text-slate-600"
                                                 >
@@ -3311,7 +3354,9 @@
                                         >
                                             <div
                                                 class="text-2xl font-black"
-                                                :style="{ color: rs.primary_color }"
+                                                :style="{
+                                                    color: rs.primary_color,
+                                                }"
                                             >
                                                 {{ stat.value }}
                                             </div>
@@ -3379,7 +3424,9 @@
                                                 >
                                                 <span
                                                     class="text-[9px] text-slate-400 ml-auto"
-                                                    >{{ el.due || "Due date" }}</span
+                                                    >{{
+                                                        el.due || "Due date"
+                                                    }}</span
                                                 >
                                             </div>
                                         </div>
@@ -3501,7 +3548,9 @@
                                 v-for="s in SHORTCUTS"
                                 :key="s.key"
                                 class="flex items-center justify-between"
-                                :class="dark ? 'text-slate-500' : 'text-slate-500'"
+                                :class="
+                                    dark ? 'text-slate-500' : 'text-slate-500'
+                                "
                             >
                                 <span>{{ s.desc }}</span>
                                 <kbd
@@ -4331,9 +4380,7 @@
                                     />
                                 </div>
                                 <PF
-                                    v-if="
-                                        selectedElement.type === 'progress'
-                                    "
+                                    v-if="selectedElement.type === 'progress'"
                                     label="Track Height (px)"
                                     :dark="dark"
                                     ><input
@@ -4980,9 +5027,12 @@
                         <!-- DIVIDER / LINE / ARROW -->
                         <PropSec
                             v-if="
-                                ['divider', 'line', 'arrow', 'double-arrow'].includes(
-                                    selectedElement.type,
-                                )
+                                [
+                                    'divider',
+                                    'line',
+                                    'arrow',
+                                    'double-arrow',
+                                ].includes(selectedElement.type)
                             "
                             title="Line Settings"
                             id="line"
@@ -5920,8 +5970,7 @@ const rs = reactive({
     background_color: props.report?.settings?.background_color || "#ffffff",
     accent_color: props.report?.settings?.accent_color || "#8b5cf6",
     text_color: props.report?.settings?.text_color || "#0f172a",
-    font_family:
-        props.report?.settings?.font_family || "'DM Sans', sans-serif",
+    font_family: props.report?.settings?.font_family || "'DM Sans', sans-serif",
     margin: props.report?.settings?.margin || 40,
     show_page_numbers: props.report?.settings?.show_page_numbers ?? false,
     show_header: props.report?.settings?.show_header ?? false,
@@ -6003,7 +6052,10 @@ const filteredCategories = computed(() => {
 
 // ─── Settings toggle helpers ─────────────────────────────────────────────────
 const TOGGLE_MAP = {
-    show_page_numbers: () => [rs.show_page_numbers, (v) => (rs.show_page_numbers = v)],
+    show_page_numbers: () => [
+        rs.show_page_numbers,
+        (v) => (rs.show_page_numbers = v),
+    ],
     show_header: () => [rs.show_header, (v) => (rs.show_header = v)],
     show_footer: () => [rs.show_footer, (v) => (rs.show_footer = v)],
     showGrid: () => [showGrid.value, (v) => (showGrid.value = v)],
@@ -6481,7 +6533,12 @@ const createDefaultElement = (type, x = 60, y = 60) => {
         },
         video: {
             src: "",
-            styles: { ...base.styles, width: 360, height: 220, borderRadius: 8 },
+            styles: {
+                ...base.styles,
+                width: 360,
+                height: 220,
+                borderRadius: 8,
+            },
         },
         table: {
             columns: ["Name", "Value", "Change"],
@@ -6520,7 +6577,12 @@ const createDefaultElement = (type, x = 60, y = 60) => {
         },
         "pie-chart": {
             chartData: {
-                labels: ["Category A", "Category B", "Category C", "Category D"],
+                labels: [
+                    "Category A",
+                    "Category B",
+                    "Category C",
+                    "Category D",
+                ],
                 values: [35, 25, 22, 18],
             },
             chartTitle: "Distribution",
@@ -6547,7 +6609,13 @@ const createDefaultElement = (type, x = 60, y = 60) => {
         },
         "radar-chart": {
             chartData: {
-                labels: ["Speed", "Accuracy", "Efficiency", "Quality", "Innovation"],
+                labels: [
+                    "Speed",
+                    "Accuracy",
+                    "Efficiency",
+                    "Quality",
+                    "Innovation",
+                ],
                 values: [80, 92, 75, 88, 70],
             },
             chartTitle: "Performance",
@@ -7619,3 +7687,5 @@ watch(dark, (v) => localStorage.setItem("rb-dark", v ? "1" : "0"));
     background: #94a3b8;
 }
 </style>
+
+<!-- thats nice  now with out changing any thing use fontawsom icon sand add all seetings related to pages ,font,fontsize,family,header,footer settings,page number settings and all other settings and also remove the dark mode functions but do not remove the drark mode style classes from tags  as i have add drag mode toggle buutton on my header component and when new page is created then the new page must be according to the selected template AND keep reponsive -->
