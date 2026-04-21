@@ -31,6 +31,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
     Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
 
+    // In web.php, inside auth group:
+    Route::get('/reports/{report:slug}/export/excel', [ReportController::class, 'exportExcel'])->name('reports.export.excel');
+    Route::get('/reports/{report:slug}/export/csv', [ReportController::class, 'exportCsv'])->name('reports.export.csv');
+    Route::get('/reports/{report:slug}/export/image', [ReportController::class, 'exportImage'])->name('reports.export.image');
+
 });
 
 require __DIR__.'/auth.php';

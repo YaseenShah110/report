@@ -22,7 +22,9 @@ class DashboardController extends Controller
         
         return Inertia::render('Dashboard', [
             'recentReports' => $recentReports,
-            'stats' => $stats
+            'stats' => $stats,
+            // In DashboardController@index, add to $stats:
+'total_templates' => \App\Models\Template::where('is_active', true)->count(),
         ]);
     }
 }
