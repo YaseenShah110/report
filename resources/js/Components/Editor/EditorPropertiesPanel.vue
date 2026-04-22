@@ -721,7 +721,7 @@ const toggleTextStyle = (st) => {
 <!-- Sub-components defined inline for single-file simplicity -->
 <script>
 // PanelSection component
-export const PanelSection = {
+const PanelSection = {
   name: 'PanelSection',
   props: { title: String, icon: String, dark: Boolean, defaultOpen: Boolean },
   data() { return { open: this.defaultOpen ?? false }; },
@@ -745,7 +745,7 @@ export const PanelSection = {
 };
 
 // PropField component
-export const PropField = {
+const PropField = {
   name: 'PropField',
   props: { label: String, dark: Boolean },
   template: `
@@ -758,7 +758,7 @@ export const PropField = {
 };
 
 // ColorRow component
-export const ColorRow = {
+const ColorRow = {
   name: 'ColorRow',
   props: { label: String, dark: Boolean, value: String },
   emits: ['update'],

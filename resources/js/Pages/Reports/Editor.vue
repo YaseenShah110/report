@@ -285,14 +285,14 @@ import EditorPropertiesPanel from "@/Components/Editor/EditorPropertiesPanel.vue
 import EditorContextMenu from "@/Components/Editor/EditorContextMenu.vue";
 
 // ─── Shared constants (exported for sub-components) ──────────────────────────
-export const EXPORT_FORMATS = [
+const EXPORT_FORMATS = [
     { key: "pdf",  label: "PDF Document", desc: "Print-ready PDF",   icon: "fa-solid fa-file-pdf" },
     { key: "xlsx", label: "Excel Sheet",  desc: "Data in .xlsx",     icon: "fa-solid fa-file-excel" },
     { key: "csv",  label: "CSV File",     desc: "Raw data export",   icon: "fa-solid fa-file-csv" },
     { key: "png",  label: "PNG Image",    desc: "High-res image",    icon: "fa-solid fa-file-image" },
 ];
 
-export const PAGE_SIZES = [
+const PAGE_SIZES = [
     { value: "A4",     label: "A4 (210 × 297 mm)" },
     { value: "Letter", label: "US Letter (8.5 × 11 in)" },
     { value: "Legal",  label: "Legal (8.5 × 14 in)" },
@@ -300,7 +300,7 @@ export const PAGE_SIZES = [
     { value: "A5",     label: "A5 (148 × 210 mm)" },
 ];
 
-export const FONTS = [
+const FONTS = [
     { name: "DM Sans",           value: "'DM Sans', sans-serif" },
     { name: "Inter",             value: "'Inter', sans-serif" },
     { name: "Outfit",            value: "'Outfit', sans-serif" },
@@ -315,7 +315,7 @@ export const FONTS = [
     { name: "Times New Roman",   value: "'Times New Roman', serif" },
 ];
 
-export const FONT_WEIGHTS = [
+const FONT_WEIGHTS = [
     { label: "Thin",       value: "100" },
     { label: "Light",      value: "300" },
     { label: "Regular",    value: "400" },
@@ -326,7 +326,7 @@ export const FONT_WEIGHTS = [
     { label: "Black",      value: "900" },
 ];
 
-export const SHADOW_MAP = {
+const SHADOW_MAP = {
     none:         "none",
     sm:           "0 1px 3px rgba(0,0,0,.12)",
     md:           "0 4px 12px rgba(0,0,0,.1)",
@@ -339,7 +339,7 @@ export const SHADOW_MAP = {
     "glow-gold":  "0 0 20px rgba(245,158,11,.5)",
 };
 
-export const CALLOUT_PRESETS = {
+const CALLOUT_PRESETS = {
     info:    { bg: "#eff6ff", border: "#bfdbfe", color: "#1e40af", emoji: "ℹ️" },
     warning: { bg: "#fffbeb", border: "#fde68a", color: "#92400e", emoji: "⚠️" },
     success: { bg: "#ecfdf5", border: "#a7f3d0", color: "#065f46", emoji: "✅" },
@@ -348,12 +348,12 @@ export const CALLOUT_PRESETS = {
     purple:  { bg: "#faf5ff", border: "#e9d5ff", color: "#6b21a8", emoji: "💡" },
 };
 
-export const CODE_LANGS = [
+const CODE_LANGS = [
     "JavaScript","TypeScript","Python","PHP","HTML","CSS","SQL","JSON",
     "Bash","Java","C#","C++","Go","Rust","Ruby","YAML","Markdown","Vue",
 ];
 
-export const SHORTCUTS = [
+const SHORTCUTS = [
     { key: "Ctrl+Z",    desc: "Undo" },
     { key: "Ctrl+Y",    desc: "Redo" },
     { key: "Ctrl+S",    desc: "Save" },
@@ -368,7 +368,7 @@ export const SHORTCUTS = [
     { key: "Shift+←",  desc: "Nudge 10px" },
 ];
 
-export const QUICK_ADD = [
+const QUICK_ADD = [
     { type: "heading",   label: "Heading",   icon: "fa-solid fa-heading" },
     { type: "text",      label: "Paragraph", icon: "fa-solid fa-paragraph" },
     { type: "metric",    label: "KPI Card",  icon: "fa-solid fa-chart-line" },
@@ -379,7 +379,7 @@ export const QUICK_ADD = [
     { type: "progress",  label: "Progress",  icon: "fa-solid fa-bars-progress" },
 ];
 
-export const ELEMENT_CATEGORIES = [
+const ELEMENT_CATEGORIES = [
     {
         name: "Text & Content", icon: "fa-solid fa-font",
         items: [
@@ -1014,3 +1014,12 @@ provide("ELEMENT_CATEGORIES",ELEMENT_CATEGORIES);
 .toast-leave-active { transition: all 0.2s ease-in; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
 </style>
+
+
+
+
+what are the errors and what to be done for there 
+give solutions to problems and for files first give the code in artifact for pages/reports/editor.vue 
+and divide the editor file into components 
+
+<!-- thats nice  now with out changing any thing use fontawsom icon sand add all setings related to pages ,font,fontsize,family,header,footer settings,page number settings and all other settings and also remove the dark mode functions but do not remove the drark mode style classes from tags  as i have add drag mode toggle buutton on my header component and when new page is created then the new page must be according to the selected template AND keep reponsive -->
