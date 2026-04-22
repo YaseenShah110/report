@@ -4,11 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Models\Template;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Storage;
+use Inertia\Inertia;
 
 class ReportController extends Controller
 {
@@ -18,7 +17,7 @@ class ReportController extends Controller
 
         // Search
         if ($request->filled('search')) {
-            $query->where('title', 'like', '%' . $request->search . '%');
+            $query->where('title', 'like', '%'.$request->search.'%');
         }
 
         // Filter by status
@@ -37,10 +36,10 @@ class ReportController extends Controller
         $reports = $query->paginate(12)->withQueryString();
 
         $stats = [
-            'total'     => Report::where('user_id', auth()->id())->count(),
+            'total' => Report::where('user_id', auth()->id())->count(),
             'published' => Report::where('user_id', auth()->id())->where('status', 'published')->count(),
-            'draft'     => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
-            'archived'  => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
+            'draft' => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
+            'archived' => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
         ];
 
         return Inertia::render('Reports/Index', compact('reports', 'stats'));
@@ -49,13 +48,14 @@ class ReportController extends Controller
     public function create()
     {
         $templates = Template::where('is_active', true)->get();
+
         return Inertia::render('Reports/Create', compact('templates'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'title'       => 'required|string|max:255',
+            'title' => 'required|string|max:255',
             'template_id' => 'nullable|exists:templates,id',
         ]);
 
@@ -64,21 +64,21 @@ class ReportController extends Controller
 
         if ($request->filled('template_id')) {
             $template = Template::findOrFail($request->template_id);
-            $pages    = $this->buildPagesFromTemplate($template);
+            $pages = $this->buildPagesFromTemplate($template);
             $settings = array_merge($template->settings ?? $this->defaultSettings(), $initialSettings);
         } else {
-            $pages    = [['id' => (string) Str::uuid(), 'label' => 'Page 1', 'elements' => []]];
+            $pages = [['id' => (string) Str::uuid(), 'label' => 'Page 1', 'elements' => []]];
             $settings = array_merge($this->defaultSettings(), $initialSettings);
         }
 
         $report = Report::create([
-            'user_id'     => auth()->id(),
+            'user_id' => auth()->id(),
             'template_id' => $request->template_id,
-            'title'       => $request->title,
-            'slug'        => Str::slug($request->title) . '-' . Str::random(6),
-            'content'     => $pages,
-            'settings'    => $settings,
-            'status'      => 'draft',
+            'title' => $request->title,
+            'slug' => Str::slug($request->title).'-'.Str::random(6),
+            'content' => $pages,
+            'settings' => $settings,
+            'status' => 'draft',
         ]);
 
         return redirect()->route('reports.edit', $report->slug)
@@ -101,14 +101,14 @@ class ReportController extends Controller
             ->firstOrFail();
 
         $request->validate([
-            'title'    => 'required|string|max:255',
-            'content'  => 'required|array',
+            'title' => 'required|string|max:255',
+            'content' => 'required|array',
             'settings' => 'required|array',
         ]);
 
         $report->update([
-            'title'    => $request->title,
-            'content'  => $request->content,
+            'title' => $request->title,
+            'content' => $request->content,
             'settings' => $request->settings,
         ]);
 
@@ -131,17 +131,17 @@ class ReportController extends Controller
             ->firstOrFail();
 
         $pdf = Pdf::loadView('pdfs.report', [
-            'report'   => $report,
-            'content'  => $report->content,
+            'report' => $report,
+            'content' => $report->content,
             'settings' => $report->settings ?? [],
         ]);
 
         $pdf->setPaper(
-            $report->settings['page_size']    ?? 'A4',
-            $report->settings['orientation']  ?? 'portrait'
+            $report->settings['page_size'] ?? 'A4',
+            $report->settings['orientation'] ?? 'portrait'
         );
 
-        return $pdf->download(Str::slug($report->title) . '.pdf');
+        return $pdf->download(Str::slug($report->title).'.pdf');
     }
 
     public function destroy($slug)
@@ -168,7 +168,7 @@ class ReportController extends Controller
         ]);
 
         $report->update([
-            'status'       => $request->status,
+            'status' => $request->status,
             'published_at' => $request->status === 'published' ? now() : $report->published_at,
         ]);
 
@@ -186,23 +186,25 @@ class ReportController extends Controller
 
         // Give every element a fresh UUID so edits are independent
         $newContent = collect($report->content ?? [])->map(function ($page) {
-            $page['id']       = (string) Str::uuid();
-            $page['label']    = $page['label'] ?? 'Page';
+            $page['id'] = (string) Str::uuid();
+            $page['label'] = $page['label'] ?? 'Page';
             $page['elements'] = collect($page['elements'] ?? [])->map(function ($el) {
                 $el['id'] = (string) Str::uuid();
+
                 return $el;
             })->toArray();
+
             return $page;
         })->toArray();
 
         $newReport = Report::create([
-            'user_id'     => auth()->id(),
+            'user_id' => auth()->id(),
             'template_id' => $report->template_id,
-            'title'       => $report->title . ' (Copy)',
-            'slug'        => Str::slug($report->title) . '-copy-' . Str::random(6),
-            'content'     => $newContent,
-            'settings'    => $report->settings,
-            'status'      => 'draft',
+            'title' => $report->title.' (Copy)',
+            'slug' => Str::slug($report->title).'-copy-'.Str::random(6),
+            'content' => $newContent,
+            'settings' => $report->settings,
+            'status' => 'draft',
         ]);
 
         return redirect()->route('reports.index')->with('success', 'Report duplicated.');
@@ -222,10 +224,11 @@ class ReportController extends Controller
 
         return array_map(function (array $page) {
             return [
-                'id'       => (string) Str::uuid(),
-                'label'    => $page['label'] ?? 'Page',
+                'id' => (string) Str::uuid(),
+                'label' => $page['label'] ?? 'Page',
                 'elements' => array_map(function (array $el) {
                     $el['id'] = (string) Str::uuid();
+
                     return $el;
                 }, $page['elements'] ?? []),
             ];
@@ -235,27 +238,27 @@ class ReportController extends Controller
     private function defaultSettings(): array
     {
         return [
-            'page_size'         => 'A4',
-            'orientation'       => 'portrait',
-            'primary_color'     => '#6366f1',
-            'accent_color'      => '#8b5cf6',
-            'background_color'  => '#ffffff',
-            'text_color'        => '#0f172a',
-            'font_family'       => "'DM Sans', sans-serif",
-            'font_size'         => 14,
-            'margin'            => 40,
+            'page_size' => 'A4',
+            'orientation' => 'portrait',
+            'primary_color' => '#6366f1',
+            'accent_color' => '#8b5cf6',
+            'background_color' => '#ffffff',
+            'text_color' => '#0f172a',
+            'font_family' => "'DM Sans', sans-serif",
+            'font_size' => 14,
+            'margin' => 40,
             'show_page_numbers' => true,
-            'show_header'       => false,
-            'show_footer'       => false,
-            'header_text'       => '',
-            'footer_left'       => '',
-            'footer_right'      => '',
-            'header_color'      => '#1e293b',
-            'footer_color'      => '#1e293b',
-            'watermark'         => '',
-            'rtl'               => false,
-            'bg_image'          => '',
-            'page_radius'       => 0,
+            'show_header' => false,
+            'show_footer' => false,
+            'header_text' => '',
+            'footer_left' => '',
+            'footer_right' => '',
+            'header_color' => '#1e293b',
+            'footer_color' => '#1e293b',
+            'watermark' => '',
+            'rtl' => false,
+            'bg_image' => '',
+            'page_radius' => 0,
         ];
     }
 }
