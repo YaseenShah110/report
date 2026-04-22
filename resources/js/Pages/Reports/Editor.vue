@@ -1016,10 +1016,23 @@ provide("ELEMENT_CATEGORIES",ELEMENT_CATEGORIES);
 </style>
 
 
-
-
+<!-- give the code in artifact
+carefully analyze the project code, the Pages/report/editor.vue is splitted into components 
+the dynamic report generator is must be modern and proffesional and when the item is selected from left side bar then the related all possible setting is not showing on right sidebar ,
+Add more editable items like modern charts ,graphs,list,tables,carts  whose values,styles fully editableand changeable and smore then 50 using fontawsome icons
 what are the errors and what to be done for there 
 give solutions to problems and for files first give the code in artifact for pages/reports/editor.vue 
-and divide the editor file into components 
+and divide the editor file into componentthats nice  now with out changing any thing use fontawsom icon sand add all setings related to pages ,font,fontsize,family,header,footer settings,page number settings and all other settings and also remove the dark mode functions but do not remove the drark mode style classes from tags  as i have add drag mode toggle buutton on my header component and when new page is created then the new page must be according to the selected template AND keep reponsive design in mind while adding new features and components. and dont remove any features from the existing code just add new features and components as per the requirements and also make sure that all the features are working properly and there are no bugs in the code.
 
-<!-- thats nice  now with out changing any thing use fontawsom icon sand add all setings related to pages ,font,fontsize,family,header,footer settings,page number settings and all other settings and also remove the dark mode functions but do not remove the drark mode style classes from tags  as i have add drag mode toggle buutton on my header component and when new page is created then the new page must be according to the selected template AND keep reponsive -->
+in the left sidebar the items are categorized into sections like "Basic Elements", "Charts", "Media", "Data Visualization", "Layout", and "Cards". Each section has a list of elements that can be added to the report. When an element is selected, its related settings should be displayed in the right sidebar for editing.
+must contain all the settings related to page number, color, font side ,fotor,header,footer and all other settings related to the report and also add fontawsome icons for each setting in the right sidebar to make it more user friendly and modern.
+also add page layer settings and options to manage layers of elements on the page like bring to front, send to back, align left, align right, align center etc with fontawsome icons for each action in the right sidebar when an element is selected.
+make sure in leftside bar under page section when click on any page that page must be active and its elements should be displayed on the canvas for editing and also the settings of that page should be displayed in the right sidebar when that page is selected.
+remove dark mode toggle function but keep the dark mode styles in place so that it can be toggled from header component and also make sure that when new page is created then it should follow the selected template settings and also make sure that all the features are working properly and there are no bugs in the code.
+make sure when new page is created then it should follow the selected template settings and also make sure that all the features are working properly and there are no bugs in the code. -->
+
+
+
+<!-- give the code in artifact
+create modern and proffessional dynamic report generator dashboard with modern charts,graphs and also add functionality to dashboard for publish,darft,delete,duplicate and also add functionality to share the report with other users and also add functionality to export the report in different formats like pdf, excel, csv etc and also add functionality to set permissions for the report and also add functionality to track the changes made to the report and also add functionality to revert back to previous versions of the report and also add functionality to collaborate with other users in real time on the same report and
+keep optimize and responsive design in mind while adding new features and components. and also make sure that all the features are working properly and there are no bugs in the code. -->
