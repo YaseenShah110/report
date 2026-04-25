@@ -6,36 +6,53 @@ use App\Http\Controllers\TemplateController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
+// ── Public landing ─────────────────────────────────────────────────────────
 Route::get('/', function () {
-    return Inertia::render('Welcome');
+    return Inertia::render('Welcome', [
+        'canLogin'      => Route::has('login'),
+        'canRegister'   => Route::has('register'),
+        'laravelVersion'=> app()->version(),
+        'phpVersion'    => PHP_VERSION,
+    ]);
 })->name('home');
 
+// ── Public share preview ───────────────────────────────────────────────────
+Route::get('/share/{token}', [ReportController::class, 'publicPreview'])
+    ->name('reports.public-preview');
+
+// ── Authenticated routes ───────────────────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Reports
-    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
-    Route::get('/reports/create', [ReportController::class, 'create'])->name('reports.create');
-    Route::post('/reports', [ReportController::class, 'store'])->name('reports.store');
-    Route::get('/reports/{report:slug}/edit', [ReportController::class, 'edit'])->name('reports.edit');
-    Route::put('/reports/{report:slug}', [ReportController::class, 'update'])->name('reports.update');
-    Route::get('/reports/{report:slug}/preview', [ReportController::class, 'preview'])->name('reports.preview');
-    Route::get('/reports/{report:slug}/download', [ReportController::class, 'download'])->name('reports.download');
-    Route::delete('/reports/{report:slug}', [ReportController::class, 'destroy'])->name('reports.destroy');
-    Route::patch('/reports/{report:slug}/status', [ReportController::class, 'updateStatus'])->name('reports.status');
-    Route::post('/reports/{report:slug}/duplicate', [ReportController::class, 'duplicate'])->name('reports.duplicate');
+    // ── Reports ─────────────────────────────────────────────────────────────
+    Route::get('/reports',                              [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/create',                       [ReportController::class, 'create'])->name('reports.create');
+    Route::post('/reports',                             [ReportController::class, 'store'])->name('reports.store');
+    Route::get('/reports/{report:slug}/edit',           [ReportController::class, 'edit'])->name('reports.edit');
+    Route::put('/reports/{report:slug}',                [ReportController::class, 'update'])->name('reports.update');
+    Route::get('/reports/{report:slug}/preview',        [ReportController::class, 'preview'])->name('reports.preview');
+    Route::get('/reports/{report:slug}/download',       [ReportController::class, 'download'])->name('reports.download');
+    Route::delete('/reports/{report:slug}',             [ReportController::class, 'destroy'])->name('reports.destroy');
+    Route::patch('/reports/{report:slug}/status',       [ReportController::class, 'updateStatus'])->name('reports.status');
+    Route::post('/reports/{report:slug}/duplicate',     [ReportController::class, 'duplicate'])->name('reports.duplicate');
 
-    // Templates
-    Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
-    Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
+    // Share link management
+    Route::post('/reports/{report:slug}/share',         [ReportController::class, 'generateShareLink'])->name('reports.share');
 
-    // In web.php, inside auth group:
-    Route::get('/reports/{report:slug}/export/excel', [ReportController::class, 'exportExcel'])->name('reports.export.excel');
-    Route::get('/reports/{report:slug}/export/csv', [ReportController::class, 'exportCsv'])->name('reports.export.csv');
-    Route::get('/reports/{report:slug}/export/image', [ReportController::class, 'exportImage'])->name('reports.export.image');
+    // Version history
+    Route::get('/reports/{report:slug}/versions',       [ReportController::class, 'versions'])->name('reports.versions');
+    Route::post('/reports/{report:slug}/versions/restore', [ReportController::class, 'restoreVersion'])->name('reports.versions.restore');
 
+    // Exports
+    Route::get('/reports/{report:slug}/export/excel',   [ReportController::class, 'exportExcel'])->name('reports.export.excel');
+    Route::get('/reports/{report:slug}/export/csv',     [ReportController::class, 'exportCsv'])->name('reports.export.csv');
+    Route::get('/reports/{report:slug}/export/image',   [ReportController::class, 'exportImage'])->name('reports.export.image');
+
+    // ── Templates ────────────────────────────────────────────────────────────
+    Route::get('/templates',             [TemplateController::class, 'index'])->name('templates.index');
+    Route::get('/templates/{template}',  [TemplateController::class, 'show'])->name('templates.show');
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';
