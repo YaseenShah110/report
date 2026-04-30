@@ -9,7 +9,7 @@ class Template extends Model
 {
     protected $fillable = [
         'name', 'slug', 'description', 'thumbnail', 
-        'structure', 'settings', 'is_active'
+        'structure', 'settings', 'is_active','category'
     ];
     
     protected $casts = [

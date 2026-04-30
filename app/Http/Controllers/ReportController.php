@@ -1,22 +1,40 @@
 <?php
+// app/Http/Controllers/ReportController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Report;
+use App\Models\ReportVersion;
 use App\Models\Template;
+use App\Models\UserActivity;
+use App\Models\ReportAssignment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
     // ─────────────────────────────────────────────────────────────
-    //  LIST
+    //  LIST REPORTS
     // ─────────────────────────────────────────────────────────────
     public function index(Request $request)
     {
-        $query = Report::where('user_id', auth()->id())->with('template');
+        $user = auth()->user();
+        
+        // Get reports that user owns OR has been assigned to
+        $query = Report::with('template')
+            ->where(function($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhereHas('assignments', function($sq) use ($user) {
+                      $sq->where('user_id', $user->id)
+                         ->where('is_active', true)
+                         ->where(function($exp) {
+                             $exp->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                         });
+                  });
+            });
 
         if ($request->filled('search')) {
             $query->where('title', 'like', '%' . $request->search . '%');
@@ -42,7 +60,7 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  CREATE
+    //  CREATE REPORT FORM
     // ─────────────────────────────────────────────────────────────
     public function create()
     {
@@ -51,7 +69,7 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  STORE
+    //  STORE NEW REPORT
     // ─────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
@@ -75,37 +93,57 @@ class ReportController extends Controller
             'user_id'     => auth()->id(),
             'template_id' => $request->template_id,
             'title'       => $request->title,
-            // FIX: use Str::random(8) instead of uniqid() to avoid collisions
             'slug'        => Str::slug($request->title) . '-' . Str::random(8),
             'content'     => $pages,
             'settings'    => $settings,
             'status'      => 'draft',
         ]);
 
+        // Log activity
+        UserActivity::log(auth()->id(), 'report_created', 'report', $report->id, [
+            'report_title' => $report->title,
+            'template_used' => $request->template_id ? 'yes' : 'no'
+        ]);
+
+        // Create initial version
+        $this->createVersionSnapshot($report, 'Initial version');
+
         return redirect()->route('reports.edit', $report->slug)
             ->with('success', 'Report created!');
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  EDIT
+    //  EDIT REPORT
     // ─────────────────────────────────────────────────────────────
     public function edit($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
+        
+        // Check if user has edit permission via assignment
+        $user = auth()->user();
+        if ($user->id !== $report->user_id && !$user->hasRole('admin')) {
+            $assignment = ReportAssignment::where('report_id', $report->id)
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->where(function($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->first();
+            
+            if (!$assignment || !in_array($assignment->permission, ['edit', 'manage'])) {
+                abort(403, 'You do not have permission to edit this report.');
+            }
+        }
 
         return Inertia::render('Reports/Editor', ['report' => $report]);
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  UPDATE (auto-save)
+    //  UPDATE REPORT (Auto-save from editor)
     // ─────────────────────────────────────────────────────────────
     public function update(Request $request, $slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         $request->validate([
             'title'    => 'required|string|max:255',
@@ -113,46 +151,35 @@ class ReportController extends Controller
             'settings' => 'required|array',
         ]);
 
+        $oldContent = $report->content;
+        $oldSettings = $report->settings;
+
         $report->update([
             'title'    => $request->title,
             'content'  => $request->content,
             'settings' => $request->settings,
         ]);
 
-        // Auto-save a version snapshot every 5 minutes
-        // (only if report_versions table exists — see migration fix)
-        if (\Schema::hasTable('report_versions')) {
-            $lastVersion = \DB::table('report_versions')
-                ->where('report_id', $report->id)
-                ->orderByDesc('created_at')
+        // Create version snapshot if significant changes
+        $contentChanged = md5(json_encode($oldContent)) !== md5(json_encode($request->content));
+        $settingsChanged = md5(json_encode($oldSettings)) !== md5(json_encode($request->settings));
+        
+        if ($contentChanged || $settingsChanged) {
+            // Check if last version was > 5 minutes ago
+            $lastVersion = ReportVersion::where('report_id', $report->id)
+                ->orderBy('created_at', 'desc')
                 ->first();
 
-            $shouldSave = !$lastVersion
-                || now()->diffInMinutes($lastVersion->created_at) >= 5;
-
-            if ($shouldSave) {
-                \DB::table('report_versions')->insert([
-                    'report_id'  => $report->id,
-                    'content'    => json_encode($request->content),
-                    'settings'   => json_encode($request->settings),
-                    'title'      => $request->title,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-
-                // Keep only last 20 versions per report
-                $versionIds = \DB::table('report_versions')
-                    ->where('report_id', $report->id)
-                    ->orderByDesc('created_at')
-                    ->skip(20)
-                    ->take(9999)
-                    ->pluck('id');
-
-                if ($versionIds->count()) {
-                    \DB::table('report_versions')->whereIn('id', $versionIds)->delete();
-                }
+            if (!$lastVersion || now()->diffInMinutes($lastVersion->created_at) >= 5) {
+                $this->createVersionSnapshot($report, 'Auto-saved');
             }
         }
+
+        UserActivity::log(auth()->id(), 'report_updated', 'report', $report->id, [
+            'report_title' => $report->title,
+            'content_changed' => $contentChanged,
+            'settings_changed' => $settingsChanged
+        ]);
 
         return response()->json([
             'message'    => 'Saved',
@@ -161,55 +188,64 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  PREVIEW
+    //  PREVIEW REPORT
     // ─────────────────────────────────────────────────────────────
     public function preview($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
+        
+        // Check if user has view permission
+        $user = auth()->user();
+        if ($user->id !== $report->user_id && !$user->hasRole('admin')) {
+            $hasAccess = ReportAssignment::where('report_id', $report->id)
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->where(function($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->exists();
+            
+            if (!$hasAccess && !$report->is_public) {
+                abort(403, 'You do not have permission to view this report.');
+            }
+        }
 
         return Inertia::render('Reports/Preview', ['report' => $report]);
     }
 
     // ─────────────────────────────────────────────────────────────
     //  DOWNLOAD PDF
-    //  FIX: Use Browsershot if available, fallback to DomPDF.
-    //  Install: composer require spatie/browsershot
-    //  Requires: Node.js + Puppeteer on server
-    //  Install Puppeteer: npm install puppeteer (in project root)
     // ─────────────────────────────────────────────────────────────
     public function download($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         $filename = Str::slug($report->title) . '.pdf';
 
-        // ── Option A: Browsershot (RECOMMENDED — renders charts + fonts perfectly) ──
+        // Option A: Browsershot (recommended)
         if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
-            // Build the full URL to the preview page (Browsershot needs a real URL)
             $previewUrl = route('reports.preview', $report->slug);
-
-            // Add auth cookie so Browsershot can access the authenticated page
             $sessionCookie = session()->getId();
-            $cookieName    = config('session.cookie');
+            $cookieName = config('session.cookie');
 
-            $pdf = \Spatie\Browsershot\Browsershot::url($previewUrl)
-                ->useCookies([
-                    $cookieName => $sessionCookie,
-                ])
-                ->waitUntilNetworkIdle()        // wait for all Chart.js to render
+            $pdf = \Spatie\Browsershot\Browsersshot::url($previewUrl)
+                ->useCookies([$cookieName => $sessionCookie])
+                ->waitUntilNetworkIdle()
                 ->dismissDialogs()
                 ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
                 ->paperSize(
                     $this->getPaperWidth($report->settings),
                     $this->getPaperHeight($report->settings)
                 )
-                ->landscape($report->settings['orientation'] === 'landscape')
+                ->landscape(($report->settings['orientation'] ?? 'portrait') === 'landscape')
                 ->margins(0, 0, 0, 0)
                 ->pdf();
+
+            // Log download activity
+            UserActivity::log(auth()->id(), 'report_downloaded', 'report', $report->id, [
+                'format' => 'pdf',
+                'via' => 'browsershot'
+            ]);
 
             return response($pdf, 200, [
                 'Content-Type'        => 'application/pdf',
@@ -217,8 +253,7 @@ class ReportController extends Controller
             ]);
         }
 
-        // ── Option B: DomPDF fallback (charts won't render, but text/shapes will) ──
-        // Install: composer require barryvdh/laravel-dompdf
+        // Option B: DomPDF fallback
         if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.report', [
                 'report'   => $report,
@@ -231,6 +266,11 @@ class ReportController extends Controller
                 $report->settings['orientation'] ?? 'portrait'
             );
 
+            UserActivity::log(auth()->id(), 'report_downloaded', 'report', $report->id, [
+                'format' => 'pdf',
+                'via' => 'dompdf'
+            ]);
+
             return $pdf->download($filename);
         }
 
@@ -239,14 +279,10 @@ class ReportController extends Controller
 
     // ─────────────────────────────────────────────────────────────
     //  EXPORT EXCEL
-    //  FIX: This method was missing — caused 500 error
-    //  Install: composer require maatwebsite/excel
     // ─────────────────────────────────────────────────────────────
     public function exportExcel($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         // Extract all table elements from all pages
         $tables = [];
@@ -257,6 +293,7 @@ class ReportController extends Controller
                         'page'    => $pageIndex + 1,
                         'columns' => $el['columns'] ?? [],
                         'data'    => $el['data'] ?? [],
+                        'title'   => $el['title'] ?? "Table " . (count($tables) + 1),
                     ];
                 }
             }
@@ -266,6 +303,11 @@ class ReportController extends Controller
             return response()->json(['error' => 'No table data found in this report'], 422);
         }
 
+        UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, [
+            'format' => 'excel',
+            'tables_count' => count($tables)
+        ]);
+
         // If maatwebsite/excel is installed
         if (class_exists(\Maatwebsite\Excel\Facades\Excel::class)) {
             return \Maatwebsite\Excel\Facades\Excel::download(
@@ -274,20 +316,17 @@ class ReportController extends Controller
             );
         }
 
-        // Fallback: generate a simple CSV-in-xlsx manually
-        return $this->generateSimpleExcel($report, $tables);
+        // Fallback CSV export
+        return $this->exportCsv($slug);
     }
 
     // ─────────────────────────────────────────────────────────────
     //  EXPORT CSV
-    //  FIX: This method was missing — caused 500 error
     // ─────────────────────────────────────────────────────────────
     public function exportCsv($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
-
+        $report = Report::where('slug', $slug)->firstOrFail();
+        
         $csvRows  = [];
         $hasData  = false;
 
@@ -295,11 +334,8 @@ class ReportController extends Controller
             foreach ($page['elements'] ?? [] as $el) {
                 if ($el['type'] === 'table' && !empty($el['data'])) {
                     $hasData = true;
-                    // Section header
                     $csvRows[] = ['=== Page ' . ($pageIndex + 1) . ' Table ==='];
-                    // Column headers
                     $csvRows[] = $el['columns'] ?? [];
-                    // Data rows
                     foreach ($el['data'] as $row) {
                         $csvRows[] = array_map(fn($col) => $row[$col] ?? '', $el['columns'] ?? []);
                     }
@@ -326,6 +362,10 @@ class ReportController extends Controller
             return response()->json(['error' => 'No exportable data found in this report'], 422);
         }
 
+        UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, [
+            'format' => 'csv'
+        ]);
+
         $filename = Str::slug($report->title) . '.csv';
 
         $callback = function () use ($csvRows) {
@@ -344,13 +384,10 @@ class ReportController extends Controller
 
     // ─────────────────────────────────────────────────────────────
     //  EXPORT IMAGE (PNG via Browsershot)
-    //  FIX: This method was missing — caused 500 error
     // ─────────────────────────────────────────────────────────────
     public function exportImage($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         if (!class_exists(\Spatie\Browsershot\Browsershot::class)) {
             return response()->json([
@@ -358,16 +395,28 @@ class ReportController extends Controller
             ], 500);
         }
 
-        $previewUrl  = route('reports.preview', $report->slug);
+        $previewUrl = route('reports.preview', $report->slug);
         $sessionCookie = session()->getId();
-        $cookieName    = config('session.cookie');
+        $cookieName = config('session.cookie');
 
+        // Set window size based on page dimensions
+        $settings = $report->settings ?? [];
+        $sizes = [
+            'A4' => ['portrait' => [794, 1123], 'landscape' => [1123, 794]],
+            'Letter' => ['portrait' => [816, 1056], 'landscape' => [1056, 816]],
+        ];
+        $dimensions = $sizes[$settings['page_size'] ?? 'A4'][$settings['orientation'] ?? 'portrait'] ?? [794, 1123];
+        
         $image = \Spatie\Browsershot\Browsershot::url($previewUrl)
             ->useCookies([$cookieName => $sessionCookie])
             ->waitUntilNetworkIdle()
             ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
-            ->windowSize(1200, 1600)
+            ->windowSize($dimensions[0], $dimensions[1])
             ->screenshot();
+
+        UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, [
+            'format' => 'image/png'
+        ]);
 
         return response($image, 200, [
             'Content-Type'        => 'image/png',
@@ -376,13 +425,15 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  DESTROY
+    //  DESTROY REPORT
     // ─────────────────────────────────────────────────────────────
     public function destroy($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        UserActivity::log(auth()->id(), 'report_deleted', 'report', $report->id, [
+            'report_title' => $report->title
+        ]);
 
         $report->delete();
 
@@ -390,13 +441,11 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  STATUS UPDATE
+    //  UPDATE STATUS (publish, archive, draft)
     // ─────────────────────────────────────────────────────────────
     public function updateStatus(Request $request, $slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         $request->validate(['status' => 'required|in:draft,published,archived']);
 
@@ -405,17 +454,20 @@ class ReportController extends Controller
             'published_at' => $request->status === 'published' ? now() : $report->published_at,
         ]);
 
+        UserActivity::log(auth()->id(), 'report_status_changed', 'report', $report->id, [
+            'old_status' => $report->getOriginal('status'),
+            'new_status' => $request->status
+        ]);
+
         return back()->with('success', 'Status updated.');
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  DUPLICATE
+    //  DUPLICATE REPORT
     // ─────────────────────────────────────────────────────────────
     public function duplicate($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         $newContent = collect($report->content ?? [])->map(function ($page) {
             $page['id']       = (string) Str::uuid();
@@ -426,7 +478,7 @@ class ReportController extends Controller
             return $page;
         })->toArray();
 
-        Report::create([
+        $newReport = Report::create([
             'user_id'     => auth()->id(),
             'template_id' => $report->template_id,
             'title'       => $report->title . ' (Copy)',
@@ -436,85 +488,109 @@ class ReportController extends Controller
             'status'      => 'draft',
         ]);
 
+        UserActivity::log(auth()->id(), 'report_duplicated', 'report', $newReport->id, [
+            'original_report' => $report->title,
+            'new_report' => $newReport->title
+        ]);
+
         return redirect()->route('reports.index')->with('success', 'Report duplicated.');
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  VERSION HISTORY  (NEW — requires report_versions table)
+    //  VERSION HISTORY
     // ─────────────────────────────────────────────────────────────
     public function versions($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
-        if (!\Schema::hasTable('report_versions')) {
-            return response()->json(['versions' => []]);
-        }
-
-        $versions = \DB::table('report_versions')
-            ->where('report_id', $report->id)
+        $versions = ReportVersion::where('report_id', $report->id)
             ->orderByDesc('created_at')
-            ->select('id', 'title', 'created_at')
-            ->limit(20)
+            ->select('id', 'title', 'label', 'version_number', 'created_at')
+            ->limit(50)
             ->get();
 
         return response()->json(['versions' => $versions]);
     }
 
-    public function restoreVersion($slug, $versionId)
+    // ─────────────────────────────────────────────────────────────
+    //  RESTORE VERSION
+    // ─────────────────────────────────────────────────────────────
+    public function restoreVersion(Request $request, $slug, $versionId)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
-        $version = \DB::table('report_versions')
-            ->where('id', $versionId)
+        $version = ReportVersion::where('id', $versionId)
             ->where('report_id', $report->id)
             ->firstOrFail();
 
         $report->update([
-            'content'  => json_decode($version->content, true),
-            'settings' => json_decode($version->settings, true),
+            'content'  => $version->content,
+            'settings' => $version->settings,
             'title'    => $version->title,
         ]);
 
-        return response()->json(['message' => 'Version restored']);
+        UserActivity::log(auth()->id(), 'report_version_restored', 'report', $report->id, [
+            'version_id' => $versionId,
+            'version_label' => $version->label
+        ]);
+
+        // Create a new version from current state before restore
+        $this->createVersionSnapshot($report, 'Restored from version #' . $versionId);
+
+        return response()->json(['message' => 'Version restored successfully']);
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  PUBLIC SHARE  (NEW — requires share_token column)
+    //  GENERATE SHARE LINK
     // ─────────────────────────────────────────────────────────────
     public function generateShareLink($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
         if (!$report->share_token) {
-            $report->update(['share_token' => Str::random(32)]);
+            $report->update([
+                'share_token' => Str::random(32),
+                'is_public' => true,
+            ]);
+        } else {
+            $report->update(['is_public' => true]);
         }
 
+        UserActivity::log(auth()->id(), 'report_share_link_generated', 'report', $report->id, [
+            'share_token' => $report->share_token
+        ]);
+
         return response()->json([
-            'url'   => route('reports.shared', $report->share_token),
+            'url'   => route('reports.public-preview', $report->share_token),
             'token' => $report->share_token,
         ]);
     }
 
+    // ─────────────────────────────────────────────────────────────
+    //  REVOKE SHARE LINK
+    // ─────────────────────────────────────────────────────────────
     public function revokeShareLink($slug)
     {
-        $report = Report::where('slug', $slug)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
 
-        $report->update(['share_token' => null]);
+        $report->update([
+            'share_token' => null,
+            'is_public' => false,
+        ]);
+
+        UserActivity::log(auth()->id(), 'report_share_link_revoked', 'report', $report->id, []);
 
         return response()->json(['message' => 'Share link revoked']);
     }
 
-    public function showShared($token)
+    // ─────────────────────────────────────────────────────────────
+    //  PUBLIC PREVIEW (no authentication required)
+    // ─────────────────────────────────────────────────────────────
+    public function publicPreview($token)
     {
-        $report = Report::where('share_token', $token)->firstOrFail();
+        $report = Report::where('share_token', $token)
+            ->where('is_public', true)
+            ->firstOrFail();
 
         return Inertia::render('Reports/Preview', [
             'report'   => $report,
@@ -523,8 +599,151 @@ class ReportController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────
-    //  HELPERS
+    //  PUBLIC DOWNLOAD (no authentication required)
     // ─────────────────────────────────────────────────────────────
+    public function publicDownload($token)
+    {
+        $report = Report::where('share_token', $token)
+            ->where('is_public', true)
+            ->firstOrFail();
+
+        $filename = Str::slug($report->title) . '.pdf';
+
+        if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
+            $previewUrl = route('reports.public-preview', $token);
+            
+            $pdf = \Spatie\Browsershot\Browsershot::url($previewUrl)
+                ->waitUntilNetworkIdle()
+                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
+                ->paperSize(
+                    $this->getPaperWidth($report->settings),
+                    $this->getPaperHeight($report->settings)
+                )
+                ->landscape(($report->settings['orientation'] ?? 'portrait') === 'landscape')
+                ->pdf();
+
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            ]);
+        }
+
+        // Fallback to DomPDF
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.report', [
+            'report' => $report,
+            'content' => $report->content,
+            'settings' => $report->settings ?? [],
+        ]);
+
+        return $pdf->download($filename);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  GET SHARED REPORT (with token)
+    // ─────────────────────────────────────────────────────────────
+    public function showShared($token)
+    {
+        $report = Report::where('share_token', $token)
+            ->where('is_public', true)
+            ->firstOrFail();
+
+        return Inertia::render('Reports/Preview', [
+            'report'   => $report,
+            'readOnly' => true,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  ASSIGN REPORT TO USER (Admin/Manager)
+    // ─────────────────────────────────────────────────────────────
+    public function assignToUser(Request $request, $slug)
+    {
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'permission' => 'required|in:view,edit,manage',
+            'expires_at' => 'nullable|date|after:today',
+        ]);
+
+        $assignment = ReportAssignment::updateOrCreate(
+            [
+                'report_id' => $report->id,
+                'user_id' => $request->user_id,
+            ],
+            [
+                'assigned_by' => auth()->id(),
+                'permission' => $request->permission,
+                'expires_at' => $request->expires_at,
+                'is_active' => true,
+            ]
+        );
+
+        UserActivity::log(auth()->id(), 'report_assigned', 'report', $report->id, [
+            'assigned_to' => $request->user_id,
+            'permission' => $request->permission
+        ]);
+
+        return response()->json([
+            'message' => 'Report assigned successfully',
+            'assignment' => $assignment
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  REMOVE ASSIGNMENT
+    // ─────────────────────────────────────────────────────────────
+    public function removeAssignment($slug, $assignmentId)
+    {
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        $assignment = ReportAssignment::where('id', $assignmentId)
+            ->where('report_id', $report->id)
+            ->firstOrFail();
+
+        $assignment->delete();
+
+        UserActivity::log(auth()->id(), 'report_unassigned', 'report', $report->id, [
+            'removed_user' => $assignment->user_id
+        ]);
+
+        return response()->json(['message' => 'Assignment removed']);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  GET REPORT ASSIGNMENTS
+    // ─────────────────────────────────────────────────────────────
+    public function getAssignments($slug)
+    {
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        $assignments = ReportAssignment::where('report_id', $report->id)
+            ->with(['user', 'assignedBy'])
+            ->get()
+            ->map(function($a) {
+                return [
+                    'id' => $a->id,
+                    'user_id' => $a->user_id,
+                    'user_name' => $a->user->name,
+                    'user_email' => $a->user->email,
+                    'permission' => $a->permission,
+                    'assigned_by' => $a->assignedBy->name,
+                    'assigned_at' => $a->assigned_at,
+                    'expires_at' => $a->expires_at,
+                    'is_active' => $a->is_active,
+                ];
+            });
+
+        return response()->json(['assignments' => $assignments]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    //  PRIVATE HELPER METHODS
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Build pages array from template structure
+     */
     private function buildPagesFromTemplate(Template $template): array
     {
         $pages = $template->structure['pages'] ?? [];
@@ -545,6 +764,38 @@ class ReportController extends Controller
         }, $pages);
     }
 
+    /**
+     * Create a version snapshot of the report
+     */
+    private function createVersionSnapshot(Report $report, $label = null): void
+    {
+        $lastVersion = ReportVersion::where('report_id', $report->id)
+            ->orderBy('version_number', 'desc')
+            ->first();
+
+        $versionNumber = ($lastVersion ? $lastVersion->version_number + 1 : 1);
+
+        ReportVersion::create([
+            'report_id' => $report->id,
+            'user_id' => auth()->id(),
+            'label' => $label ?? 'Auto-saved',
+            'content' => $report->content,
+            'settings' => $report->settings,
+            'title' => $report->title,
+            'version_number' => $versionNumber,
+        ]);
+
+        // Keep only last 50 versions
+        ReportVersion::where('report_id', $report->id)
+            ->orderBy('version_number', 'desc')
+            ->skip(50)
+            ->take(1000)
+            ->delete();
+    }
+
+    /**
+     * Default report settings
+     */
     private function defaultSettings(): array
     {
         return [
@@ -572,38 +823,41 @@ class ReportController extends Controller
         ];
     }
 
-    // Paper sizes in mm for Browsershot
+    /**
+     * Get paper width in mm for PDF
+     */
     private function getPaperWidth(array $settings): float
     {
         $sizes = [
-            'A4'     => 210,
-            'A3'     => 297,
-            'A5'     => 148,
-            'Letter' => 215.9,
-            'Legal'  => 215.9,
+            'A4' => ['portrait' => 210, 'landscape' => 297],
+            'Letter' => ['portrait' => 215.9, 'landscape' => 279.4],
+            'Legal' => ['portrait' => 215.9, 'landscape' => 355.6],
+            'A3' => ['portrait' => 297, 'landscape' => 420],
+            'A5' => ['portrait' => 148, 'landscape' => 210],
         ];
+        
         $size = $settings['page_size'] ?? 'A4';
-        $w    = $sizes[$size] ?? 210;
-        return ($settings['orientation'] ?? 'portrait') === 'landscape' ? ($sizes[$size . '_h'] ?? $w) : $w;
+        $orientation = $settings['orientation'] ?? 'portrait';
+        
+        return $sizes[$size][$orientation] ?? $sizes['A4']['portrait'];
     }
 
+    /**
+     * Get paper height in mm for PDF
+     */
     private function getPaperHeight(array $settings): float
     {
         $sizes = [
-            'A4'     => 297,
-            'A3'     => 420,
-            'A5'     => 210,
-            'Letter' => 279.4,
-            'Legal'  => 355.6,
+            'A4' => ['portrait' => 297, 'landscape' => 210],
+            'Letter' => ['portrait' => 279.4, 'landscape' => 215.9],
+            'Legal' => ['portrait' => 355.6, 'landscape' => 215.9],
+            'A3' => ['portrait' => 420, 'landscape' => 297],
+            'A5' => ['portrait' => 210, 'landscape' => 148],
         ];
+        
         $size = $settings['page_size'] ?? 'A4';
-        $h    = $sizes[$size] ?? 297;
-        return ($settings['orientation'] ?? 'portrait') === 'landscape' ? ($sizes[$size . '_w'] ?? $h) : $h;
-    }
-
-    private function generateSimpleExcel(Report $report, array $tables): \Symfony\Component\HttpFoundation\StreamedResponse
-    {
-        // Simple CSV fallback when maatwebsite/excel not installed
-        return $this->exportCsv($report->slug);
+        $orientation = $settings['orientation'] ?? 'portrait';
+        
+        return $sizes[$size][$orientation] ?? $sizes['A4']['portrait'];
     }
 }

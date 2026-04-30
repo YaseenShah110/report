@@ -1,22 +1,30 @@
+<!-- resources/js/Layouts/GuestLayout.vue -->
 <template>
-    <div class="min-h-screen flex flex-col justify-center items-center bg-slate-50 dark:bg-slate-900 py-12 px-4">
-        <div class="mb-8">
-            <Link :href="route('login')" class="flex items-center gap-2.5">
-                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                </div>
-                <span class="font-bold text-slate-900 dark:text-white text-xl">ReportGen</span>
-            </Link>
+  <div class="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800 py-12 px-4">
+    <div class="mb-8">
+      <Link :href="route('login')" class="flex items-center gap-2.5">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+          <i class="fa-solid fa-chart-line text-white text-xl"></i>
         </div>
-        <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-8">
-            <slot/>
-        </div>
+        <span class="font-bold text-slate-900 dark:text-white text-2xl">ReportGen</span>
+      </Link>
     </div>
+    <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl p-8 animate-fade-in">
+      <slot/>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { Link } from '@inertiajs/vue3';
+import { Link } from '@inertiajs/vue3'
 </script>
+
+<style scoped>
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+</style>
