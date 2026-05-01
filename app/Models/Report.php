@@ -4,11 +4,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
-
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Report extends Model
 {
-    protected $fillable = [
+    
+use HasFactory, SoftDeletes; 
+ protected $dates = ['deleted_at'];
+protected $fillable = [
         'user_id', 'template_id', 'title', 'slug', 'share_token', 'is_public',
         'content', 'settings', 'metadata', 'status', 'published_at'
     ];

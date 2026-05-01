@@ -3863,3 +3863,4 @@ const ColorPicker = {
 
 <!-- For DomPDF fallback (optional) -->
 <!-- composer require barryvdh/laravel-dompdf -->
+ <!-- #editor and preview not enhance -->

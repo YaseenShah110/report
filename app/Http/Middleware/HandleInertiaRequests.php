@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use App\Models\Task;
 use App\Models\ReportAssignment;
+use App\Models\Notification;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -38,6 +39,9 @@ class HandleInertiaRequests extends Middleware
         $pendingTasks = null;
         $overdueTasks = null;
         $assignedReportsCount = null;
+        $notifications = [];
+        $unreadNotificationsCount = 0;
+        $notificationTypes = [];
         
         if ($user) {
             // Count pending tasks for notification badge
@@ -58,6 +62,51 @@ class HandleInertiaRequests extends Middleware
                     $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
                 })
                 ->count();
+            
+            // Get latest notifications for dropdown
+            $notifications = Notification::where('user_id', $user->id)
+                ->recent()
+                ->take(10)
+                ->get()
+                ->map(function ($notification) {
+                    return [
+                        'id' => $notification->id,
+                        'type' => $notification->type,
+                        'title' => $notification->title,
+                        'message' => $notification->message,
+                        'icon' => $notification->icon ?? 'fa-solid fa-bell',
+                        'color' => $notification->color ?? '#64748b',
+                        'action_url' => $notification->action_url,
+                        'read_at' => $notification->read_at,
+                        'trashed' => $notification->trashed(),
+                        'created_at' => $notification->created_at,
+                        'time_ago' => $notification->created_at->diffForHumans(),
+                    ];
+                });
+            
+            // Get unread notification count
+            $unreadNotificationsCount = Notification::where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->count();
+            
+            // Get notification type counts for filtering
+            $notificationTypes = Notification::where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->selectRaw('type, COUNT(*) as count')
+                ->groupBy('type')
+                ->pluck('count', 'type')
+                ->toArray();
+            
+            // Get specific notification counts for sidebar badges
+            $assignedReportsNotifications = Notification::where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->whereIn('type', ['report_assigned', 'report_shared'])
+                ->count();
+            
+            $pendingTaskNotifications = Notification::where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->whereIn('type', ['task_created', 'task_updated'])
+                ->count();
         }
         
         return [
@@ -70,6 +119,7 @@ class HandleInertiaRequests extends Middleware
                     'is_premium' => $user->is_premium,
                     'roles' => $user->getRoleNames(),
                 ] : null,
+                'is_impersonating' => session()->has('impersonate'),
             ],
             'flash' => [
                 'success' => session('success'),
@@ -87,6 +137,12 @@ class HandleInertiaRequests extends Middleware
                 'pending_tasks' => $pendingTasks,
                 'overdue_tasks' => $overdueTasks,
                 'assigned_reports' => $assignedReportsCount,
+                // New dynamic notification data
+                'items' => $notifications,
+                'unread_count' => $unreadNotificationsCount,
+                'types' => $notificationTypes,
+                'assigned_reports_notifications' => $assignedReportsNotifications ?? 0,
+                'pending_task_notifications' => $pendingTaskNotifications ?? 0,
             ],
         ];
     }

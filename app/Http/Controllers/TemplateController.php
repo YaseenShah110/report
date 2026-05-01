@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Template;
 use Inertia\Inertia;
-
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 class TemplateController extends Controller
 {
+     use HasFactory, SoftDeletes; 
+     protected $dates = ['deleted_at'];
     public function index()
     {
         $templates = Template::where('is_active', true)

@@ -860,4 +860,54 @@ class ReportController extends Controller
         
         return $sizes[$size][$orientation] ?? $sizes['A4']['portrait'];
     }
+
+    /**
+ * Get reports assigned to the authenticated user
+ */
+public function assignedReports()
+{
+    $user = auth()->user();
+    
+    $assignments = ReportAssignment::with(['report', 'assignedBy'])
+        ->where('user_id', $user->id)
+        ->where('is_active', true)
+        ->where(function($q) {
+            $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+        })
+        ->get()
+        ->map(function($assignment) {
+            // Calculate progress based on report completion (customize as needed)
+            $report = $assignment->report;
+            $totalElements = 0;
+            $completedElements = 0;
+            
+            if ($report && $report->content) {
+                foreach ($report->content as $page) {
+                    $totalElements += count($page['elements'] ?? []);
+                }
+            }
+            
+            $progress = $totalElements > 0 ? min(100, round(($completedElements / $totalElements) * 100)) : 0;
+            
+            return [
+                'id' => $assignment->id,
+                'permission' => $assignment->permission,
+                'assigned_at' => $assignment->assigned_at,
+                'expires_at' => $assignment->expires_at,
+                'progress' => $progress,
+                'assigned_by' => $assignment->assignedBy?->name,
+                'report' => $report ? [
+                    'id' => $report->id,
+                    'title' => $report->title,
+                    'slug' => $report->slug,
+                    'status' => $report->status,
+                    'pages' => count($report->content ?? []),
+                ] : null,
+            ];
+        });
+    
+    return Inertia::render('Reports/AssignedReports', [
+        'assignments' => $assignments
+    ]);
+}
 }
