@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/Admin/AnalyticsController.php
 
 namespace App\Http\Controllers\Admin;
 
@@ -9,218 +8,280 @@ use App\Models\User;
 use App\Models\Task;
 use App\Models\UserActivity;
 use App\Models\ReportAssignment;
+use App\Models\Template;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
+/**
+ * Analytics Controller
+ * 
+ * Provides system-wide analytics and statistics.
+ * Includes report stats, user stats, task stats, activity stats,
+ * sharing stats, and chart data for the analytics dashboard.
+ * 
+ * Access: Admin and Manager roles
+ */
 class AnalyticsController extends Controller
 {
-   
-
     /**
-     * Display analytics dashboard
+     * Display the main analytics dashboard with all statistics.
+     * Supports period filtering (7, 30, 90, 365 days).
      */
     public function index(Request $request)
     {
         $period = $request->get('period', '30');
-        $startDate = Carbon::now()->subDays($period);
+        $startDate = Carbon::now()->subDays((int)$period);
         
-        // Report statistics
+        // Report Statistics
         $reportStats = [
-            'total' => Report::count(),
+            'total'     => Report::count(),
             'published' => Report::where('status', 'published')->count(),
-            'draft' => Report::where('status', 'draft')->count(),
-            'archived' => Report::where('status', 'archived')->count(),
-            'trend' => $this->getReportTrend($startDate),
+            'draft'     => Report::where('status', 'draft')->count(),
+            'archived'  => Report::where('status', 'archived')->count(),
+            'trashed'   => Report::onlyTrashed()->count(),
+            'trend'     => $this->getReportTrend($startDate),
         ];
         
-        // User statistics
+        // User Statistics
         $userStats = [
-            'total' => User::count(),
-            'new_this_month' => User::whereMonth('created_at', Carbon::now()->month)->count(),
-            'active' => User::where('email_verified_at', '!=', null)->count(),
-            'premium' => User::where('is_premium', true)->count(),
-            'with_reports' => User::has('reports')->count(),
+            'total'          => User::count(),
+            'new_this_month' => User::whereMonth('created_at', Carbon::now()->month)
+                ->whereYear('created_at', Carbon::now()->year)->count(),
+            'active'         => User::whereNotNull('email_verified_at')->count(),
+            'premium'        => User::where('is_premium', true)->count(),
+            'with_reports'   => User::has('reports')->count(),
+            'trashed'        => User::onlyTrashed()->count(),
         ];
         
-        // Task statistics
+        // Task Statistics
         $taskStats = [
-            'total' => Task::count(),
-            'completed' => Task::where('status', 'completed')->count(),
-            'pending' => Task::where('status', 'pending')->count(),
-            'in_progress' => Task::where('status', 'in_progress')->count(),
-            'overdue' => Task::where('status', '!=', 'completed')
-                ->where('due_date', '<', now())
-                ->count(),
+            'total'           => Task::count(),
+            'completed'       => Task::where('status', 'completed')->count(),
+            'pending'         => Task::where('status', 'pending')->count(),
+            'in_progress'     => Task::where('status', 'in_progress')->count(),
+            'overdue'         => Task::where('status', '!=', 'completed')
+                ->where('due_date', '<', now())->count(),
+            'trashed'         => Task::onlyTrashed()->count(),
             'completion_rate' => $this->calculateCompletionRate(),
         ];
         
-        // Activity statistics
+        // Activity Statistics
         $activityStats = [
-            'total' => UserActivity::count(),
-            'last_24h' => UserActivity::where('created_at', '>=', Carbon::now()->subDay())->count(),
-            'last_7d' => UserActivity::where('created_at', '>=', Carbon::now()->subDays(7))->count(),
+            'total'             => UserActivity::count(),
+            'last_24h'          => UserActivity::where('created_at', '>=', Carbon::now()->subDay())->count(),
+            'last_7d'           => UserActivity::where('created_at', '>=', Carbon::now()->subDays(7))->count(),
             'most_active_users' => $this->getMostActiveUsers(),
         ];
         
-        // Chart data
+        // Chart Data for JavaScript charts
         $chartData = [
-            'reports_created' => $this->getReportsCreatedChart($startDate),
-            'user_growth' => $this->getUserGrowthChart($startDate),
-            'task_completion' => $this->getTaskCompletionChart($startDate),
-            'popular_report_types' => $this->getPopularReportTypes(),
+            'reports_created'       => $this->getReportsCreatedChart($startDate),
+            'user_growth'           => $this->getUserGrowthChart($startDate),
+            'task_completion'       => $this->getTaskCompletionChart($startDate),
+            'popular_report_types'  => $this->getPopularReportTypes(),
         ];
         
-        // Sharing statistics
+        // Sharing Statistics
         $sharingStats = [
-            'total_shares' => ReportAssignment::count(),
-            'active_shares' => ReportAssignment::where('is_active', true)->count(),
-            'expired_shares' => ReportAssignment::where('expires_at', '<', now())->count(),
-            'most_shared_reports' => $this->getMostSharedReports(),
+            'total_shares'          => ReportAssignment::count(),
+            'active_shares'         => ReportAssignment::where('is_active', true)->count(),
+            'expired_shares'        => ReportAssignment::where('expires_at', '<', now())->count(),
+            'most_shared_reports'   => $this->getMostSharedReports(),
         ];
         
         return Inertia::render('Admin/Analytics/Index', [
-            'reportStats' => $reportStats,
-            'userStats' => $userStats,
-            'taskStats' => $taskStats,
+            'reportStats'   => $reportStats,
+            'userStats'     => $userStats,
+            'taskStats'     => $taskStats,
             'activityStats' => $activityStats,
-            'sharingStats' => $sharingStats,
-            'chartData' => $chartData,
-            'period' => $period,
+            'sharingStats'  => $sharingStats,
+            'chartData'     => $chartData,
+            'period'        => (int)$period,
         ]);
     }
     
     /**
-     * Get detailed reports analytics
+     * Display detailed reports analytics with pagination and search.
      */
     public function reports(Request $request)
     {
         $period = $request->get('period', '30');
-        $startDate = Carbon::now()->subDays($period);
+        $startDate = Carbon::now()->subDays((int)$period);
         
         $reports = Report::with('user')
+            ->withCount('assignments')
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->search, fn($q) => $q->where('title', 'like', "%{$request->search}%"))
             ->orderBy($request->sort ?? 'created_at', $request->direction ?? 'desc')
             ->paginate(20)
+            ->withQueryString()
             ->through(fn($report) => [
-                'id' => $report->id,
-                'title' => $report->title,
-                'status' => $report->status,
-                'user_name' => $report->user->name,
-                'pages' => count($report->content ?? []),
-                'shares' => $report->assignments()->count(),
+                'id'         => $report->id,
+                'title'      => $report->title,
+                'slug'       => $report->slug,
+                'status'     => $report->status,
+                'user_name'  => $report->user->name ?? 'Unknown',
+                'pages'      => count($report->content ?? []),
+                'shares'     => $report->assignments_count,
                 'created_at' => $report->created_at,
                 'updated_at' => $report->updated_at,
             ]);
         
+        // Summary statistics
         $summary = [
-            'total_pages' => Report::sum(DB::raw('JSON_LENGTH(content)')),
-            'avg_pages_per_report' => round(Report::avg(DB::raw('JSON_LENGTH(content)')), 1),
-            'total_shares' => ReportAssignment::count(),
-            'reports_with_shares' => Report::has('assignments')->count(),
+            'total_pages'          => Report::sum(DB::raw('JSON_LENGTH(content)')),
+            'avg_pages_per_report'  => round(Report::avg(DB::raw('JSON_LENGTH(content)')) ?? 0, 1),
+            'total_shares'          => ReportAssignment::count(),
+            'reports_with_shares'   => Report::has('assignments')->count(),
         ];
         
         return Inertia::render('Admin/Analytics/Reports', [
-            'reports' => $reports,
-            'summary' => $summary,
-            'filters' => $request->only(['status', 'search', 'sort', 'direction']),
+            'reports'  => $reports,
+            'summary'  => $summary,
+            'filters'  => $request->only(['status', 'search', 'sort', 'direction']),
         ]);
     }
     
     /**
-     * Get detailed users analytics
+     * Display detailed users analytics with pagination and search.
      */
     public function users(Request $request)
     {
-        $users = User::withCount(['reports', 'tasksAssigned', 'tasksCreated'])
+        $users = User::withCount(['reports', 'tasksAssigned'])
             ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%")
                 ->orWhere('email', 'like', "%{$request->search}%"))
             ->when($request->role, fn($q) => $q->role($request->role))
             ->orderBy($request->sort ?? 'created_at', $request->direction ?? 'desc')
             ->paginate(20)
+            ->withQueryString()
             ->through(fn($user) => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'reports_count' => $user->reports_count,
-                'tasks_assigned' => $user->tasks_assigned_count,
-                'tasks_created' => $user->tasks_created_count,
-                'last_activity' => $user->activities()->latest()->first()?->created_at,
-                'created_at' => $user->created_at,
+                'id'              => $user->id,
+                'name'            => $user->name,
+                'email'           => $user->email,
+                'reports_count'   => $user->reports_count,
+                'tasks_assigned'  => $user->tasks_assigned_count,
+                'last_activity'   => $user->activities()->latest()->first()?->created_at,
+                'created_at'      => $user->created_at,
             ]);
         
         $summary = [
-            'total_users' => User::count(),
-            'users_with_reports' => User::has('reports')->count(),
-            'users_with_tasks' => User::has('tasksAssigned')->count(),
-            'avg_reports_per_user' => round(User::avg(DB::raw('(SELECT COUNT(*) FROM reports WHERE reports.user_id = users.id)')), 1),
+            'total_users'           => User::count(),
+            'users_with_reports'    => User::has('reports')->count(),
+            'users_with_tasks'      => User::has('tasksAssigned')->count(),
+            'avg_reports_per_user'  => round(User::has('reports')->count() > 0 
+                ? Report::count() / max(User::has('reports')->count(), 1) : 0, 1),
         ];
         
         $roles = \Spatie\Permission\Models\Role::all();
         
         return Inertia::render('Admin/Analytics/Users', [
-            'users' => $users,
-            'summary' => $summary,
-            'roles' => $roles,
-            'filters' => $request->only(['search', 'role', 'sort', 'direction']),
+            'users'    => $users,
+            'summary'  => $summary,
+            'roles'    => $roles,
+            'filters'  => $request->only(['search', 'role', 'sort', 'direction']),
         ]);
     }
     
     /**
-     * Export analytics data
+     * Export analytics data as CSV.
+     * Supports types: reports, users, tasks, activities
      */
     public function export(Request $request)
     {
         $type = $request->get('type', 'reports');
         $period = $request->get('period', '30');
-        $startDate = Carbon::now()->subDays($period);
+        $startDate = Carbon::now()->subDays((int)$period);
         
-        if ($type === 'reports') {
-            return $this->exportReportsData($startDate);
-        } elseif ($type === 'users') {
-            return $this->exportUsersData($startDate);
-        } elseif ($type === 'tasks') {
-            return $this->exportTasksData($startDate);
-        } elseif ($type === 'activities') {
-            return $this->exportActivitiesData($startDate);
-        }
-        
-        return response()->json(['error' => 'Invalid export type'], 422);
+        return match($type) {
+            'reports'    => $this->exportReportsData($startDate),
+            'users'      => $this->exportUsersData($startDate),
+            'tasks'      => $this->exportTasksData($startDate),
+            'activities' => $this->exportActivitiesData($startDate),
+            default      => response()->json(['error' => 'Invalid export type'], 422),
+        };
     }
     
     /**
-     * Get API stats for dashboard widgets
+     * Quick stats API endpoint for dashboard widgets.
      */
     public function quickStats()
     {
         return response()->json([
             'reports' => [
-                'total' => Report::count(),
-                'today' => Report::whereDate('created_at', today())->count(),
-                'this_week' => Report::whereBetween('created_at', [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])->count(),
+                'total'     => Report::count(),
+                'today'     => Report::whereDate('created_at', today())->count(),
+                'this_week' => Report::whereBetween('created_at', 
+                    [Carbon::now()->startOfWeek(), Carbon::now()->endOfWeek()])->count(),
             ],
             'users' => [
-                'total' => User::count(),
+                'total'     => User::count(),
                 'new_today' => User::whereDate('created_at', today())->count(),
-                'active' => User::whereNotNull('email_verified_at')->count(),
+                'active'    => User::whereNotNull('email_verified_at')->count(),
             ],
             'tasks' => [
-                'completed' => Task::where('status', 'completed')->whereDate('completed_at', today())->count(),
-                'pending' => Task::where('status', 'pending')->count(),
-                'overdue' => Task::where('status', '!=', 'completed')->where('due_date', '<', now())->count(),
+                'completed' => Task::where('status', 'completed')
+                    ->whereDate('completed_at', today())->count(),
+                'pending'   => Task::where('status', 'pending')->count(),
+                'overdue'   => Task::where('status', '!=', 'completed')
+                    ->where('due_date', '<', now())->count(),
             ],
         ]);
     }
     
-    // ─────────────────────────────────────────────────────────────
-    // PRIVATE HELPER METHODS
-    // ─────────────────────────────────────────────────────────────
-    
-    private function getReportTrend($startDate)
+    /**
+     * Get task statistics API endpoint.
+     */
+    public function taskStats()
     {
-        $previousPeriod = Carbon::now()->subDays(30);
+        return response()->json([
+            'total'       => Task::count(),
+            'completed'   => Task::where('status', 'completed')->count(),
+            'pending'     => Task::where('status', 'pending')->count(),
+            'in_progress' => Task::where('status', 'in_progress')->count(),
+            'overdue'     => Task::where('status', '!=', 'completed')
+                ->where('due_date', '<', now())->count(),
+        ]);
+    }
+    
+    /**
+     * Get report statistics API endpoint.
+     */
+    public function reportStats()
+    {
+        return response()->json([
+            'total'     => Report::count(),
+            'published' => Report::where('status', 'published')->count(),
+            'draft'     => Report::where('status', 'draft')->count(),
+            'archived'  => Report::where('status', 'archived')->count(),
+            'trashed'   => Report::onlyTrashed()->count(),
+        ]);
+    }
+    
+    /**
+     * Get user statistics API endpoint.
+     */
+    public function userStats()
+    {
+        return response()->json([
+            'total'     => User::count(),
+            'active'    => User::whereNotNull('email_verified_at')->count(),
+            'premium'   => User::where('is_premium', true)->count(),
+            'new_today' => User::whereDate('created_at', today())->count(),
+        ]);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // PRIVATE HELPER METHODS
+    // ═══════════════════════════════════════════════════════════════
+    
+    /**
+     * Calculate report creation trend percentage.
+     */
+    private function getReportTrend($startDate): float
+    {
+        $previousPeriod = Carbon::now()->subDays(60);
         $currentCount = Report::where('created_at', '>=', $startDate)->count();
         $previousCount = Report::whereBetween('created_at', [$previousPeriod, $startDate])->count();
         
@@ -228,104 +289,140 @@ class AnalyticsController extends Controller
         return round((($currentCount - $previousCount) / $previousCount) * 100, 1);
     }
     
-    private function calculateCompletionRate()
+    /**
+     * Calculate overall task completion rate.
+     */
+    private function calculateCompletionRate(): float
     {
         $total = Task::count();
         if ($total == 0) return 0;
-        $completed = Task::where('status', 'completed')->count();
-        return round(($completed / $total) * 100, 1);
+        return round((Task::where('status', 'completed')->count() / $total) * 100, 1);
     }
     
-    private function getMostActiveUsers()
+    /**
+     * Get most active users by activity count.
+     */
+    private function getMostActiveUsers(): array
     {
         return UserActivity::select('user_id', DB::raw('count(*) as activity_count'))
-            ->with('user')
+            ->with('user:id,name')
             ->groupBy('user_id')
             ->orderBy('activity_count', 'desc')
             ->limit(5)
             ->get()
             ->map(fn($activity) => [
-                'user_id' => $activity->user_id,
-                'user_name' => $activity->user->name,
+                'user_id'        => $activity->user_id,
+                'user_name'      => $activity->user->name ?? 'Unknown',
                 'activity_count' => $activity->activity_count,
-            ]);
+            ])
+            ->toArray();
     }
     
-    private function getReportsCreatedChart($startDate)
+    /**
+     * Generate reports created chart data.
+     */
+    private function getReportsCreatedChart($startDate): array
     {
         $dates = [];
         $counts = [];
         
-        for ($i = 0; $i <= 30; $i++) {
+        for ($i = 30; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $dates[] = $date->format('M d');
             $counts[] = Report::whereDate('created_at', $date)->count();
         }
         
         return [
-            'labels' => array_reverse($dates),
-            'values' => array_reverse($counts),
+            'labels' => $dates,
+            'values' => $counts,
         ];
     }
     
-    private function getUserGrowthChart($startDate)
+    /**
+     * Generate user growth chart data.
+     */
+    private function getUserGrowthChart($startDate): array
     {
         $dates = [];
         $counts = [];
         
-        for ($i = 0; $i <= 30; $i++) {
+        for ($i = 30; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $dates[] = $date->format('M d');
             $counts[] = User::whereDate('created_at', $date)->count();
         }
         
         return [
-            'labels' => array_reverse($dates),
-            'values' => array_reverse($counts),
+            'labels' => $dates,
+            'values' => $counts,
         ];
     }
     
-    private function getTaskCompletionChart($startDate)
+    /**
+     * Generate task completion chart data.
+     */
+    private function getTaskCompletionChart($startDate): array
     {
         $dates = [];
-        $completed = [];
         $created = [];
+        $completed = [];
         
-        for ($i = 0; $i <= 30; $i++) {
+        for ($i = 30; $i >= 0; $i--) {
             $date = Carbon::now()->subDays($i);
             $dates[] = $date->format('M d');
-            $completed[] = Task::whereDate('completed_at', $date)->count();
             $created[] = Task::whereDate('created_at', $date)->count();
+            $completed[] = Task::whereDate('completed_at', $date)->count();
         }
         
         return [
-            'labels' => array_reverse($dates),
-            'completed' => array_reverse($completed),
-            'created' => array_reverse($created),
+            'labels'    => $dates,
+            'created'   => $created,
+            'completed' => $completed,
         ];
     }
     
-    private function getPopularReportTypes()
+    /**
+     * Get popular report types (template usage).
+     */
+    private function getPopularReportTypes(): array
     {
-        // This is simplified - you can expand based on your template system
+        $templateData = Template::withCount('reports')
+            ->orderBy('reports_count', 'desc')
+            ->take(6)
+            ->get();
+        
+        if ($templateData->isEmpty()) {
+            return [
+                'labels' => ['Business', 'Executive', 'Analytics', 'Marketing', 'Financial', 'Sales'],
+                'values' => [0, 0, 0, 0, 0, 0],
+            ];
+        }
+        
         return [
-            'labels' => ['Business', 'Executive', 'Analytics', 'Marketing', 'Financial'],
-            'values' => [45, 30, 25, 20, 15],
+            'labels' => $templateData->pluck('name')->toArray(),
+            'values' => $templateData->pluck('reports_count')->toArray(),
         ];
     }
     
-    private function getMostSharedReports()
+    /**
+     * Get most shared reports.
+     */
+    private function getMostSharedReports(): array
     {
         return Report::withCount('assignments')
             ->orderBy('assignments_count', 'desc')
             ->limit(5)
             ->get()
             ->map(fn($report) => [
-                'title' => $report->title,
+                'title'       => $report->title,
                 'share_count' => $report->assignments_count,
-            ]);
+            ])
+            ->toArray();
     }
     
+    /**
+     * Export reports analytics as CSV.
+     */
     private function exportReportsData($startDate)
     {
         $reports = Report::with('user')
@@ -333,30 +430,33 @@ class AnalyticsController extends Controller
             ->get();
         
         $filename = 'reports_analytics_' . now()->format('Y-m-d') . '.csv';
+        
         $callback = function() use ($reports) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Title', 'Author', 'Status', 'Pages', 'Shares', 'Created At', 'Updated At']);
+            fputcsv($handle, ['Title', 'Author', 'Status', 'Pages', 'Shares', 'Created At']);
             
             foreach ($reports as $report) {
                 fputcsv($handle, [
                     $report->title,
-                    $report->user->name,
+                    $report->user->name ?? 'N/A',
                     $report->status,
                     count($report->content ?? []),
                     $report->assignments()->count(),
-                    $report->created_at,
-                    $report->updated_at,
+                    $report->created_at->format('Y-m-d'),
                 ]);
             }
             fclose($handle);
         };
         
         return response()->stream($callback, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
     
+    /**
+     * Export users analytics as CSV.
+     */
     private function exportUsersData($startDate)
     {
         $users = User::withCount(['reports', 'tasksAssigned'])
@@ -364,9 +464,10 @@ class AnalyticsController extends Controller
             ->get();
         
         $filename = 'users_analytics_' . now()->format('Y-m-d') . '.csv';
+        
         $callback = function() use ($users) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Name', 'Email', 'Reports Created', 'Tasks Assigned', 'Joined', 'Last Activity']);
+            fputcsv($handle, ['Name', 'Email', 'Reports', 'Tasks', 'Joined']);
             
             foreach ($users as $user) {
                 fputcsv($handle, [
@@ -374,19 +475,21 @@ class AnalyticsController extends Controller
                     $user->email,
                     $user->reports_count,
                     $user->tasks_assigned_count,
-                    $user->created_at,
-                    $user->activities()->latest()->first()?->created_at ?? 'N/A',
+                    $user->created_at->format('Y-m-d'),
                 ]);
             }
             fclose($handle);
         };
         
         return response()->stream($callback, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
     
+    /**
+     * Export tasks analytics as CSV.
+     */
     private function exportTasksData($startDate)
     {
         $tasks = Task::with(['assignedTo', 'assignedBy'])
@@ -394,30 +497,33 @@ class AnalyticsController extends Controller
             ->get();
         
         $filename = 'tasks_analytics_' . now()->format('Y-m-d') . '.csv';
+        
         $callback = function() use ($tasks) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Title', 'Assigned To', 'Assigned By', 'Priority', 'Status', 'Due Date', 'Completed At']);
+            fputcsv($handle, ['Title', 'Assigned To', 'Priority', 'Status', 'Due Date', 'Completed']);
             
             foreach ($tasks as $task) {
                 fputcsv($handle, [
                     $task->title,
-                    $task->assignedTo->name,
-                    $task->assignedBy->name,
+                    $task->assignedTo->name ?? 'N/A',
                     $task->priority,
                     $task->status,
-                    $task->due_date ?? 'N/A',
-                    $task->completed_at ?? 'N/A',
+                    $task->due_date?->format('Y-m-d') ?? 'N/A',
+                    $task->completed_at?->format('Y-m-d') ?? 'N/A',
                 ]);
             }
             fclose($handle);
         };
         
         return response()->stream($callback, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
     
+    /**
+     * Export activities analytics as CSV.
+     */
     private function exportActivitiesData($startDate)
     {
         $activities = UserActivity::with('user')
@@ -426,25 +532,25 @@ class AnalyticsController extends Controller
             ->get();
         
         $filename = 'activities_analytics_' . now()->format('Y-m-d') . '.csv';
+        
         $callback = function() use ($activities) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['User', 'Action', 'Entity Type', 'Details', 'IP Address', 'Timestamp']);
+            fputcsv($handle, ['User', 'Action', 'Entity', 'Details', 'Timestamp']);
             
             foreach ($activities as $activity) {
                 fputcsv($handle, [
-                    $activity->user->name,
+                    $activity->user->name ?? 'System',
                     $activity->action,
                     $activity->entity_type ?? 'N/A',
                     json_encode($activity->details),
-                    $activity->ip_address ?? 'N/A',
-                    $activity->created_at,
+                    $activity->created_at->format('Y-m-d H:i:s'),
                 ]);
             }
             fclose($handle);
         };
         
         return response()->stream($callback, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type'        => 'text/csv',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }

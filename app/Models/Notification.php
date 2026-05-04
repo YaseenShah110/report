@@ -1,5 +1,4 @@
 <?php
-// app/Models/Notification.php
 
 namespace App\Models;
 
@@ -13,32 +12,40 @@ class Notification extends Model
 {
     use HasFactory, SoftDeletes;
 
+    /**
+     * Mass-assignable fields
+     */
     protected $fillable = [
-        'user_id',
-        'type',
-        'title',
-        'message',
-        'notifiable_type',
-        'notifiable_id',
-        'data',
-        'icon',
-        'color',
-        'action_url',
-        'read_at',
-    ];
-
-    protected $casts = [
-        'data' => 'array',
-        'read_at' => 'datetime',
-    ];
-
-    protected $dates = [
-        'read_at',
-        'deleted_at',
+        'user_id',           // The user who receives this notification
+        'type',              // Notification type: 'task_created', 'report_shared', etc.
+        'title',             // Short title for the notification
+        'message',           // Detailed message body
+        'notifiable_type',   // Related model type (e.g., 'App\Models\Report')
+        'notifiable_id',     // Related model ID
+        'data',              // Additional JSON data
+        'icon',              // Font Awesome icon class
+        'color',             // Accent color for the notification
+        'action_url',        // URL to navigate when clicked
+        'read_at',           // Timestamp when notification was read (null = unread)
     ];
 
     /**
-     * Get the user that owns the notification.
+     * Type casting for model attributes
+     */
+    protected $casts = [
+        'data'      => 'array',       // Auto JSON encode/decode
+        'read_at'   => 'datetime',    // Carbon datetime instance
+        'deleted_at'=> 'datetime',    // Soft delete timestamp
+    ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONSHIPS
+    |--------------------------------------------------------------------------
+    */
+    
+    /**
+     * User who owns this notification
      */
     public function user(): BelongsTo
     {
@@ -46,15 +53,24 @@ class Notification extends Model
     }
 
     /**
-     * Get the parent notifiable model (report, task, etc.).
+     * Polymorphic relationship to the related model
+     * Can be a Report, Task, or any other notifiable model
      */
     public function notifiable(): MorphTo
     {
         return $this->morphTo();
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | QUERY SCOPES
+    |--------------------------------------------------------------------------
+    | Scopes allow you to easily add constraints to queries
+    */
+    
     /**
-     * Scope a query to only include unread notifications.
+     * Scope: Only unread notifications
+     * Usage: Notification::unread()->get()
      */
     public function scopeUnread($query)
     {
@@ -62,7 +78,8 @@ class Notification extends Model
     }
 
     /**
-     * Scope a query to only include read notifications.
+     * Scope: Only read notifications
+     * Usage: Notification::read()->get()
      */
     public function scopeRead($query)
     {
@@ -70,7 +87,8 @@ class Notification extends Model
     }
 
     /**
-     * Scope a query to only include notifications for a specific user.
+     * Scope: Notifications for a specific user
+     * Usage: Notification::forUser($userId)->get()
      */
     public function scopeForUser($query, $userId)
     {
@@ -78,7 +96,8 @@ class Notification extends Model
     }
 
     /**
-     * Scope a query to order by most recent.
+     * Scope: Order by most recent first
+     * Usage: Notification::recent()->get()
      */
     public function scopeRecent($query)
     {
@@ -86,15 +105,23 @@ class Notification extends Model
     }
 
     /**
-     * Scope a query to only include notifications of a specific type.
+     * Scope: Filter by notification type
+     * Usage: Notification::ofType('task_created')->get()
      */
     public function scopeOfType($query, string $type)
     {
         return $query->where('type', $type);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER METHODS
+    |--------------------------------------------------------------------------
+    */
+    
     /**
-     * Mark the notification as read.
+     * Mark this notification as read
+     * Only updates if not already read
      */
     public function markAsRead(): void
     {
@@ -104,7 +131,7 @@ class Notification extends Model
     }
 
     /**
-     * Mark the notification as unread.
+     * Mark this notification as unread
      */
     public function markAsUnread(): void
     {
@@ -114,7 +141,7 @@ class Notification extends Model
     }
 
     /**
-     * Determine if the notification has been read.
+     * Check if notification has been read
      */
     public function isRead(): bool
     {
@@ -122,7 +149,7 @@ class Notification extends Model
     }
 
     /**
-     * Determine if the notification has not been read.
+     * Check if notification is unread
      */
     public function isUnread(): bool
     {
@@ -130,7 +157,8 @@ class Notification extends Model
     }
 
     /**
-     * Mark all notifications as read for a user.
+     * Mark ALL notifications as read for a specific user
+     * Returns the number of notifications marked as read
      */
     public static function markAllAsReadForUser($userId): int
     {
@@ -140,23 +168,12 @@ class Notification extends Model
     }
 
     /**
-     * Get the count of unread notifications for a user.
+     * Get count of unread notifications for a user
      */
     public static function unreadCountForUser($userId): int
     {
         return static::where('user_id', $userId)
             ->whereNull('read_at')
             ->count();
-    }
-
-    /**
-     * Get notifications with Trashed (for admin).
-     */
-    public static function getWithTrashedForUser($userId)
-    {
-        return static::withTrashed()
-            ->where('user_id', $userId)
-            ->recent()
-            ->get();
     }
 }

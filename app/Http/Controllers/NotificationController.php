@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/NotificationController.php
 
 namespace App\Http\Controllers;
 
@@ -8,10 +7,19 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
+/**
+ * Notification Controller
+ * 
+ * Handles all notification operations for authenticated users.
+ * Supports: list, latest, mark read, mark all read, soft delete, restore, force delete.
+ * 
+ * Access: All authenticated users (only their own notifications)
+ */
 class NotificationController extends Controller
 {
     /**
-     * Get user notifications.
+     * Display paginated list of user's notifications.
+     * Supports filtering by: read status (unread/read/trashed), type.
      */
     public function index(Request $request)
     {
@@ -29,7 +37,7 @@ class NotificationController extends Controller
             }
         }
 
-        // Filter by type
+        // Filter by notification type
         if ($request->has('type')) {
             $query->ofType($request->type);
         }
@@ -49,14 +57,15 @@ class NotificationController extends Controller
 
         return Inertia::render('Notifications/Index', [
             'notifications' => $notifications,
-            'unread_count' => $unreadCount,
+            'unread_count'  => $unreadCount,
             'trashed_count' => $trashedCount,
-            'filters' => $request->only(['filter', 'type']),
+            'filters'       => $request->only(['filter', 'type']),
         ]);
     }
 
     /**
-     * Get notifications for API/dropdown.
+     * Get latest notifications for the dropdown (API endpoint).
+     * Returns max 10 recent notifications + unread count.
      */
     public function latest(Request $request)
     {
@@ -74,12 +83,13 @@ class NotificationController extends Controller
 
         return response()->json([
             'notifications' => $notifications,
-            'unread_count' => $unreadCount,
+            'unread_count'  => $unreadCount,
         ]);
     }
 
     /**
-     * Mark a notification as read.
+     * Mark a single notification as read.
+     * Only the owner can mark their own notifications.
      */
     public function markAsRead($id, Request $request)
     {
@@ -90,26 +100,26 @@ class NotificationController extends Controller
         $notification->markAsRead();
 
         return response()->json([
-            'success' => true,
+            'success'      => true,
             'unread_count' => Notification::unreadCountForUser($request->user()->id),
         ]);
     }
 
     /**
-     * Mark all notifications as read.
+     * Mark ALL notifications as read for the current user.
      */
     public function markAllAsRead(Request $request)
     {
         Notification::markAllAsReadForUser($request->user()->id);
 
         return response()->json([
-            'success' => true,
+            'success'      => true,
             'unread_count' => 0,
         ]);
     }
 
     /**
-     * Soft delete a notification.
+     * Soft delete a notification (move to trash).
      */
     public function destroy($id, Request $request)
     {
@@ -120,13 +130,13 @@ class NotificationController extends Controller
         $notification->delete();
 
         return response()->json([
-            'success' => true,
+            'success'      => true,
             'unread_count' => Notification::unreadCountForUser($request->user()->id),
         ]);
     }
 
     /**
-     * Restore a soft deleted notification.
+     * Restore a soft-deleted notification from trash.
      */
     public function restore($id, Request $request)
     {
@@ -138,13 +148,13 @@ class NotificationController extends Controller
         $notification->restore();
 
         return response()->json([
-            'success' => true,
+            'success'      => true,
             'unread_count' => Notification::unreadCountForUser($request->user()->id),
         ]);
     }
 
     /**
-     * Force delete a notification.
+     * Permanently delete a notification (cannot be recovered).
      */
     public function forceDelete($id, Request $request)
     {
@@ -156,28 +166,29 @@ class NotificationController extends Controller
         $notification->forceDelete();
 
         return response()->json([
-            'success' => true,
+            'success'      => true,
             'unread_count' => Notification::unreadCountForUser($request->user()->id),
         ]);
     }
 
     /**
-     * Format notification for response.
+     * Format a notification for API/Inertia response.
+     * Ensures consistent data structure across all endpoints.
      */
     private function formatNotification($notification): array
     {
         return [
-            'id' => $notification->id,
-            'type' => $notification->type,
-            'title' => $notification->title,
-            'message' => $notification->message,
-            'icon' => $notification->icon ?? 'fa-solid fa-bell',
-            'color' => $notification->color ?? '#64748b',
+            'id'         => $notification->id,
+            'type'       => $notification->type,
+            'title'      => $notification->title,
+            'message'    => $notification->message,
+            'icon'       => $notification->icon ?? 'fa-solid fa-bell',
+            'color'      => $notification->color ?? '#64748b',
             'action_url' => $notification->action_url,
-            'read_at' => $notification->read_at,
-            'trashed' => $notification->trashed(),
+            'read_at'    => $notification->read_at,
+            'trashed'    => $notification->trashed(),
             'created_at' => $notification->created_at->toISOString(),
-            'time_ago' => $notification->created_at->diffForHumans(),
+            'time_ago'   => $notification->created_at->diffForHumans(),
         ];
     }
 }

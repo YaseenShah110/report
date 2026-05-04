@@ -30664,3 +30664,22 @@ make sure modern design,mindblowing styles which must be changeable according to
 make sure ammazing mindblowing designs and dynamic styles for both light and drak theme
 
 without removing any things and features enhance each files and add all required feature you think that should be their ,add them and if a and give complate code dear pro laravel  developer
+
+
+
+
+i have done all above your provided code and pasted in my project files 
+now  give all pages dear pro  laravel developer without changing any thing 
+
+Dear pro laravel Developer these are my curren project files and i will pprovide you the Editor.vue and preview file in next chat  without changing any things add the featuresof soft delete,and use inertia,laravel and vue stack 
+make sure all features are included with permissions and roles ,make sure all sure all user must be able to perform fuctionalities according to their respective roles and permission,make sure smoth searching,make sure status of reports change able by respective users or authorize users.
+without changing any things give complete code and also
+i have installed brosershoote 
+so downloading must be fucntional 
+dear pro laravel developer my project programming stack is laravel,inertia and view
+so follow it 
+make sure modern design,mindblowing styles which must be changeable according to dashboard settings and ui,responsiveness ,
+
+make sure ammazing mindblowing designs and dynamic styles for both light and drak theme
+
+without removing any things and features enhance each files and add all required feature you think that should be their ,add them and if a and give complate code dear pro laravel  developer

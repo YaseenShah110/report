@@ -1,5 +1,4 @@
 <?php
-// app/Providers/AuthServiceProvider.php
 
 namespace App\Providers;
 
@@ -9,24 +8,36 @@ use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvid
 use Illuminate\Support\Facades\Gate;
 use App\Models\User;
 
+/**
+ * Authentication Service Provider
+ * 
+ * Registers policies and defines gates for authorization.
+ * Includes super-admin bypass, impersonation gates, and report access gates.
+ */
 class AuthServiceProvider extends ServiceProvider
 {
+    /**
+     * The model to policy mappings.
+     */
     protected $policies = [
         Report::class => ReportPolicy::class,
     ];
 
+    /**
+     * Register any authentication / authorization services.
+     */
     public function boot(): void
     {
         $this->registerPolicies();
 
-        // Super admin gate - allows admin to do everything
+        // Super admin gate - admin can do everything
         Gate::before(function ($user, $ability) {
             if ($user->hasRole('admin')) {
                 return true;
             }
         });
 
-        // Impersonation gate
+        // Impersonation gate - only admin can impersonate
         Gate::define('impersonate', function (User $user, User $target) {
             return $user->hasRole('admin') && $user->id !== $target->id;
         });
@@ -36,7 +47,7 @@ class AuthServiceProvider extends ServiceProvider
             return session()->has('impersonate');
         });
 
-        // Report access gates
+        // Report access gates (view, edit, manage)
         Gate::define('view-report', function (User $user, Report $report) {
             return $user->canAccessReport($report, 'view');
         });
@@ -47,6 +58,11 @@ class AuthServiceProvider extends ServiceProvider
 
         Gate::define('manage-report', function (User $user, Report $report) {
             return $user->canAccessReport($report, 'manage');
+        });
+
+        // Template management gate (admin only)
+        Gate::define('manage-templates', function (User $user) {
+            return $user->hasRole('admin');
         });
     }
 }

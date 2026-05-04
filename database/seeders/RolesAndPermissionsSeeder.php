@@ -1,5 +1,4 @@
 <?php
-// database/seeders/RolesAndPermissionsSeeder.php
 
 namespace Database\Seeders;
 
@@ -8,23 +7,30 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use App\Models\User;
 
+/**
+ * Roles & Permissions Seeder
+ * 
+ * Creates default roles (admin, manager, user) and permissions.
+ * Assigns all permissions to admin, limited to manager, basic to user.
+ * Creates a default admin account if not exists.
+ */
 class RolesAndPermissionsSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // Create permissions
+        // Define all available permissions
         $permissions = [
-            // User management
+            // User Management
             'view-users',
             'create-users',
             'edit-users',
             'delete-users',
             'manage-users',
             
-            // Report management
+            // Report Management
             'view-reports',
             'create-reports',
             'edit-reports',
@@ -32,24 +38,28 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage-reports',
             'assign-reports',
             
-            // Task management
+            // Task Management
             'view-tasks',
             'create-tasks',
             'edit-tasks',
             'delete-tasks',
             'manage-tasks',
             
-            // Template management
+            // Template Management
             'view-templates',
             'create-templates',
             'edit-templates',
             'delete-templates',
+            'manage-templates',
             
-            // Settings
+            // System Settings
             'manage-settings',
             'view-analytics',
+            'manage-roles',
+            'view-activities',
         ];
 
+        // Create all permissions
         foreach ($permissions as $permission) {
             Permission::create(['name' => $permission]);
         }
@@ -59,10 +69,10 @@ class RolesAndPermissionsSeeder extends Seeder
         $managerRole = Role::create(['name' => 'manager']);
         $userRole = Role::create(['name' => 'user']);
 
-        // Assign all permissions to admin
+        // Assign ALL permissions to admin
         $adminRole->givePermissionTo(Permission::all());
 
-        // Assign manager permissions
+        // Assign limited permissions to manager
         $managerRole->givePermissionTo([
             'view-users',
             'view-reports',
@@ -75,9 +85,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'manage-tasks',
             'view-templates',
             'view-analytics',
+            'view-activities',
         ]);
 
-        // Assign user permissions
+        // Assign basic permissions to regular users
         $userRole->givePermissionTo([
             'view-reports',
             'create-reports',
@@ -86,16 +97,46 @@ class RolesAndPermissionsSeeder extends Seeder
             'view-templates',
         ]);
 
-        // Create admin user if not exists
+        // Create default admin user if not exists
         $admin = User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [
-                'name' => 'Admin User',
-                'email' => 'admin@example.com',
-                'password' => bcrypt('password'),
-                'is_admin' => true,
+                'name'              => 'Admin User',
+                'password'          => bcrypt('password'),
+                'is_admin'          => true,
+                'is_premium'        => true,
+                'email_verified_at' => now(),
             ]
         );
         $admin->assignRole('admin');
+
+        // Create default manager user if not exists
+        $manager = User::firstOrCreate(
+            ['email' => 'manager@example.com'],
+            [
+                'name'              => 'Manager User',
+                'password'          => bcrypt('password'),
+                'is_premium'        => true,
+                'email_verified_at' => now(),
+            ]
+        );
+        $manager->assignRole('manager');
+
+        // Create default regular user if not exists
+        $user = User::firstOrCreate(
+            ['email' => 'user@example.com'],
+            [
+                'name'              => 'Regular User',
+                'password'          => bcrypt('password'),
+                'email_verified_at' => now(),
+            ]
+        );
+        $user->assignRole('user');
+
+        // Output success message
+        $this->command->info('Roles and permissions seeded successfully!');
+        $this->command->info('Admin: admin@example.com / password');
+        $this->command->info('Manager: manager@example.com / password');
+        $this->command->info('User: user@example.com / password');
     }
 }
