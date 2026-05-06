@@ -431,8 +431,10 @@
                 >
                   <option v-for="f in fontList" :key="f" :value="f">{{ f }}</option>
                 </select>
+                
               </div>
             </div>
+            
 
             <div v-if="isTextElement(selectedEl.type)" class="prop-section">
               <div class="section-title">Size & Weight</div>

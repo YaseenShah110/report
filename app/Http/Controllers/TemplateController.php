@@ -94,18 +94,18 @@ class TemplateController extends Controller
             'settings'       => 'nullable|array',
         ]);
 
-        $template = Template::create([
-            'name'           => $request->name,
-            'slug'           => Str::slug($request->name) . '-' . Str::random(6),
-            'description'    => $request->description,
-            'category'       => $request->category,
-            'badge'          => $request->badge,
-            'tags'           => $request->tags,
-            'cover_gradient' => $request->cover_gradient,
-            'structure'      => $request->structure ?? ['pages' => []],
-            'settings'       => $request->settings ?? $this->defaultSettings(),
-            'is_active'      => $request->is_active ?? true,
-        ]);
+$template = Template::create([
+    'name'           => $request->name,
+    'slug'           => Str::slug($request->name) . '-' . Str::random(6),
+    'description'    => $request->description,
+    'category'       => $request->category,
+    'badge'          => $request->badge,
+    'tags'           => $request->tags,
+    'cover_gradient' => $request->cover_gradient,
+    'structure'      => $request->structure ?? ['pages' => []],
+    'settings'       => array_merge($this->defaultSettings(), $request->settings ?? []),
+    'is_active'      => $request->is_active ?? true,
+]);
 
         UserActivity::log(auth()->id(), 'template_created', 'template', $template->id, [
             'template_name' => $template->name

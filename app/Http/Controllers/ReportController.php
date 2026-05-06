@@ -100,10 +100,21 @@ class ReportController extends Controller
 
         // Build pages from template or create blank page
         if ($request->filled('template_id')) {
-            $template = Template::findOrFail($request->template_id);
-            $pages    = $this->buildPagesFromTemplate($template);
-            $settings = array_merge($template->settings ?? $this->defaultSettings(), $initialSettings);
-        } else {
+    $template = Template::findOrFail($request->template_id);
+    $pages    = $this->buildPagesFromTemplate($template);
+    
+    // Deep merge: template settings override defaults
+    $templateSettings = $template->settings ?? [];
+    $defaults = $this->defaultSettings();
+    
+    // Ensure ALL keys exist
+    $settings = array_merge($defaults, $templateSettings, $initialSettings);
+    
+    // Apply template structure to pages
+    if (!empty($template->structure)) {
+        $pages = $this->buildPagesFromTemplate($template);
+    }
+} else {
             $pages    = [['id' => (string) Str::uuid(), 'label' => 'Page 1', 'elements' => []]];
             $settings = array_merge($this->defaultSettings(), $initialSettings);
         }
