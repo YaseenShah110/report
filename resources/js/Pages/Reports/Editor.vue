@@ -275,6 +275,47 @@ const props = defineProps({ report: { type: Object, required: true } })
 const report = reactive(JSON.parse(JSON.stringify(props.report)))
 const settings = reactive(JSON.parse(JSON.stringify(props.report?.settings || getDefaultSettings())))
 
+// Google Fonts API
+const googleFonts = ref([])
+const googleFontsLoading = ref(false)
+const googleFontsSearch = ref('')
+
+// Popular Google Fonts (pre-loaded for offline)
+const popularFonts = [
+  { family: 'Inter', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Roboto', category: 'sans-serif', variants: ['300','400','500','700','900'] },
+  { family: 'Open Sans', category: 'sans-serif', variants: ['300','400','500','600','700','800'] },
+  { family: 'Lato', category: 'sans-serif', variants: ['300','400','700','900'] },
+  { family: 'Montserrat', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Poppins', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Playfair Display', category: 'serif', variants: ['400','500','600','700','800','900'] },
+  { family: 'Merriweather', category: 'serif', variants: ['300','400','700','900'] },
+  { family: 'Fira Code', category: 'monospace', variants: ['300','400','500','600','700'] },
+  { family: 'JetBrains Mono', category: 'monospace', variants: ['300','400','500','600','700','800'] },
+  { family: 'DM Sans', category: 'sans-serif', variants: ['400','500','700'] },
+  { family: 'Space Grotesk', category: 'sans-serif', variants: ['300','400','500','600','700'] },
+  { family: 'Outfit', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Nunito', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Raleway', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Ubuntu', category: 'sans-serif', variants: ['300','400','500','700'] },
+  { family: 'Source Sans 3', category: 'sans-serif', variants: ['300','400','500','600','700','800','900'] },
+  { family: 'Crimson Text', category: 'serif', variants: ['400','600','700'] },
+  { family: 'Libre Baskerville', category: 'serif', variants: ['400','700'] },
+  { family: 'Bebas Neue', category: 'display', variants: ['400'] },
+]
+
+// Load a Google Font dynamically
+function loadGoogleFont(fontFamily) {
+  const link = document.createElement('link')
+  link.href = `https://fonts.googleapis.com/css2?family=${fontFamily.replace(/ /g, '+')}:wght@300;400;500;600;700;800;900&display=swap`
+  link.rel = 'stylesheet'
+  document.head.appendChild(link)
+}
+
+// Pre-load popular fonts
+onMounted(() => {
+  popularFonts.slice(0, 8).forEach(f => loadGoogleFont(f.family))
+})
 
 // Ensure all default settings exist
 function getDefaultSettings() {
