@@ -39,39 +39,34 @@ use App\Http\Controllers\Admin\ReportAssignmentController;
 use App\Http\Controllers\Admin\ActivityController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
 | PUBLIC ROUTES (No Authentication Required)
 |--------------------------------------------------------------------------
-| These routes are accessible by anyone, including guests.
-| Used for landing page, public report sharing, and health checks.
 */
 
 // Landing page - Welcome screen with animated UI
-// Passes boolean flags for conditional login/register links
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'canLogin'       => Route::has('login'),    // Check if login route exists
-        'canRegister'    => Route::has('register'),  // Check if register route exists
-        'laravelVersion' => app()->version(),        // Show Laravel version in UI
-        'phpVersion'     => PHP_VERSION,             // Show PHP version in UI
+        'canLogin'       => Route::has('login'),
+        'canRegister'    => Route::has('register'),
+        'laravelVersion' => app()->version(),
+        'phpVersion'     => PHP_VERSION,
     ]);
 })->name('home');
 
 // Public Share Links - View/download reports without authentication
-// Uses a random 32-character token for security (unguessable)
-// Token is revoked from admin panel or when report is unshared
 Route::prefix('share')->name('reports.')->group(function () {
     
     // Public preview - View a shared report in read-only mode
-    // Checks: share_token exists AND is_public is true
     Route::get('/{token}', [ReportController::class, 'publicPreview'])
         ->name('public-preview');
     
     // Public download - Download a shared report as PDF
-    // Uses Browsershot for PDF generation (with DomPDF fallback)
     Route::get('/{token}/download', [ReportController::class, 'publicDownload'])
         ->name('public-download');
 });
@@ -80,623 +75,231 @@ Route::prefix('share')->name('reports.')->group(function () {
 |--------------------------------------------------------------------------
 | AUTHENTICATED ROUTES (Requires Login + Verified Email)
 |--------------------------------------------------------------------------
-| All routes in this group require:
-| - User must be logged in (auth middleware)
-| - Email must be verified (verified middleware)
-| 
-| These routes are available to ALL authenticated users regardless of role.
 */
 
 Route::middleware(['auth', 'verified'])->group(function () {
     
-    // ─────────────────────────────────────────────────────────────
-    // DASHBOARD - Main landing page after login
-    // Shows: reports overview, tasks, charts, recent activities
-    // ─────────────────────────────────────────────────────────────
+    // ── Dashboard ──────────────────────────────────────────────
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
 
-    // ─────────────────────────────────────────────────────────────
-    // PROFILE MANAGEMENT - User's own profile settings
-    // Uses Laravel Breeze conventions
-    // ─────────────────────────────────────────────────────────────
+    // ── Profile Management ─────────────────────────────────────
     Route::prefix('profile')->name('profile.')->group(function () {
-        
-        // Show profile edit form (name, email, password change)
-        Route::get('/', [ProfileController::class, 'edit'])
-            ->name('edit');
-        
-        // Update profile information
-        Route::patch('/', [ProfileController::class, 'update'])
-            ->name('update');
-        
-        // Delete user account (requires password confirmation)
-        Route::delete('/', [ProfileController::class, 'destroy'])
-            ->name('destroy');
+        Route::get('/', [ProfileController::class, 'edit'])->name('edit');
+        Route::patch('/', [ProfileController::class, 'update'])->name('update');
+        Route::delete('/', [ProfileController::class, 'destroy'])->name('destroy');
     });
 
-    // ─────────────────────────────────────────────────────────────
-    // NOTIFICATIONS - Real-time notification system
-    // Features: List, latest (for dropdown), mark read, mark all read
-    //           Soft delete (trash), restore, permanent delete
-    // Polling: Frontend polls /notifications/latest every 30 seconds
-    // ─────────────────────────────────────────────────────────────
+    // ── Notifications ──────────────────────────────────────────
     Route::prefix('notifications')->name('notifications.')->group(function () {
-        
-        // View all notifications (paginated with filters)
-        Route::get('/', [NotificationController::class, 'index'])
-            ->name('index');
-        
-        // Get latest 10 notifications for dropdown (API endpoint)
-        Route::get('/latest', [NotificationController::class, 'latest'])
-            ->name('latest');
-        
-        // Mark single notification as read
-        Route::put('/{id}/read', [NotificationController::class, 'markAsRead'])
-            ->name('mark-read');
-        
-        // Mark ALL notifications as read for current user
-        Route::put('/mark-all-read', [NotificationController::class, 'markAllAsRead'])
-            ->name('mark-all-read');
-        
-        // Soft delete a notification (move to trash)
-        Route::delete('/{id}', [NotificationController::class, 'destroy'])
-            ->name('destroy');
-        
-        // Restore a soft-deleted notification from trash
-        Route::post('/{id}/restore', [NotificationController::class, 'restore'])
-            ->name('restore');
-        
-        // Permanently delete a notification (cannot be recovered)
-        Route::delete('/{id}/force', [NotificationController::class, 'forceDelete'])
-            ->name('force-delete');
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::get('/latest', [NotificationController::class, 'latest'])->name('latest');
+        Route::put('/{id}/read', [NotificationController::class, 'markAsRead'])->name('mark-read');
+        Route::put('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        Route::delete('/{id}', [NotificationController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/restore', [NotificationController::class, 'restore'])->name('restore');
+        Route::delete('/{id}/force', [NotificationController::class, 'forceDelete'])->name('force-delete');
     });
 
-    // ─────────────────────────────────────────────────────────────
-    // REPORTS - Core report management functionality
-    // Includes: CRUD, status management, versioning, sharing, export
-    // Uses slug for route model binding (instead of numeric ID)
-    // Slug is auto-generated from title + random string for uniqueness
-    // ─────────────────────────────────────────────────────────────
+    // ── Reports CRUD ───────────────────────────────────────────
     Route::prefix('reports')->name('reports.')->group(function () {
         
-        // ── Basic CRUD Operations ────────────────────────────────
-        
-        // List all reports (owned by user + assigned to user)
-        Route::get('/', [ReportController::class, 'index'])
-            ->name('index');
-        
-        // Show create report form (template selection + settings)
-        Route::get('/create', [ReportController::class, 'create'])
-            ->name('create');
-        
-        // Store new report (from template or blank)
-        // Creates initial version snapshot automatically
-        Route::post('/', [ReportController::class, 'store'])
-            ->name('store');
-        
-        // Open report in editor (drag-and-drop canvas)
-        // Checks: User owns report OR has edit/manage assignment
-        Route::get('/{report:slug}/edit', [ReportController::class, 'edit'])
-            ->name('edit');
-        
-        // Update report (auto-save from editor)
-        // Throttled: Creates version snapshot only if 5+ minutes since last
-        Route::put('/{report:slug}', [ReportController::class, 'update'])
-            ->name('update');
-        
-        // Soft delete report (move to trash)
-        // Also soft-deletes related notifications
-        Route::delete('/{report:slug}', [ReportController::class, 'destroy'])
-            ->name('destroy');
+        // Basic CRUD Operations
+        Route::get('/', [ReportController::class, 'index'])->name('index');
+        Route::get('/create', [ReportController::class, 'create'])->name('create');
+        Route::post('/', [ReportController::class, 'store'])->name('store');
+        Route::get('/{report:slug}/edit', [ReportController::class, 'edit'])->name('edit');
+        Route::put('/{report:slug}', [ReportController::class, 'update'])->name('update');
+        Route::delete('/{report:slug}', [ReportController::class, 'destroy'])->name('destroy');
 
-        // ── View & Preview ───────────────────────────────────────
+        // View & Preview
+        Route::get('/{report:slug}/preview', [ReportController::class, 'preview'])->name('preview');
         
-        // Preview report (read-only view with download options)
-        // Checks: User owns OR has assignment OR report is public
-        Route::get('/{report:slug}/preview', [ReportController::class, 'preview'])
-            ->name('preview');
+        // Status Management (draft → published → archived)
+        Route::patch('/{report:slug}/status', [ReportController::class, 'updateStatus'])->name('status');
         
-        // ── Status Management ────────────────────────────────────
+        // Duplicate Report
+        Route::post('/{report:slug}/duplicate', [ReportController::class, 'duplicate'])->name('duplicate');
         
-        // Update report status (draft → published → archived)
-        // Only owner or admin can change status
-        Route::patch('/{report:slug}/status', [ReportController::class, 'updateStatus'])
-            ->name('status');
+        // Version History
+        Route::get('/{report:slug}/versions', [ReportController::class, 'versions'])->name('versions');
+        Route::post('/{report:slug}/versions/{version}/restore', [ReportController::class, 'restoreVersion'])->name('versions.restore');
         
-        // ── Duplicate Report ────────────────────────────────────
+        // Share Management
+        Route::post('/{report:slug}/share', [ReportController::class, 'generateShareLink'])->name('share');
+        Route::delete('/{report:slug}/share', [ReportController::class, 'revokeShareLink'])->name('share.revoke');
         
-        // Create a copy of an existing report with "(Copy)" suffix
-        // Generates new UUIDs for all elements to avoid conflicts
-        Route::post('/{report:slug}/duplicate', [ReportController::class, 'duplicate'])
-            ->name('duplicate');
+        // Export Functionality
+        Route::get('/{report:slug}/download', [ReportController::class, 'download'])->name('download');
+        Route::get('/{report:slug}/export/pdf', [ReportController::class, 'download'])->name('export.pdf');
+        Route::get('/{report:slug}/export/excel', [ReportController::class, 'exportExcel'])->name('export.excel');
+        Route::get('/{report:slug}/export/csv', [ReportController::class, 'exportCsv'])->name('export.csv');
+        Route::get('/{report:slug}/export/image', [ReportController::class, 'exportImage'])->name('export.image');
         
-        // ── Version History ──────────────────────────────────────
+        // Soft Delete Management
+        Route::post('/{report:slug}/restore', [ReportController::class, 'restore'])->withTrashed()->name('restore');
+        Route::delete('/{report:slug}/force', [ReportController::class, 'forceDelete'])->withTrashed()->name('force-delete');
+        Route::get('/trashed', [ReportController::class, 'trashed'])->name('trashed');
         
-        // Get version history for a report (last 50 versions)
-        Route::get('/{report:slug}/versions', [ReportController::class, 'versions'])
-            ->name('versions');
+        // Reports Assigned to Current User
+        Route::get('/assigned', [ReportController::class, 'assignedReports'])->name('assigned');
         
-        // Restore a previous version (creates new version before restore)
-        Route::post('/{report:slug}/versions/{version}/restore', 
-            [ReportController::class, 'restoreVersion'])
-            ->name('versions.restore');
-        
-        // ── Share Management ─────────────────────────────────────
-        
-        // Generate public share link (32-char random token)
-        // Anyone with the link can view the report (no login required)
-        Route::post('/{report:slug}/share', [ReportController::class, 'generateShareLink'])
-            ->name('share');
-        
-        // Revoke public share link (makes report private again)
-        Route::delete('/{report:slug}/share', [ReportController::class, 'revokeShareLink'])
-            ->name('share.revoke');
-        
-        // ── Export Functionality ─────────────────────────────────
-        
-        // Download as PDF (uses Browsershot primary, DomPDF fallback)
-        Route::get('/{report:slug}/download', [ReportController::class, 'download'])
-            ->name('download');
-        
-        // Export as PDF (same as download, different route name)
-        Route::get('/{report:slug}/export/pdf', [ReportController::class, 'download'])
-            ->name('export.pdf');
-        
-        // Export as Excel (uses Maatwebsite Excel, CSV fallback)
-        Route::get('/{report:slug}/export/excel', [ReportController::class, 'exportExcel'])
-            ->name('export.excel');
-        
-        // Export as CSV (extracts all table and chart data)
-        Route::get('/{report:slug}/export/csv', [ReportController::class, 'exportCsv'])
-            ->name('export.csv');
-        
-        // Export as PNG image (uses Browsershot screenshot)
-        Route::get('/{report:slug}/export/image', [ReportController::class, 'exportImage'])
-            ->name('export.image');
-        
-        // ── Soft Delete Management ───────────────────────────────
-        
-        // Restore a soft-deleted report from trash
-        // Also restores related notifications
-        Route::post('/{report:slug}/restore', [ReportController::class, 'restore'])
-            ->withTrashed()  // Allows finding soft-deleted records
-            ->name('restore');
-        
-        // Permanently delete a report (cannot be recovered)
-        // Also permanently deletes related notifications
-        Route::delete('/{report:slug}/force', [ReportController::class, 'forceDelete'])
-            ->withTrashed()
-            ->name('force-delete');
-        
-        // View all trashed (soft-deleted) reports for current user
-        Route::get('/trashed', [ReportController::class, 'trashed'])
-            ->name('trashed');
-        
-        // ── Reports Assigned to Current User ─────────────────────
-        
-        // View reports that other users have shared with you
-        // Shows permission level (view/edit/manage) and expiry
-        Route::get('/assigned', [ReportController::class, 'assignedReports'])
-            ->name('assigned');
-        
-        // ── Report Assignment Management (per report) ────────────
-        
-        // Get all assignments for a specific report
-        Route::get('/{report:slug}/assignments', [ReportController::class, 'getAssignments'])
-            ->name('assignments');
-        
-        // Assign a report to another user (view/edit/manage permissions)
-        // Sends notification to the assigned user
-        Route::post('/{report:slug}/assign', [ReportController::class, 'assignToUser'])
-            ->name('assign');
-        
-        // Remove a user's assignment from a report
-        Route::delete('/{report:slug}/assignments/{assignment}', 
-            [ReportController::class, 'removeAssignment'])
-            ->name('unassign');
+        // Report Assignment Management (per report)
+        Route::get('/{report:slug}/assignments', [ReportController::class, 'getAssignments'])->name('assignments');
+        Route::post('/{report:slug}/assign', [ReportController::class, 'assignToUser'])->name('assign');
+        Route::delete('/{report:slug}/assignments/{assignment}', [ReportController::class, 'removeAssignment'])->name('unassign');
+
+        // Element Presets
+        Route::get('/presets/list', [ReportController::class, 'getPresets'])->name('presets');
+        Route::post('/presets/save', [ReportController::class, 'savePreset'])->name('presets.save');
+
+        // Report Statistics
+        Route::get('/{report:slug}/stats', [ReportController::class, 'reportStats'])->name('stats');
     });
 
-    // ─────────────────────────────────────────────────────────────
-    // TEMPLATES - Report template management
-    // Users can view and use templates to create reports
-    // Admin can create/edit/delete templates (see admin routes)
-    // ─────────────────────────────────────────────────────────────
-    
-    // View all available templates (gallery view)
-    Route::get('/templates', [TemplateController::class, 'index'])
-        ->name('templates.index');
-    
-    // View single template details (API endpoint)
-    Route::get('/templates/{template:slug}', [TemplateController::class, 'show'])
-        ->name('templates.show');
-    
-    // Use a template to create a new report (redirects to create page)
-    Route::get('/templates/{template:slug}/use', [TemplateController::class, 'use'])
-        ->name('templates.use');
+    // ── Templates ──────────────────────────────────────────────
+    Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
+    Route::get('/templates/{template:slug}', [TemplateController::class, 'show'])->name('templates.show');
+    Route::get('/templates/{template:slug}/use', [TemplateController::class, 'use'])->name('templates.use');
 
-    // ─────────────────────────────────────────────────────────────
-    // MY TASKS - Tasks assigned to the current user
-    // Different from admin tasks (which shows ALL tasks)
-    // Orders: Overdue first, then Pending, In Progress, Completed
-    // ─────────────────────────────────────────────────────────────
-    Route::get('/my-tasks', [TaskController::class, 'myTasks'])
-        ->name('admin.tasks.my');
+    // ── My Tasks ───────────────────────────────────────────────
+    Route::get('/my-tasks', [TaskController::class, 'myTasks'])->name('admin.tasks.my');
 
     /*
     |--------------------------------------------------------------------------
     | ADMIN ROUTES (Requires Admin or Manager Role)
     |--------------------------------------------------------------------------
-    | These routes are protected by role middleware.
-    | - Admin: Full access to all admin features including roles/permissions
-    | - Manager: Access to users, tasks, reports, analytics (NOT roles)
-    | - Regular users: Cannot access any of these routes
-    |
-    | All routes in this group are prefixed with /admin
-    | Route names are prefixed with admin. (e.g., admin.users.index)
     */
     
     Route::prefix('admin')->name('admin.')
-        ->middleware(['can:admin|manager'])  // Both admin and manager can access
+        ->middleware(['can:admin|manager'])
         ->group(function () {
 
-        // ─────────────────────────────────────────────────────────
-        // USER MANAGEMENT (Admin & Manager)
-        // Full CRUD + impersonation + bulk operations + export
-        // All actions are logged in UserActivity
-        // ─────────────────────────────────────────────────────────
+        // ── User Management ─────────────────────────────────────
         Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [UserController::class, 'index'])->name('index');
+            Route::get('/create', [UserController::class, 'create'])->name('create');
+            Route::post('/', [UserController::class, 'store'])->name('store');
+            Route::get('/{user}', [UserController::class, 'show'])->name('show');
+            Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
+            Route::put('/{user}', [UserController::class, 'update'])->name('update');
+            Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
             
-            // List all users (paginated with search/filter/sort)
-            Route::get('/', [UserController::class, 'index'])
-                ->name('index');
+            // Impersonate user
+            Route::post('/{user}/impersonate', [UserController::class, 'impersonate'])->name('impersonate');
             
-            // Show create user form (name, email, password, roles, premium)
-            Route::get('/create', [UserController::class, 'create'])
-                ->name('create');
+            // User activities
+            Route::get('/{user}/activities', [UserController::class, 'userActivities'])->name('activities');
             
-            // Store new user (auto-verifies email for admin-created users)
-            Route::post('/', [UserController::class, 'store'])
-                ->name('store');
+            // Bulk operations
+            Route::post('/bulk-delete', [UserController::class, 'bulkDelete'])->name('bulk-delete');
             
-            // Show user details (profile, stats, roles)
-            Route::get('/{user}', [UserController::class, 'show'])
-                ->name('show');
+            // Export
+            Route::get('/export', [UserController::class, 'export'])->name('export');
             
-            // Show edit user form (with current roles/stats)
-            Route::get('/{user}/edit', [UserController::class, 'edit'])
-                ->name('edit');
-            
-            // Update user details (name, email, roles, premium)
-            // Password only updated if provided (optional)
-            Route::put('/{user}', [UserController::class, 'update'])
-                ->name('update');
-            
-            // Soft delete user (move to trash)
-            // Prevents self-deletion and deleting last admin
-            Route::delete('/{user}', [UserController::class, 'destroy'])
-                ->name('destroy');
-            
-            // ── User Actions ────────────────────────────────────
-            
-            // Impersonate a user (admin logs in as that user)
-            // Session stores original user ID for stop-impersonate
-            Route::post('/{user}/impersonate', [UserController::class, 'impersonate'])
-                ->name('impersonate');
-            
-            // Get user activity logs (API endpoint)
-            Route::get('/{user}/activities', [UserController::class, 'userActivities'])
-                ->name('activities');
-            
-            // ── Bulk Operations ──────────────────────────────────
-            
-            // Bulk soft delete users (accepts array of user IDs)
-            Route::post('/bulk-delete', [UserController::class, 'bulkDelete'])
-                ->name('bulk-delete');
-            
-            // ── Export ───────────────────────────────────────────
-            
-            // Export users to CSV (with filters)
-            Route::get('/export', [UserController::class, 'export'])
-                ->name('export');
-            
-            // ── Soft Delete Management ───────────────────────────
-            
-            // Restore a soft-deleted user from trash
-            Route::post('/{user}/restore', [UserController::class, 'restore'])
-                ->withTrashed()  // Allows finding soft-deleted users
-                ->name('restore');
-            
-            // Permanently delete a user (cannot be recovered)
-            // Also soft-deletes related reports and tasks
-            Route::delete('/{user}/force', [UserController::class, 'forceDelete'])
-                ->withTrashed()
-                ->name('force-delete');
-            
-            // View all trashed (soft-deleted) users
-            Route::get('/trashed', [UserController::class, 'trashed'])
-                ->name('trashed');
+            // Soft delete management
+            Route::post('/{user}/restore', [UserController::class, 'restore'])->withTrashed()->name('restore');
+            Route::delete('/{user}/force', [UserController::class, 'forceDelete'])->withTrashed()->name('force-delete');
+            Route::get('/trashed', [UserController::class, 'trashed'])->name('trashed');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // ROLE & PERMISSION MANAGEMENT (Admin Only)
-        // Uses Spatie Laravel Permission package
-        // Manager role CANNOT access these routes
-        // ─────────────────────────────────────────────────────────
+        // ── Role & Permission Management (Admin Only) ───────────
         Route::prefix('roles')->name('roles.')
-            ->middleware(['can:admin'])  // Only admin can manage roles
+            ->middleware(['can:admin'])
             ->group(function () {
             
-            // ── Role CRUD ────────────────────────────────────────
+            // Role CRUD
+            Route::get('/', [RoleController::class, 'index'])->name('index');
+            Route::get('/create', [RoleController::class, 'create'])->name('create');
+            Route::post('/', [RoleController::class, 'store'])->name('store');
+            Route::get('/{role}', [RoleController::class, 'show'])->name('show');
+            Route::get('/{role}/edit', [RoleController::class, 'edit'])->name('edit');
+            Route::put('/{role}', [RoleController::class, 'update'])->name('update');
+            Route::delete('/{role}', [RoleController::class, 'destroy'])->name('destroy');
             
-            // List all roles with permissions count
-            Route::get('/', [RoleController::class, 'index'])
-                ->name('index');
+            // Permission CRUD
+            Route::get('/permissions', [RoleController::class, 'permissions'])->name('permissions');
+            Route::post('/permissions', [RoleController::class, 'storePermission'])->name('permissions.store');
+            Route::put('/permissions/{permission}', [RoleController::class, 'updatePermission'])->name('permissions.update');
+            Route::delete('/permissions/{permission}', [RoleController::class, 'destroyPermission'])->name('permissions.destroy');
             
-            // Show create role form with permission checkboxes
-            Route::get('/create', [RoleController::class, 'create'])
-                ->name('create');
+            // Role-Permission Assignment
+            Route::post('/{role}/assign-permissions', [RoleController::class, 'assignPermissions'])->name('assign-permissions');
+            Route::delete('/{role}/permissions/{permission}', [RoleController::class, 'removePermission'])->name('remove-permission');
             
-            // Store new role with selected permissions
-            Route::post('/', [RoleController::class, 'store'])
-                ->name('store');
+            // User-Role Assignment
+            Route::post('/assign-to-user', [RoleController::class, 'assignToUser'])->name('assign-to-user');
+            Route::delete('/remove-from-user', [RoleController::class, 'removeFromUser'])->name('remove-from-user');
             
-            // Show role details (permissions list, users with this role)
-            Route::get('/{role}', [RoleController::class, 'show'])
-                ->name('show');
-            
-            // Show edit role form (current permissions pre-checked)
-            Route::get('/{role}/edit', [RoleController::class, 'edit'])
-                ->name('edit');
-            
-            // Update role name and permissions
-            // Prevents renaming the admin role
-            Route::put('/{role}', [RoleController::class, 'update'])
-                ->name('update');
-            
-            // Delete role (prevents deletion if users are assigned)
-            // Cannot delete admin role
-            Route::delete('/{role}', [RoleController::class, 'destroy'])
-                ->name('destroy');
-            
-            // ── Permission CRUD ──────────────────────────────────
-            
-            // View all permissions grouped by category
-            Route::get('/permissions', [RoleController::class, 'permissions'])
-                ->name('permissions');
-            
-            // Create new permission (e.g., "edit-reports")
-            Route::post('/permissions', [RoleController::class, 'storePermission'])
-                ->name('permissions.store');
-            
-            // Update permission name
-            Route::put('/permissions/{permission}', [RoleController::class, 'updatePermission'])
-                ->name('permissions.update');
-            
-            // Delete permission (prevents if assigned to any role)
-            Route::delete('/permissions/{permission}', [RoleController::class, 'destroyPermission'])
-                ->name('permissions.destroy');
-            
-            // ── Role-Permission Assignment ───────────────────────
-            
-            // Bulk assign multiple permissions to a role
-            Route::post('/{role}/assign-permissions', [RoleController::class, 'assignPermissions'])
-                ->name('assign-permissions');
-            
-            // Remove a single permission from a role
-            Route::delete('/{role}/permissions/{permission}', [RoleController::class, 'removePermission'])
-                ->name('remove-permission');
-            
-            // ── User-Role Assignment ─────────────────────────────
-            
-            // Assign a role to a user
-            Route::post('/assign-to-user', [RoleController::class, 'assignToUser'])
-                ->name('assign-to-user');
-            
-            // Remove a role from a user
-            Route::delete('/remove-from-user', [RoleController::class, 'removeFromUser'])
-                ->name('remove-from-user');
-            
-            // ── Setup & Statistics ───────────────────────────────
-            
-            // Create default roles (admin, manager, user) with permissions
-            // Only available in local environment
-            Route::post('/setup-default', [RoleController::class, 'setupDefaultRoles'])
-                ->name('setup-default');
-            
-            // Get role statistics (API endpoint)
-            Route::get('/stats', [RoleController::class, 'getStats'])
-                ->name('stats');
+            // Setup & Statistics
+            Route::post('/setup-default', [RoleController::class, 'setupDefaultRoles'])->name('setup-default');
+            Route::get('/stats', [RoleController::class, 'getStats'])->name('stats');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // TASK MANAGEMENT - Admin/Manager view of ALL tasks
-        // Includes: CRUD, status updates, bulk operations, export
-        // Uses soft deletes with trash/restore/force-delete
-        // ─────────────────────────────────────────────────────────
+        // ── Task Management ────────────────────────────────────
         Route::prefix('tasks')->name('tasks.')->group(function () {
             
-            // ── Basic CRUD ───────────────────────────────────────
+            // Basic CRUD
+            Route::get('/', [TaskController::class, 'index'])->name('index');
+            Route::get('/create', [TaskController::class, 'create'])->name('create');
+            Route::post('/', [TaskController::class, 'store'])->name('store');
+            Route::get('/{task}', [TaskController::class, 'show'])->name('show');
+            Route::get('/{task}/edit', [TaskController::class, 'edit'])->name('edit');
+            Route::put('/{task}', [TaskController::class, 'update'])->name('update');
+            Route::delete('/{task}', [TaskController::class, 'destroy'])->name('destroy');
             
-            // List ALL tasks (paginated with filters)
-            Route::get('/', [TaskController::class, 'index'])
-                ->name('index');
+            // Quick Status Update
+            Route::patch('/{task}/status', [TaskController::class, 'updateStatus'])->name('status');
             
-            // Show create task form (user selection, report linking)
-            Route::get('/create', [TaskController::class, 'create'])
-                ->name('create');
+            // Bulk Operations
+            Route::post('/bulk-delete', [TaskController::class, 'bulkDelete'])->name('bulk-delete');
+            Route::post('/bulk-assign', [TaskController::class, 'bulkAssign'])->name('bulk-assign');
+            Route::post('/bulk-status', [TaskController::class, 'bulkStatus'])->name('bulk-status');
             
-            // Store new task (sends notification to assigned user)
-            Route::post('/', [TaskController::class, 'store'])
-                ->name('store');
+            // Export
+            Route::get('/export', [TaskController::class, 'export'])->name('export');
             
-            // Show task details (activity log, related tasks)
-            Route::get('/{task}', [TaskController::class, 'show'])
-                ->name('show');
-            
-            // Show edit task form
-            Route::get('/{task}/edit', [TaskController::class, 'edit'])
-                ->name('edit');
-            
-            // Update task details (notifies on reassignment/completion)
-            Route::put('/{task}', [TaskController::class, 'update'])
-                ->name('update');
-            
-            // Soft delete task (move to trash)
-            // Notifies assigned user
-            Route::delete('/{task}', [TaskController::class, 'destroy'])
-                ->name('destroy');
-            
-            // ── Quick Status Update (AJAX) ───────────────────────
-            
-            // Update task status via AJAX (from dropdown)
-            // Supports completion notes when marking as completed
-            Route::patch('/{task}/status', [TaskController::class, 'updateStatus'])
-                ->name('status');
-            
-            // ── Bulk Operations ──────────────────────────────────
-            
-            // Bulk soft delete tasks
-            Route::post('/bulk-delete', [TaskController::class, 'bulkDelete'])
-                ->name('bulk-delete');
-            
-            // Bulk assign tasks to a user
-            Route::post('/bulk-assign', [TaskController::class, 'bulkAssign'])
-                ->name('bulk-assign');
-            
-            // Bulk update task status
-            Route::post('/bulk-status', [TaskController::class, 'bulkStatus'])
-                ->name('bulk-status');
-            
-            // ── Export ───────────────────────────────────────────
-            
-            // Export tasks to CSV (with filters)
-            Route::get('/export', [TaskController::class, 'export'])
-                ->name('export');
-            
-            // ── Soft Delete Management ───────────────────────────
-            
-            // Restore a soft-deleted task from trash
-            Route::post('/{task}/restore', [TaskController::class, 'restore'])
-                ->withTrashed()
-                ->name('restore');
-            
-            // Permanently delete a task (cannot be recovered)
-            Route::delete('/{task}/force', [TaskController::class, 'forceDelete'])
-                ->withTrashed()
-                ->name('force-delete');
-            
-            // View all trashed (soft-deleted) tasks
-            Route::get('/trashed', [TaskController::class, 'trashed'])
-                ->name('trashed');
+            // Soft Delete Management
+            Route::post('/{task}/restore', [TaskController::class, 'restore'])->withTrashed()->name('restore');
+            Route::delete('/{task}/force', [TaskController::class, 'forceDelete'])->withTrashed()->name('force-delete');
+            Route::get('/trashed', [TaskController::class, 'trashed'])->name('trashed');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // REPORT ASSIGNMENTS MANAGEMENT (Admin & Manager)
-        // Central management of all report sharing/assignments
-        // ─────────────────────────────────────────────────────────
+        // ── Report Assignments Management ──────────────────────
         Route::prefix('report-assignments')->name('report-assignments.')->group(function () {
-            
-            // List all assignments (with filters by report/user)
-            Route::get('/', [ReportAssignmentController::class, 'index'])
-                ->name('index');
-            
-            // Create new assignment (or update existing)
-            Route::post('/', [ReportAssignmentController::class, 'store'])
-                ->name('store');
-            
-            // Delete an assignment (removes user's access)
-            Route::delete('/{assignment}', [ReportAssignmentController::class, 'destroy'])
-                ->name('destroy');
-            
-            // Toggle assignment active/inactive status
-            Route::patch('/{assignment}/toggle', [ReportAssignmentController::class, 'toggleActive'])
-                ->name('toggle');
-            
-            // Export assignments to CSV
-            Route::get('/export', [ReportAssignmentController::class, 'export'])
-                ->name('export');
+            Route::get('/', [ReportAssignmentController::class, 'index'])->name('index');
+            Route::post('/', [ReportAssignmentController::class, 'store'])->name('store');
+            Route::delete('/{assignment}', [ReportAssignmentController::class, 'destroy'])->name('destroy');
+            Route::patch('/{assignment}/toggle', [ReportAssignmentController::class, 'toggleActive'])->name('toggle');
+            Route::get('/export', [ReportAssignmentController::class, 'export'])->name('export');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // TEMPLATE MANAGEMENT (Admin Only)
-        // CRUD for report templates (structure, settings, etc.)
-        // ─────────────────────────────────────────────────────────
+        // ── Template Management (Admin Only) ───────────────────
         Route::prefix('templates')->name('templates.')
-            ->middleware(['can:admin'])  // Only admin can manage templates
+            ->middleware(['can:admin'])
             ->group(function () {
-            
-            // Create new template
-            Route::post('/', [TemplateController::class, 'store'])
-                ->name('store');
-            
-            // Update existing template
-            Route::put('/{template}', [TemplateController::class, 'update'])
-                ->name('update');
-            
-            // Soft delete template (move to trash)
-            Route::delete('/{template}', [TemplateController::class, 'destroy'])
-                ->name('destroy');
-            
-            // Restore soft-deleted template
-            Route::post('/{template}/restore', [TemplateController::class, 'restore'])
-                ->withTrashed()
-                ->name('restore');
-            
-            // Permanently delete template
-            Route::delete('/{template}/force', [TemplateController::class, 'forceDelete'])
-                ->withTrashed()
-                ->name('force-delete');
+            Route::post('/', [TemplateController::class, 'store'])->name('store');
+            Route::put('/{template}', [TemplateController::class, 'update'])->name('update');
+            Route::delete('/{template}', [TemplateController::class, 'destroy'])->name('destroy');
+            Route::post('/{template}/restore', [TemplateController::class, 'restore'])->withTrashed()->name('restore');
+            Route::delete('/{template}/force', [TemplateController::class, 'forceDelete'])->withTrashed()->name('force-delete');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // ACTIVITY LOGS (Admin & Manager)
-        // Track all user actions across the system
-        // ─────────────────────────────────────────────────────────
+        // ── Activity Logs ──────────────────────────────────────
         Route::prefix('activities')->name('activities.')->group(function () {
-            
-            // List all activities (with filters by user, action, date)
-            Route::get('/', [ActivityController::class, 'index'])
-                ->name('index');
-            
-            // Get activities for a specific user
-            Route::get('/user/{user}', [ActivityController::class, 'userActivities'])
-                ->name('user');
-            
-            // Clear old activities (based on days parameter)
-            Route::delete('/clear', [ActivityController::class, 'clear'])
-                ->name('clear');
-            
-            // Export activities to CSV
-            Route::get('/export', [ActivityController::class, 'export'])
-                ->name('export');
+            Route::get('/', [ActivityController::class, 'index'])->name('index');
+            Route::get('/user/{user}', [ActivityController::class, 'userActivities'])->name('user');
+            Route::delete('/clear', [ActivityController::class, 'clear'])->name('clear');
+            Route::get('/export', [ActivityController::class, 'export'])->name('export');
         });
 
-        // ─────────────────────────────────────────────────────────
-        // ANALYTICS DASHBOARD (Admin & Manager)
-        // System-wide statistics, charts, and reports
-        // ─────────────────────────────────────────────────────────
+        // ── Analytics Dashboard ─────────────────────────────────
         Route::prefix('analytics')->name('analytics.')->group(function () {
-            
-            // Main analytics dashboard (overview with all stats)
-            Route::get('/', [AnalyticsController::class, 'index'])
-                ->name('index');
-            
-            // Detailed reports analytics (paginated list)
-            Route::get('/reports', [AnalyticsController::class, 'reports'])
-                ->name('reports');
-            
-            // Detailed users analytics (paginated list)
-            Route::get('/users', [AnalyticsController::class, 'users'])
-                ->name('users');
-            
-            // Export analytics data to CSV
-            Route::get('/export', [AnalyticsController::class, 'export'])
-                ->name('export');
-            
-            // Quick stats API for dashboard widgets
-            Route::get('/quick-stats', [AnalyticsController::class, 'quickStats'])
-                ->name('quick-stats');
+            Route::get('/', [AnalyticsController::class, 'index'])->name('index');
+            Route::get('/reports', [AnalyticsController::class, 'reports'])->name('reports');
+            Route::get('/users', [AnalyticsController::class, 'users'])->name('users');
+            Route::get('/export', [AnalyticsController::class, 'export'])->name('export');
+            Route::get('/quick-stats', [AnalyticsController::class, 'quickStats'])->name('quick-stats');
         });
     });
 });
@@ -705,13 +308,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 |--------------------------------------------------------------------------
 | IMPERSONATION STOP ROUTE - Outside admin group
 |--------------------------------------------------------------------------
-| This route is defined OUTSIDE the admin middleware group.
-| Reason: When an admin is impersonating a regular user, the impersonated
-| user may NOT have admin role. If this route was inside the admin group,
-| the impersonated user wouldn't be able to stop the impersonation.
-| 
-| Session key 'impersonate' stores the original admin's user ID.
-| stopImpersonate() removes this key and redirects to dashboard.
 */
 Route::middleware(['auth', 'verified'])
     ->post('/admin/users/stop-impersonate', [UserController::class, 'stopImpersonate'])
@@ -719,15 +315,388 @@ Route::middleware(['auth', 'verified'])
 
 /*
 |--------------------------------------------------------------------------
+| API ROUTES (Application-specific, no external API)
+|--------------------------------------------------------------------------
+*/
+
+// Image Upload
+Route::middleware(['auth', 'verified'])->post('/api/upload-image', function (Request $request) {
+    $request->validate([
+        'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp,svg|max:5120',
+    ]);
+    try {
+        $path = $request->file('image')->store('report-images', 'public');
+        return response()->json([
+            'url'     => Storage::url($path),
+            'path'    => $path,
+            'message' => 'Image uploaded successfully.',
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['error' => 'Upload failed: ' . $e->getMessage()], 500);
+    }
+});
+
+// AI Content Generation
+Route::middleware(['auth', 'verified'])->post('/api/ai/generate', function (Request $request) {
+    $request->validate([
+        'prompt' => 'required|string|max:1000',
+        'type'   => 'required|in:text,chart_data,headline,summary',
+    ]);
+
+    $prompt = strtolower($request->prompt);
+
+    // Smart Text Generation
+    if ($request->type === 'text') {
+        $templates = [
+            'business' => [
+                'keywords'  => ['revenue', 'growth', 'profit', 'sales', 'quarter', 'annual', 'business', 'company'],
+                'responses' => [
+                    'Based on our analysis, the company has demonstrated consistent growth trajectory over the past fiscal year. Key metrics show a {percent}% increase in revenue, driven by strategic initiatives and market expansion.',
+                    'The business performance report indicates strong operational efficiency with EBITDA margins improving by {percent}%. Cost optimization strategies have yielded significant results.',
+                    'Market analysis reveals emerging opportunities in the {segment} sector. Our competitive positioning remains strong with projected growth of {percent}% in the coming quarters.',
+                ]
+            ],
+            'marketing' => [
+                'keywords'  => ['campaign', 'marketing', 'social', 'advertising', 'brand', 'engagement', 'roi'],
+                'responses' => [
+                    'The marketing campaign exceeded KPI targets with a {percent}% increase in engagement. Social media reach expanded by {percent}%, driving significant brand awareness.',
+                    'ROI analysis shows marketing spend efficiency improved by {percent}%. The multi-channel approach generated {number} new leads with a conversion rate of {percent}%.',
+                ]
+            ],
+            'default' => [
+                'responses' => [
+                    'Based on your request regarding "{prompt}", analysis indicates positive outcomes. Key metrics show improvement across all tracked dimensions with projected growth of {percent}%.',
+                    'The data suggests that strategic focus on {prompt} has yielded measurable results. Implementation of recommended actions would further enhance outcomes by an estimated {percent}%.',
+                ]
+            ]
+        ];
+
+        $category = 'default';
+        foreach ($templates as $cat => $config) {
+            if ($cat !== 'default' && isset($config['keywords'])) {
+                foreach ($config['keywords'] as $keyword) {
+                    if (strpos($prompt, $keyword) !== false) {
+                        $category = $cat;
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        $responses = $templates[$category]['responses'] ?? $templates['default']['responses'];
+        $template  = $responses[array_rand($responses)];
+        $percent   = rand(8, 45);
+        $amount    = rand(50, 500);
+        $number    = rand(5, 50);
+        $segment   = ['enterprise', 'SMB', 'consumer', 'international', 'digital'][array_rand(['enterprise', 'SMB', 'consumer', 'international', 'digital'])];
+
+        $result = str_replace(
+            ['{percent}', '{amount}', '{number}', '{segment}', '{prompt}'],
+            [$percent, $amount, $number, $segment, $request->prompt],
+            $template
+        );
+
+        $result .= ' ' . [
+            'Further analysis is available upon request.',
+            'Detailed breakdown by region available.',
+            'Comparative data shows consistent improvement.',
+            'Recommendations for next quarter have been prepared.',
+            'Full report with visualizations is attached.',
+        ][array_rand([0, 1, 2, 3, 4])];
+
+        return response()->json(['result' => $result]);
+    }
+
+    // Smart Headline Generation
+    if ($request->type === 'headline') {
+        $templates = [
+            'Q{quarter} {year} {topic} Report: Key Insights & Analysis',
+            'Breaking Down {topic}: {percent}% Growth Achieved',
+            'The State of {topic}: {year} Edition',
+            '{topic} Trends: What You Need to Know',
+            '{topic} Performance Review: {percent}% Increase',
+            'Strategic Analysis: {topic} Market Outlook',
+            '{topic} Report: From Data to Decisions',
+        ];
+
+        $quarter = rand(1, 4);
+        $year    = date('Y');
+        $percent = rand(10, 75);
+        $topic   = ucwords(str_replace(['write', 'generate', 'about', 'for', 'a'], '', $request->prompt));
+        if (strlen($topic) < 3) $topic = 'Performance';
+
+        $template = $templates[array_rand($templates)];
+        $result   = str_replace(
+            ['{quarter}', '{year}', '{topic}', '{percent}'],
+            [$quarter, $year, $topic, $percent],
+            $template
+        );
+
+        return response()->json(['result' => $result]);
+    }
+
+    // Smart Summary Generation
+    if ($request->type === 'summary') {
+        $metrics = [
+            'revenue'      => rand(50000, 500000),
+            'growth'       => rand(5, 45),
+            'customers'    => rand(1000, 50000),
+            'satisfaction' => rand(75, 98),
+            'efficiency'   => rand(60, 95),
+        ];
+
+        $summary  = "Executive Summary: ";
+        $summary .= "Based on the analysis of \"{$request->prompt}\", ";
+        $summary .= "the organization achieved {$metrics['growth']}% growth with revenue reaching \${$metrics['revenue']}. ";
+        $summary .= "Customer satisfaction stands at {$metrics['satisfaction']}% with {$metrics['customers']}+ active users. ";
+        $summary .= "Operational efficiency improved by {$metrics['efficiency']}% through strategic initiatives. ";
+        $summary .= "Key recommendations include leveraging emerging opportunities and optimizing resource allocation for sustained growth.";
+
+        return response()->json(['result' => $summary]);
+    }
+
+    // Smart Chart Data Generation
+    if ($request->type === 'chart_data') {
+        $chartTypes    = ['bar-chart', 'line-chart', 'area-chart', 'pie-chart'];
+        $suggestedType = $chartTypes[array_rand($chartTypes)];
+
+        $periods         = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        $selectedPeriods = array_slice($periods, 0, rand(4, 8));
+
+        $baseValue = rand(20000, 100000);
+        $trend     = rand(-15, 30);
+        $values    = [];
+        $current   = $baseValue;
+
+        for ($i = 0; $i < count($selectedPeriods); $i++) {
+            $change   = rand(-10, 25);
+            $current  = max(1000, $current + ($current * $change / 100));
+            $values[] = round($current);
+        }
+
+        $isTrending = end($values) > $values[0];
+        $title      = $isTrending
+            ? "Upward Trend in " . ucwords(str_replace(['generate', 'chart', 'data', 'for'], '', $request->prompt))
+            : "Performance Analysis";
+        if (strlen($title) < 5) $title = "Key Performance Metrics";
+
+        return response()->json([
+            'labels'               => $selectedPeriods,
+            'values'               => $values,
+            'title'                => $title,
+            'suggested_chart_type' => $suggestedType,
+            'summary'              => $isTrending ? "Showing {$trend}% overall growth" : "Stable performance with minor fluctuations",
+        ]);
+    }
+
+    return response()->json(['result' => 'Analysis complete. The data indicates positive momentum with opportunities for further optimization.']);
+});
+
+// AI Content Enhancement
+Route::middleware(['auth', 'verified'])->post('/api/ai/enhance', function (Request $request) {
+    $request->validate([
+        'content' => 'required|string|max:5000',
+        'style'   => 'required|in:professional,concise,detailed,persuasive',
+    ]);
+
+    $content = $request->content;
+    $style   = $request->style;
+
+    $enhancements = [
+        'professional' => [
+            'prefix'       => 'Upon review, ',
+            'suffix'       => ' This analysis was conducted using industry-standard methodologies.',
+            'replacements' => [
+                'good' => 'satisfactory', 'great' => 'excellent', 'bad' => 'suboptimal',
+                'think' => 'believe', 'show' => 'demonstrate', 'get' => 'obtain',
+            ]
+        ],
+        'concise' => [
+            'prefix'       => '',
+            'suffix'       => ' In summary, the key takeaways are clear.',
+            'replacements' => [
+                'in order to' => 'to', 'due to the fact that' => 'because', 'at this point in time' => 'now',
+                'a large number of' => 'many', 'in the event that' => 'if',
+            ]
+        ],
+        'detailed' => [
+            'prefix'       => 'A comprehensive examination reveals that ',
+            'suffix'       => ' Further analysis indicates additional opportunities for optimization.',
+            'replacements' => []
+        ],
+        'persuasive' => [
+            'prefix'       => 'Undoubtedly, ',
+            'suffix'       => ' The evidence strongly supports this conclusion.',
+            'replacements' => [
+                'good' => 'outstanding', 'important' => 'critical', 'help' => 'empower',
+                'show' => 'prove', 'think' => 'are confident',
+            ]
+        ],
+    ];
+
+    $config   = $enhancements[$style];
+    $enhanced = $config['prefix'] . $content . $config['suffix'];
+
+    foreach ($config['replacements'] as $old => $new) {
+        $enhanced = str_ireplace($old, $new, $enhanced);
+    }
+
+    return response()->json([
+        'original'   => $content,
+        'enhanced'   => $enhanced,
+        'style'      => $style,
+        'word_count' => [
+            'original' => str_word_count($content),
+            'enhanced' => str_word_count($enhanced),
+        ]
+    ]);
+});
+
+// AI Chart Suggestion
+Route::middleware(['auth', 'verified'])->post('/api/ai/suggest-chart', function (Request $request) {
+    $request->validate(['data' => 'nullable|array']);
+
+    $hasData = !empty($request->data);
+
+    if ($hasData && count($request->data) > 0) {
+        $dataValues = array_values($request->data);
+        $avg        = array_sum($dataValues) / count($dataValues);
+        $max        = max($dataValues);
+        $min        = min($dataValues);
+        $range      = $max - $min;
+
+        if ($range / $max < 0.1) {
+            $chartType = 'bar-chart';
+            $reason    = 'Values are similar, bar chart shows comparison effectively';
+        } elseif ($range / $max > 0.5) {
+            $chartType = 'line-chart';
+            $reason    = 'High variance detected, line chart shows trend clearly';
+        } else {
+            $chartType = 'area-chart';
+            $reason    = 'Moderate variance, area chart emphasizes magnitude';
+        }
+
+        $labels        = [];
+        $defaultLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        for ($i = 0; $i < count($dataValues); $i++) {
+            $labels[] = $defaultLabels[$i % 12] . ' ' . (floor($i / 12) + 1);
+        }
+
+        return response()->json([
+            'suggested_type' => $chartType,
+            'reason'         => $reason,
+            'labels'         => $labels,
+            'values'         => $dataValues,
+            'title'          => 'Data Visualization',
+            'insights'       => "Values range from {$min} to {$max} with an average of " . round($avg, 2),
+        ]);
+    }
+
+    $sampleData = [
+        'labels'         => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        'values'         => [12500, 18200, 15800, 22400, 19600, 28300],
+        'title'          => 'Revenue Trend (Suggested)',
+        'suggested_type' => 'line-chart',
+        'reason'         => 'Line chart best shows the upward trend in revenue over time',
+        'insights'       => 'Showing 126% growth from January to June',
+    ];
+
+    return response()->json($sampleData);
+});
+
+// Unsplash/Stock Image Search (Free placeholder images)
+Route::middleware(['auth', 'verified'])->get('/api/unsplash/search', function (Request $request) {
+    $query  = $request->get('q', 'business');
+    $page   = $request->get('page', 1);
+    $images = collect(range(1, 20))->map(function ($i) use ($query) {
+        $seed = $i * 7 + (time() % 100);
+        return [
+            'id'           => $i,
+            'url'          => "https://picsum.photos/800/600?random={$seed}",
+            'thumb'        => "https://picsum.photos/200/150?random={$seed}",
+            'author'       => 'Free Stock Photo',
+            'download_url' => "https://picsum.photos/800/600?random={$seed}",
+        ];
+    });
+
+    return response()->json([
+        'images' => $images,
+        'total'  => 20,
+        'page'   => $page,
+    ]);
+});
+
+// QR Code Generation
+Route::middleware(['auth', 'verified'])->post('/api/qr/generate', function (Request $request) {
+    $text = $request->get('text', 'https://example.com');
+    $size = $request->get('size', 200);
+    $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data=" . urlencode($text);
+
+    return response()->json([
+        'qr_url' => $qrUrl,
+        'text'   => $text,
+    ]);
+});
+
+// Available Icons List
+Route::middleware(['auth', 'verified'])->get('/api/icons', function () {
+    $icons = [
+        'fa-solid fa-star', 'fa-solid fa-heart', 'fa-solid fa-check', 'fa-solid fa-xmark',
+        'fa-solid fa-arrow-right', 'fa-solid fa-arrow-left', 'fa-solid fa-arrow-up', 'fa-solid fa-arrow-down',
+        'fa-solid fa-phone', 'fa-solid fa-envelope', 'fa-solid fa-location-dot', 'fa-solid fa-globe',
+        'fa-solid fa-user', 'fa-solid fa-users', 'fa-solid fa-building', 'fa-solid fa-house',
+        'fa-solid fa-gear', 'fa-solid fa-wrench', 'fa-solid fa-magnifying-glass', 'fa-solid fa-filter',
+        'fa-solid fa-cloud', 'fa-solid fa-sun', 'fa-solid fa-moon', 'fa-solid fa-bolt',
+        'fa-solid fa-fire', 'fa-solid fa-shield', 'fa-solid fa-lock', 'fa-solid fa-key',
+        'fa-solid fa-trophy', 'fa-solid fa-gift', 'fa-solid fa-rocket', 'fa-solid fa-lightbulb',
+        'fa-solid fa-chart-line', 'fa-solid fa-chart-bar', 'fa-solid fa-chart-pie', 'fa-solid fa-table',
+        'fa-solid fa-file-pdf', 'fa-solid fa-file-image', 'fa-solid fa-file-excel', 'fa-solid fa-file-csv',
+        'fa-solid fa-download', 'fa-solid fa-upload', 'fa-solid fa-share', 'fa-solid fa-link',
+        'fa-solid fa-clock', 'fa-solid fa-calendar', 'fa-solid fa-tag', 'fa-solid fa-hashtag',
+        'fa-solid fa-camera', 'fa-solid fa-video', 'fa-solid fa-music', 'fa-solid fa-comment',
+        'fa-solid fa-bell', 'fa-solid fa-bookmark', 'fa-solid fa-flag', 'fa-solid fa-thumbs-up',
+        'fa-solid fa-circle-check', 'fa-solid fa-circle-xmark', 'fa-solid fa-circle-exclamation',
+        'fa-solid fa-circle-info', 'fa-solid fa-circle-question',
+    ];
+
+    return response()->json(['icons' => $icons]);
+});
+
+// Search Endpoints
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/api/search/users', [UserController::class, 'search']);
+    Route::get('/api/search/reports', [ReportController::class, 'search']);
+    Route::get('/api/search/tasks', [TaskController::class, 'search']);
+});
+
+// Notifications API
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/api/notifications', [DashboardController::class, 'notifications']);
+    Route::post('/api/notifications/read', [DashboardController::class, 'markNotificationsRead']);
+});
+
+// Quick Stats API
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/api/stats/dashboard', [DashboardController::class, 'quickStats']);
+    Route::get('/api/stats/reports', [ReportController::class, 'quickStats']);
+});
+
+// Task Status API
+Route::middleware(['auth', 'verified'])
+    ->patch('/api/tasks/{task}/status', [TaskController::class, 'updateStatus']);
+
+// Health Check
+Route::get('/api/health', function () {
+    return response()->json([
+        'status'    => 'healthy',
+        'timestamp' => now(),
+        'app_name'  => config('app.name'),
+    ]);
+});
+
+/*
+|--------------------------------------------------------------------------
 | AUTH ROUTES - Laravel Breeze/Jetstream
 |--------------------------------------------------------------------------
-| These routes handle authentication:
-| - Login / Logout
-| - Register
-| - Password Reset / Forgot Password
-| - Email Verification
-| - Password Confirmation
-| 
-| Defined in a separate file for better organization.
 */
 require __DIR__.'/auth.php';
