@@ -65,12 +65,14 @@ class ReportController extends Controller
         $reports = $query->paginate(12)->withQueryString();
 
         // Calculate statistics (only for owned reports)
+       
         $stats = [
-            'total'     => Report::where('user_id', auth()->id())->count(),
-            'published' => Report::where('user_id', auth()->id())->where('status', 'published')->count(),
-            'draft'     => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
-            'archived'  => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
-        ];
+    'total'     => Report::where('user_id', auth()->id())->count(),
+    'published' => Report::where('user_id', auth()->id())->where('status', 'published')->count(),
+    'draft'     => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
+    'archived'  => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
+    'trashed'   => Report::onlyTrashed()->where('user_id', auth()->id())->count(),
+];
 
         return Inertia::render('Reports/Index', compact('reports', 'stats'));
     }
