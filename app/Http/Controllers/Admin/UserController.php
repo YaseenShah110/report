@@ -6,17 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserActivity;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Role;
 use Illuminate\Validation\Rules;
+use Inertia\Inertia;
+use Spatie\Permission\Models\Role;
 
 /**
  * User Management Controller
- * 
+ *
  * Handles all user CRUD operations for administrators.
  * Supports soft deletes, impersonation, bulk operations, and export.
- * 
+ *
  * Access: Admin and Manager roles
  */
 class UserController extends Controller
@@ -25,44 +25,122 @@ class UserController extends Controller
      * Display paginated list of users with search and filters.
      * Shows active users by default.
      */
-    public function index(Request $request)
-    {
-        $users = User::with('roles')
-            ->withCount(['reports', 'tasksAssigned'])
-            ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%")
-                ->orWhere('email', 'like', "%{$request->search}%"))
-            ->when($request->role, fn($q) => $q->role($request->role))
-            ->orderBy($request->sort ?? 'created_at', $request->direction ?? 'desc')
-            ->paginate(12)
-            ->withQueryString()
-            ->through(fn($user) => [
-                'id'                => $user->id,
-                'name'              => $user->name,
-                'email'             => $user->email,
-                'roles'             => $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name]),
-                'reports_count'     => $user->reports_count,
-                'tasks_count'       => $user->tasks_assigned_count,
-                'email_verified_at' => $user->email_verified_at,
-                'is_premium'        => $user->is_premium,
-                'created_at'        => $user->created_at,
-            ]);
+  // ═══════════════════════════════════════════════════════════════════
 
-        $roles = Role::all();
-        $stats = [
-            'total'    => User::count(),
-            'active'   => User::whereNotNull('email_verified_at')->count(),
-            'premium'  => User::where('is_premium', true)->count(),
-            'new_today'=> User::whereDate('created_at', today())->count(),
-            'trashed'  => User::onlyTrashed()->count(),
-        ];
 
-        return Inertia::render('Admin/Users/Index', [
-            'users'   => $users,
-            'roles'   => $roles,
-            'stats'   => $stats,
-            'filters' => $request->only(['search', 'role', 'sort', 'direction'])
+public function index(Request $request)
+{
+    $users = User::with('roles')
+        ->withCount([
+            'reports',           // Total reports created
+            'tasksAssigned',     // Total tasks assigned to user
+        ])
+        ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%")
+            ->orWhere('email', 'like', "%{$request->search}%"))
+        ->when($request->role, fn ($q) => $q->role($request->role))
+        ->orderBy($request->sort ?? 'created_at', $request->direction ?? 'desc')
+        ->paginate(12)
+        ->withQueryString()
+        ->through(fn ($user) => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => $user->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name]),
+            'reports_count' => $user->reports_count,
+            'tasks_count' => $user->tasks_assigned_count,
+            'shared_reports_count' => 0,  // Set to 0 or adjust if you have a specific relationship
+            'email_verified_at' => $user->email_verified_at,
+            'is_premium' => $user->is_premium,
+            'created_at' => $user->created_at,
+        ]);
+
+    $roles = Role::all();
+    
+    // Get all stats including role-based counts
+    $stats = [
+        'total' => User::count(),
+        'active' => User::whereNotNull('email_verified_at')->count(),
+        'admin' => User::role('admin')->count(),
+        'manager' => User::role('manager')->count(),
+        'user' => User::role('user')->count(),
+        'premium' => User::where('is_premium', true)->count(),
+        'new_today' => User::whereDate('created_at', today())->count(),
+        'trashed' => User::onlyTrashed()->count(),
+    ];
+    
+    $trashedUsers = User::onlyTrashed()
+        ->select('id', 'name', 'email', 'deleted_at')
+        ->orderBy('deleted_at', 'desc')
+        ->get();
+
+    return Inertia::render('Admin/Users/Index', [
+        'users' => $users,
+        'roles' => $roles,
+        'stats' => $stats,
+        'filters' => $request->only(['search', 'role', 'sort', 'direction']),
+        'trashedUsers' => $trashedUsers,
+    ]);
+}
+ 
+// ═══════════════════════════════════════════════════════════════════
+// ADD THIS NEW export() METHOD TO: app/Http/Controllers/Admin/UserController.php
+// ═══════════════════════════════════════════════════════════════════
+ 
+public function downloadUsers(Request $request)
+{
+    $format = $request->get('format', 'csv');
+    
+    // Get all users with roles
+    $users = User::with('roles')->get();
+    
+    if ($format == 'json') {
+        $data = [];
+        foreach ($users as $user) {
+            $data[] = [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles->pluck('name')->implode(', '),
+                'verified' => $user->email_verified_at ? 'Yes' : 'No',
+                'premium' => $user->is_premium ? 'Yes' : 'No',
+            ];
+        }
+        
+        return response()->json($data, 200, [
+            'Content-Disposition' => 'attachment; filename="users-' . date('Y-m-d') . '.json"',
+            'Content-Type' => 'application/json;charset=UTF-8'
         ]);
     }
+    
+    // CSV Format
+    $filename = 'users-' . date('Y-m-d') . '.csv';
+    $handle = fopen('php://memory', 'r+');
+    
+    // Headers
+    fputcsv($handle, ['ID', 'Name', 'Email', 'Roles', 'Verified', 'Premium']);
+    
+    // Data
+    foreach ($users as $user) {
+        fputcsv($handle, [
+            $user->id,
+            $user->name,
+            $user->email,
+            $user->roles->pluck('name')->implode(', '),
+            $user->email_verified_at ? 'Yes' : 'No',
+            $user->is_premium ? 'Yes' : 'No',
+        ]);
+    }
+    
+    rewind($handle);
+    $csv = stream_get_contents($handle);
+    fclose($handle);
+    
+    return response($csv, 200, [
+        'Content-Type' => 'text/csv;charset=UTF-8',
+        'Content-Disposition' => 'attachment; filename="' . $filename . '"'
+    ]);
+}
+
 
     /**
      * Show create user form with available roles.
@@ -70,6 +148,7 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::all();
+
         return Inertia::render('Admin/Users/Create', ['roles' => $roles]);
     }
 
@@ -81,16 +160,16 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|string|lowercase|email|max:255|unique:users',
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|lowercase|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
         $user = User::create([
-            'name'              => $request->name,
-            'email'             => $request->email,
-            'password'          => Hash::make($request->password),
-            'is_premium'        => $request->is_premium ?? false,
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'is_premium' => $request->is_premium ?? false,
             'email_verified_at' => now(), // Auto-verify admin created users
         ]);
 
@@ -101,8 +180,8 @@ class UserController extends Controller
 
         // Log the activity
         UserActivity::log(auth()->id(), 'user_created', 'user', $user->id, [
-            'user_name'  => $user->name,
-            'user_email' => $user->email
+            'user_name' => $user->name,
+            'user_email' => $user->email,
         ]);
 
         return redirect()->route('admin.users.index')
@@ -115,17 +194,17 @@ class UserController extends Controller
     public function show(User $user)
     {
         $user->load(['roles']);
-        
+
         $stats = [
-            'total_reports'    => $user->reports()->count(),
-            'assigned_reports'  => $user->assignedReports()->count(),
-            'completed_tasks'   => $user->tasksAssigned()->where('status', 'completed')->count(),
-            'pending_tasks'     => $user->tasksAssigned()->whereIn('status', ['pending', 'in_progress'])->count(),
+            'total_reports' => $user->reports()->count(),
+            'assigned_reports' => $user->assignedReports()->count(),
+            'completed_tasks' => $user->tasksAssigned()->where('status', 'completed')->count(),
+            'pending_tasks' => $user->tasksAssigned()->whereIn('status', ['pending', 'in_progress'])->count(),
         ];
-        
+
         return Inertia::render('Admin/Users/Show', [
-            'user'  => $user,
-            'stats' => $stats
+            'user' => $user,
+            'stats' => $stats,
         ]);
     }
 
@@ -136,19 +215,19 @@ class UserController extends Controller
     {
         $roles = Role::all();
         $userRoles = $user->roles->pluck('name');
-        
+
         $stats = [
-            'total_reports'    => $user->reports()->count(),
-            'assigned_reports'  => $user->assignedReports()->count(),
-            'completed_tasks'   => $user->tasksAssigned()->where('status', 'completed')->count(),
-            'pending_tasks'     => $user->tasksAssigned()->whereIn('status', ['pending', 'in_progress'])->count(),
+            'total_reports' => $user->reports()->count(),
+            'assigned_reports' => $user->assignedReports()->count(),
+            'completed_tasks' => $user->tasksAssigned()->where('status', 'completed')->count(),
+            'pending_tasks' => $user->tasksAssigned()->whereIn('status', ['pending', 'in_progress'])->count(),
         ];
-        
+
         return Inertia::render('Admin/Users/Edit', [
-            'user'       => $user,
-            'roles'      => $roles,
-            'userRoles'  => $userRoles,
-            'stats'      => $stats
+            'user' => $user,
+            'roles' => $roles,
+            'userRoles' => $userRoles,
+            'stats' => $stats,
         ]);
     }
 
@@ -160,7 +239,7 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $request->validate([
-            'name'  => 'required|string|max:255',
+            'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:users,email,'.$user->id,
         ]);
 
@@ -172,8 +251,8 @@ class UserController extends Controller
             $user->password = Hash::make($request->password);
         }
 
-        $user->name       = $request->name;
-        $user->email      = $request->email;
+        $user->name = $request->name;
+        $user->email = $request->email;
         $user->is_premium = $request->is_premium ?? false;
         $user->save();
 
@@ -185,7 +264,7 @@ class UserController extends Controller
         // Log the activity
         UserActivity::log(auth()->id(), 'user_updated', 'user', $user->id, [
             'user_name' => $user->name,
-            'changes'   => $request->only(['name', 'email', 'is_premium'])
+            'changes' => $request->only(['name', 'email', 'is_premium']),
         ]);
 
         return redirect()->route('admin.users.index')
@@ -209,8 +288,8 @@ class UserController extends Controller
         }
 
         UserActivity::log(auth()->id(), 'user_deleted', 'user', $user->id, [
-            'user_name'  => $user->name,
-            'user_email' => $user->email
+            'user_name' => $user->name,
+            'user_email' => $user->email,
         ]);
 
         $user->delete(); // Soft delete
@@ -227,24 +306,24 @@ class UserController extends Controller
         $users = User::onlyTrashed()
             ->with('roles')
             ->withCount(['reports', 'tasksAssigned'])
-            ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
+            ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%"))
             ->orderBy('deleted_at', 'desc')
             ->paginate(12)
             ->withQueryString()
-            ->through(fn($user) => [
-                'id'             => $user->id,
-                'name'           => $user->name,
-                'email'          => $user->email,
-                'roles'          => $user->roles,
-                'reports_count'  => $user->reports_count,
-                'tasks_count'    => $user->tasks_assigned_count,
-                'created_at'     => $user->created_at,
-                'deleted_at'     => $user->deleted_at,
+            ->through(fn ($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'roles' => $user->roles,
+                'reports_count' => $user->reports_count,
+                'tasks_count' => $user->tasks_assigned_count,
+                'created_at' => $user->created_at,
+                'deleted_at' => $user->deleted_at,
             ]);
 
         return Inertia::render('Admin/Users/Trashed', [
-            'users'   => $users,
-            'filters' => $request->only(['search'])
+            'users' => $users,
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -257,8 +336,8 @@ class UserController extends Controller
         $user->restore();
 
         UserActivity::log(auth()->id(), 'user_restored', 'user', $user->id, [
-            'user_name'  => $user->name,
-            'user_email' => $user->email
+            'user_name' => $user->name,
+            'user_email' => $user->email,
         ]);
 
         return redirect()->route('admin.users.index')
@@ -278,14 +357,14 @@ class UserController extends Controller
         }
 
         UserActivity::log(auth()->id(), 'user_force_deleted', 'user', $user->id, [
-            'user_name'  => $user->name,
-            'user_email' => $user->email
+            'user_name' => $user->name,
+            'user_email' => $user->email,
         ]);
 
         // Soft delete user's reports and tasks
         $user->reports()->delete();
         $user->tasksAssigned()->delete();
-        
+
         $user->forceDelete();
 
         return redirect()->route('admin.users.index')
@@ -298,16 +377,16 @@ class UserController extends Controller
      */
     public function impersonate(User $user)
     {
-        if (!auth()->user()->hasRole('admin')) {
+        if (! auth()->user()->hasRole('admin')) {
             abort(403, 'Only administrators can impersonate users.');
         }
 
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot impersonate yourself.');
         }
-        
+
         session(['impersonate' => $user->id]);
-        
+
         return redirect()->route('dashboard')
             ->with('info', "You are now impersonating {$user->name}");
     }
@@ -317,12 +396,12 @@ class UserController extends Controller
      */
     public function stopImpersonate()
     {
-        if (!session()->has('impersonate')) {
+        if (! session()->has('impersonate')) {
             return redirect()->route('dashboard');
         }
-        
+
         $impersonatedId = session()->pull('impersonate');
-        
+
         return redirect()->route('dashboard')
             ->with('success', 'Stopped impersonating. Welcome back!');
     }
@@ -333,16 +412,16 @@ class UserController extends Controller
     public function userActivities(User $user, Request $request)
     {
         $activities = UserActivity::where('user_id', $user->id)
-            ->when($request->action, fn($q) => $q->where('action', $request->action))
+            ->when($request->action, fn ($q) => $q->where('action', $request->action))
             ->orderBy('created_at', 'desc')
             ->paginate(20)
-            ->through(fn($activity) => [
-                'id'          => $activity->id,
-                'action'      => $activity->action,
+            ->through(fn ($activity) => [
+                'id' => $activity->id,
+                'action' => $activity->action,
                 'entity_type' => $activity->entity_type,
-                'details'     => $activity->details,
-                'ip_address'  => $activity->ip_address,
-                'created_at'  => $activity->created_at,
+                'details' => $activity->details,
+                'ip_address' => $activity->ip_address,
+                'created_at' => $activity->created_at,
             ]);
 
         return response()->json(['activities' => $activities]);
@@ -354,7 +433,7 @@ class UserController extends Controller
     public function bulkDelete(Request $request)
     {
         $request->validate([
-            'user_ids'   => 'required|array',
+            'user_ids' => 'required|array',
             'user_ids.*' => 'exists:users,id',
         ]);
 
@@ -363,8 +442,8 @@ class UserController extends Controller
             $user = User::find($userId);
             if ($user && $user->id !== auth()->id()) {
                 UserActivity::log(auth()->id(), 'user_deleted', 'user', $user->id, [
-                    'user_name'  => $user->name,
-                    'bulk_delete' => true
+                    'user_name' => $user->name,
+                    'bulk_delete' => true,
                 ]);
                 $user->delete();
                 $deletedCount++;
@@ -372,8 +451,8 @@ class UserController extends Controller
         }
 
         return response()->json([
-            'message'       => "{$deletedCount} users deleted successfully",
-            'deleted_count' => $deletedCount
+            'message' => "{$deletedCount} users deleted successfully",
+            'deleted_count' => $deletedCount,
         ]);
     }
 
@@ -383,16 +462,16 @@ class UserController extends Controller
     public function export(Request $request)
     {
         $users = User::with('roles')
-            ->when($request->role, fn($q) => $q->role($request->role))
-            ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
+            ->when($request->role, fn ($q) => $q->role($request->role))
+            ->when($request->search, fn ($q) => $q->where('name', 'like', "%{$request->search}%"))
             ->get();
 
-        $filename = 'users_export_' . now()->format('Y-m-d_His') . '.csv';
-        
-        $callback = function() use ($users) {
+        $filename = 'users_export_'.now()->format('Y-m-d_His').'.csv';
+
+        $callback = function () use ($users) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['Name', 'Email', 'Roles', 'Premium', 'Verified', 'Reports', 'Tasks', 'Joined']);
-            
+
             foreach ($users as $user) {
                 fputcsv($handle, [
                     $user->name,
@@ -407,10 +486,10 @@ class UserController extends Controller
             }
             fclose($handle);
         };
-        
+
         return response()->stream($callback, 200, [
-            'Content-Type'        => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
@@ -420,12 +499,12 @@ class UserController extends Controller
     public function search(Request $request)
     {
         $query = $request->get('q', '');
-        
+
         $users = User::where('name', 'like', "%{$query}%")
             ->orWhere('email', 'like', "%{$query}%")
             ->limit(10)
             ->get(['id', 'name', 'email']);
-        
+
         return response()->json(['users' => $users]);
     }
 }

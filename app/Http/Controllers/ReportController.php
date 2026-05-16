@@ -2,24 +2,26 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ReportTablesExport;
 use App\Models\Report;
+use App\Models\ReportAssignment;
 use App\Models\ReportVersion;
 use App\Models\Template;
 use App\Models\UserActivity;
-use App\Models\ReportAssignment;
 use App\Services\NotificationService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
+use Maatwebsite\Excel\Facades\Excel;
+use Spatie\Browsershot\Browsershot;
 
 /**
  * Report Controller
- * 
+ *
  * Handles all report CRUD operations, versioning, sharing, and export.
  * Supports PDF (Browsershot/DomPDF), Excel, CSV, and PNG export.
- * 
+ *
  * Access: Authenticated users for own reports, assigned users for shared reports,
  *         public access via share tokens.
  */
@@ -32,24 +34,24 @@ class ReportController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        
+
         // Get reports that user owns OR has been assigned to (active, not expired)
         $query = Report::with('template')
-            ->where(function($q) use ($user) {
+            ->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
-                  ->orWhereHas('assignments', function($sq) use ($user) {
-                      $sq->where('user_id', $user->id)
-                         ->where('is_active', true)
-                         ->where(function($exp) {
-                             $exp->whereNull('expires_at')
-                                 ->orWhere('expires_at', '>', now());
-                         });
-                  });
+                    ->orWhereHas('assignments', function ($sq) use ($user) {
+                        $sq->where('user_id', $user->id)
+                            ->where('is_active', true)
+                            ->where(function ($exp) {
+                                $exp->whereNull('expires_at')
+                                    ->orWhere('expires_at', '>', now());
+                            });
+                    });
             });
 
         // Apply search filter
         if ($request->filled('search')) {
-            $query->where('title', 'like', '%' . $request->search . '%');
+            $query->where('title', 'like', '%'.$request->search.'%');
         }
 
         // Apply status filter
@@ -59,22 +61,28 @@ class ReportController extends Controller
 
         // Apply sorting
         $sort = $request->get('sort', 'updated_at');
-        $query->orderBy($sort === 'title' ? 'title' : $sort, 
-                       $sort === 'title' ? 'asc' : 'desc');
+        $query->orderBy($sort === 'title' ? 'title' : $sort,
+            $sort === 'title' ? 'asc' : 'desc');
 
         $reports = $query->paginate(12)->withQueryString();
 
         // Calculate statistics (only for owned reports)
-       
-        $stats = [
-    'total'     => Report::where('user_id', auth()->id())->count(),
-    'published' => Report::where('user_id', auth()->id())->where('status', 'published')->count(),
-    'draft'     => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
-    'archived'  => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
-    'trashed'   => Report::onlyTrashed()->where('user_id', auth()->id())->count(),
-];
 
-        return Inertia::render('Reports/Index', compact('reports', 'stats'));
+        $stats = [
+            'total' => Report::where('user_id', auth()->id())->count(),
+            'published' => Report::where('user_id', auth()->id())->where('status', 'published')->count(),
+            'draft' => Report::where('user_id', auth()->id())->where('status', 'draft')->count(),
+            'archived' => Report::where('user_id', auth()->id())->where('status', 'archived')->count(),
+            'trashed' => Report::onlyTrashed()->where('user_id', auth()->id())->count(),
+        ];
+
+        $trashedReports = Report::onlyTrashed()
+            ->where('user_id', $user->id)
+            ->select('id', 'title', 'slug', 'deleted_at', 'settings')
+            ->orderBy('deleted_at', 'desc')
+            ->get();
+
+        return Inertia::render('Reports/Index', compact('reports', 'stats', 'trashedReports'));
     }
 
     /**
@@ -83,6 +91,7 @@ class ReportController extends Controller
     public function create()
     {
         $templates = Template::where('is_active', true)->get();
+
         return Inertia::render('Reports/Create', compact('templates'));
     }
 
@@ -94,7 +103,7 @@ class ReportController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'title'       => 'required|string|max:255',
+            'title' => 'required|string|max:255',
             'template_id' => 'nullable|exists:templates,id',
         ]);
 
@@ -102,40 +111,40 @@ class ReportController extends Controller
 
         // Build pages from template or create blank page
         if ($request->filled('template_id')) {
-    $template = Template::findOrFail($request->template_id);
-    $pages    = $this->buildPagesFromTemplate($template);
-    
-    // Deep merge: template settings override defaults
-    $templateSettings = $template->settings ?? [];
-    $defaults = $this->defaultSettings();
-    
-    // Ensure ALL keys exist
-    $settings = array_merge($defaults, $templateSettings, $initialSettings);
-    
-    // Apply template structure to pages
-    if (!empty($template->structure)) {
-        $pages = $this->buildPagesFromTemplate($template);
-    }
-} else {
-            $pages    = [['id' => (string) Str::uuid(), 'label' => 'Page 1', 'elements' => []]];
+            $template = Template::findOrFail($request->template_id);
+            $pages = $this->buildPagesFromTemplate($template);
+
+            // Deep merge: template settings override defaults
+            $templateSettings = $template->settings ?? [];
+            $defaults = $this->defaultSettings();
+
+            // Ensure ALL keys exist
+            $settings = array_merge($defaults, $templateSettings, $initialSettings);
+
+            // Apply template structure to pages
+            if (! empty($template->structure)) {
+                $pages = $this->buildPagesFromTemplate($template);
+            }
+        } else {
+            $pages = [['id' => (string) Str::uuid(), 'label' => 'Page 1', 'elements' => []]];
             $settings = array_merge($this->defaultSettings(), $initialSettings);
         }
 
         // Create the report
         $report = Report::create([
-            'user_id'     => auth()->id(),
+            'user_id' => auth()->id(),
             'template_id' => $request->template_id,
-            'title'       => $request->title,
-            'slug'        => Str::slug($request->title) . '-' . Str::random(8),
-            'content'     => $pages,
-            'settings'    => $settings,
-            'status'      => 'draft',
+            'title' => $request->title,
+            'slug' => Str::slug($request->title).'-'.Str::random(8),
+            'content' => $pages,
+            'settings' => $settings,
+            'status' => 'draft',
         ]);
 
         // Log activity
         UserActivity::log(auth()->id(), 'report_created', 'report', $report->id, [
-            'report_title'   => $report->title,
-            'template_used'  => $request->template_id ? 'yes' : 'no'
+            'report_title' => $report->title,
+            'template_used' => $request->template_id ? 'yes' : 'no',
         ]);
 
         // Create initial version
@@ -152,10 +161,10 @@ class ReportController extends Controller
     public function edit($slug)
     {
         $report = Report::where('slug', $slug)->firstOrFail();
-        
+
         // Check edit permission
         $user = auth()->user();
-        if (!$report->canBeEditedBy($user)) {
+        if (! $report->canBeEditedBy($user)) {
             abort(403, 'You do not have permission to edit this report.');
         }
 
@@ -171,49 +180,49 @@ class ReportController extends Controller
         $report = Report::where('slug', $slug)->firstOrFail();
 
         // Check edit permission
-        if (!$report->canBeEditedBy(auth()->user())) {
+        if (! $report->canBeEditedBy(auth()->user())) {
             abort(403);
         }
 
         $request->validate([
-            'title'    => 'required|string|max:255',
-            'content'  => 'required|array',
+            'title' => 'required|string|max:255',
+            'content' => 'required|array',
             'settings' => 'required|array',
         ]);
 
-        $oldContent  = $report->content;
+        $oldContent = $report->content;
         $oldSettings = $report->settings;
 
         $report->update([
-            'title'    => $request->title,
-            'content'  => $request->content,
+            'title' => $request->title,
+            'content' => $request->content,
             'settings' => $request->settings,
         ]);
 
         // Create version snapshot if significant changes (throttled)
-        $contentChanged  = md5(json_encode($oldContent)) !== md5(json_encode($request->content));
+        $contentChanged = md5(json_encode($oldContent)) !== md5(json_encode($request->content));
         $settingsChanged = md5(json_encode($oldSettings)) !== md5(json_encode($request->settings));
-        
+
         if ($contentChanged || $settingsChanged) {
             $lastVersion = ReportVersion::where('report_id', $report->id)
                 ->orderBy('created_at', 'desc')
                 ->first();
 
             // Only create version if last version was > 5 minutes ago
-            if (!$lastVersion || now()->diffInMinutes($lastVersion->created_at) >= 5) {
+            if (! $lastVersion || now()->diffInMinutes($lastVersion->created_at) >= 5) {
                 $this->createVersionSnapshot($report, 'Auto-saved');
             }
         }
 
         // Log activity
         UserActivity::log(auth()->id(), 'report_updated', 'report', $report->id, [
-            'report_title'     => $report->title,
-            'content_changed'  => $contentChanged,
-            'settings_changed' => $settingsChanged
+            'report_title' => $report->title,
+            'content_changed' => $contentChanged,
+            'settings_changed' => $settingsChanged,
         ]);
 
         return response()->json([
-            'message'    => 'Saved',
+            'message' => 'Saved',
             'updated_at' => $report->fresh()->updated_at,
         ]);
     }
@@ -224,9 +233,9 @@ class ReportController extends Controller
     public function preview($slug)
     {
         $report = Report::where('slug', $slug)->firstOrFail();
-        
+
         // Check view permission
-        if (!$report->canBeViewedBy(auth()->user())) {
+        if (! $report->canBeViewedBy(auth()->user())) {
             abort(403, 'You do not have permission to view this report.');
         }
 
@@ -241,16 +250,16 @@ class ReportController extends Controller
     public function download($slug)
     {
         $report = Report::where('slug', $slug)->firstOrFail();
-        $filename = Str::slug($report->title) . '.pdf';
+        $filename = Str::slug($report->title).'.pdf';
 
         // Option A: Browsershot (recommended - better quality)
-        if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
-            $previewUrl    = route('reports.preview', $report->slug);
+        if (class_exists(Browsershot::class)) {
+            $previewUrl = route('reports.preview', $report->slug);
             $sessionCookie = session()->getId();
-            $cookieName    = config('session.cookie');
+            $cookieName = config('session.cookie');
 
             // FIXED: "Browsersshot" → "Browsershot" (correct class name)
-            $pdf = \Spatie\Browsershot\Browsershot::url($previewUrl)
+            $pdf = Browsershot::url($previewUrl)
                 ->useCookies([$cookieName => $sessionCookie])
                 ->waitUntilNetworkIdle()
                 ->dismissDialogs()
@@ -265,38 +274,38 @@ class ReportController extends Controller
 
             UserActivity::log(auth()->id(), 'report_downloaded', 'report', $report->id, [
                 'format' => 'pdf',
-                'via'    => 'browsershot'
+                'via' => 'browsershot',
             ]);
 
             return response($pdf, 200, [
-                'Content-Type'        => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             ]);
         }
 
         // Option B: DomPDF fallback
-        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.report', [
-                'report'   => $report,
-                'content'  => $report->content,
+        if (class_exists(Pdf::class)) {
+            $pdf = Pdf::loadView('pdfs.report', [
+                'report' => $report,
+                'content' => $report->content,
                 'settings' => $report->settings ?? [],
             ]);
 
             $pdf->setPaper(
-                $report->settings['page_size']   ?? 'A4',
+                $report->settings['page_size'] ?? 'A4',
                 $report->settings['orientation'] ?? 'portrait'
             );
 
             UserActivity::log(auth()->id(), 'report_downloaded', 'report', $report->id, [
                 'format' => 'pdf',
-                'via'    => 'dompdf'
+                'via' => 'dompdf',
             ]);
 
             return $pdf->download($filename);
         }
 
         return response()->json([
-            'error' => 'No PDF driver installed. Run: composer require spatie/browsershot'
+            'error' => 'No PDF driver installed. Run: composer require spatie/browsershot',
         ], 500);
     }
 
@@ -313,12 +322,12 @@ class ReportController extends Controller
         $tables = [];
         foreach ($report->content ?? [] as $pageIndex => $page) {
             foreach ($page['elements'] ?? [] as $el) {
-                if ($el['type'] === 'table' && !empty($el['data'])) {
+                if ($el['type'] === 'table' && ! empty($el['data'])) {
                     $tables[] = [
-                        'page'    => $pageIndex + 1,
+                        'page' => $pageIndex + 1,
                         'columns' => $el['columns'] ?? [],
-                        'data'    => $el['data'] ?? [],
-                        'title'   => $el['title'] ?? "Table " . (count($tables) + 1),
+                        'data' => $el['data'] ?? [],
+                        'title' => $el['title'] ?? 'Table '.(count($tables) + 1),
                     ];
                 }
             }
@@ -329,15 +338,15 @@ class ReportController extends Controller
         }
 
         UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, [
-            'format'       => 'excel',
-            'tables_count' => count($tables)
+            'format' => 'excel',
+            'tables_count' => count($tables),
         ]);
 
         // Use Maatwebsite Excel if available
-        if (class_exists(\Maatwebsite\Excel\Facades\Excel::class)) {
-            return \Maatwebsite\Excel\Facades\Excel::download(
-                new \App\Exports\ReportTablesExport($tables),
-                Str::slug($report->title) . '.xlsx'
+        if (class_exists(Excel::class)) {
+            return Excel::download(
+                new ReportTablesExport($tables),
+                Str::slug($report->title).'.xlsx'
             );
         }
 
@@ -351,28 +360,28 @@ class ReportController extends Controller
      */
     public function exportCsv($slug)
     {
-        $report  = Report::where('slug', $slug)->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
         $csvRows = [];
         $hasData = false;
 
         foreach ($report->content ?? [] as $pageIndex => $page) {
             foreach ($page['elements'] ?? [] as $el) {
                 // Export table data
-                if ($el['type'] === 'table' && !empty($el['data'])) {
+                if ($el['type'] === 'table' && ! empty($el['data'])) {
                     $hasData = true;
-                    $csvRows[] = ['=== Page ' . ($pageIndex + 1) . ' Table ==='];
+                    $csvRows[] = ['=== Page '.($pageIndex + 1).' Table ==='];
                     $csvRows[] = $el['columns'] ?? [];
                     foreach ($el['data'] as $row) {
-                        $csvRows[] = array_map(fn($col) => $row[$col] ?? '', $el['columns'] ?? []);
+                        $csvRows[] = array_map(fn ($col) => $row[$col] ?? '', $el['columns'] ?? []);
                     }
                     $csvRows[] = []; // Blank line between tables
                 }
 
                 // Export chart data
-                if (in_array($el['type'], ['bar-chart','line-chart','area-chart','pie-chart','doughnut-chart','radar-chart'])
-                    && !empty($el['chartData'])) {
+                if (in_array($el['type'], ['bar-chart', 'line-chart', 'area-chart', 'pie-chart', 'doughnut-chart', 'radar-chart'])
+                    && ! empty($el['chartData'])) {
                     $hasData = true;
-                    $csvRows[] = ['=== ' . ($el['chartTitle'] ?? ucfirst($el['type'])) . ' ==='];
+                    $csvRows[] = ['=== '.($el['chartTitle'] ?? ucfirst($el['type'])).' ==='];
                     $csvRows[] = ['Label', 'Value'];
                     $labels = $el['chartData']['labels'] ?? [];
                     $values = $el['chartData']['values'] ?? [];
@@ -384,22 +393,24 @@ class ReportController extends Controller
             }
         }
 
-        if (!$hasData) {
+        if (! $hasData) {
             return response()->json(['error' => 'No exportable data found'], 422);
         }
 
         UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, ['format' => 'csv']);
 
-        $filename = Str::slug($report->title) . '.csv';
+        $filename = Str::slug($report->title).'.csv';
         $callback = function () use ($csvRows) {
             $handle = fopen('php://output', 'w');
-            foreach ($csvRows as $row) fputcsv($handle, $row);
+            foreach ($csvRows as $row) {
+                fputcsv($handle, $row);
+            }
             fclose($handle);
         };
 
         return response()->stream($callback, 200, [
-            'Content-Type'        => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
@@ -410,26 +421,26 @@ class ReportController extends Controller
     {
         $report = Report::where('slug', $slug)->firstOrFail();
 
-        if (!class_exists(\Spatie\Browsershot\Browsershot::class)) {
+        if (! class_exists(Browsershot::class)) {
             return response()->json([
                 'error' => 'Browsershot not installed. Run: composer require spatie/browsershot',
             ], 500);
         }
 
-        $previewUrl    = route('reports.preview', $report->slug);
+        $previewUrl = route('reports.preview', $report->slug);
         $sessionCookie = session()->getId();
-        $cookieName    = config('session.cookie');
+        $cookieName = config('session.cookie');
 
         // Calculate window size based on page dimensions
-        $settings   = $report->settings ?? [];
-        $sizes      = [
-            'A4'     => ['portrait' => [794, 1123], 'landscape' => [1123, 794]],
+        $settings = $report->settings ?? [];
+        $sizes = [
+            'A4' => ['portrait' => [794, 1123], 'landscape' => [1123, 794]],
             'Letter' => ['portrait' => [816, 1056], 'landscape' => [1056, 816]],
         ];
         $dimensions = $sizes[$settings['page_size'] ?? 'A4'][$settings['orientation'] ?? 'portrait'] ?? [794, 1123];
-        
+
         // FIXED: Correct class name
-        $image = \Spatie\Browsershot\Browsershot::url($previewUrl)
+        $image = Browsershot::url($previewUrl)
             ->useCookies([$cookieName => $sessionCookie])
             ->waitUntilNetworkIdle()
             ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
@@ -439,8 +450,8 @@ class ReportController extends Controller
         UserActivity::log(auth()->id(), 'report_exported', 'report', $report->id, ['format' => 'image/png']);
 
         return response($image, 200, [
-            'Content-Type'        => 'image/png',
-            'Content-Disposition' => 'attachment; filename="' . Str::slug($report->title) . '.png"',
+            'Content-Type' => 'image/png',
+            'Content-Disposition' => 'attachment; filename="'.Str::slug($report->title).'.png"',
         ]);
     }
 
@@ -452,17 +463,17 @@ class ReportController extends Controller
         $report = Report::where('slug', $slug)->firstOrFail();
 
         // Only owner or admin can delete
-        if (!auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
+        if (! auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
             abort(403);
         }
 
         UserActivity::log(auth()->id(), 'report_deleted', 'report', $report->id, [
-            'report_title' => $report->title
+            'report_title' => $report->title,
         ]);
 
         // Soft delete related notifications
         NotificationService::deleteForNotifiable($report);
-        
+
         $report->delete();
 
         return redirect()->route('reports.index')
@@ -477,7 +488,7 @@ class ReportController extends Controller
         $report = Report::where('slug', $slug)->firstOrFail();
 
         // Only owner or admin can change status
-        if (!auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
+        if (! auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
             abort(403);
         }
 
@@ -485,13 +496,13 @@ class ReportController extends Controller
 
         $oldStatus = $report->status;
         $report->update([
-            'status'       => $request->status,
+            'status' => $request->status,
             'published_at' => $request->status === 'published' ? now() : $report->published_at,
         ]);
 
         UserActivity::log(auth()->id(), 'report_status_changed', 'report', $report->id, [
             'old_status' => $oldStatus,
-            'new_status' => $request->status
+            'new_status' => $request->status,
         ]);
 
         return back()->with('success', 'Status updated.');
@@ -506,27 +517,29 @@ class ReportController extends Controller
 
         // Generate new UUIDs for all pages and elements
         $newContent = collect($report->content ?? [])->map(function ($page) {
-            $page['id']       = (string) Str::uuid();
+            $page['id'] = (string) Str::uuid();
             $page['elements'] = collect($page['elements'] ?? [])->map(function ($el) {
                 $el['id'] = (string) Str::uuid();
+
                 return $el;
             })->toArray();
+
             return $page;
         })->toArray();
 
         $newReport = Report::create([
-            'user_id'     => auth()->id(),
+            'user_id' => auth()->id(),
             'template_id' => $report->template_id,
-            'title'       => $report->title . ' (Copy)',
-            'slug'        => Str::slug($report->title) . '-copy-' . Str::random(8),
-            'content'     => $newContent,
-            'settings'    => $report->settings,
-            'status'      => 'draft',
+            'title' => $report->title.' (Copy)',
+            'slug' => Str::slug($report->title).'-copy-'.Str::random(8),
+            'content' => $newContent,
+            'settings' => $report->settings,
+            'status' => 'draft',
         ]);
 
         UserActivity::log(auth()->id(), 'report_duplicated', 'report', $newReport->id, [
             'original_report' => $report->title,
-            'new_report'      => $newReport->title
+            'new_report' => $newReport->title,
         ]);
 
         return redirect()->route('reports.index')
@@ -538,7 +551,7 @@ class ReportController extends Controller
      */
     public function versions($slug)
     {
-        $report   = Report::where('slug', $slug)->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
         $versions = ReportVersion::where('report_id', $report->id)
             ->orderByDesc('created_at')
             ->select('id', 'title', 'label', 'version_number', 'created_at')
@@ -553,24 +566,24 @@ class ReportController extends Controller
      */
     public function restoreVersion(Request $request, $slug, $versionId)
     {
-        $report  = Report::where('slug', $slug)->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
         $version = ReportVersion::where('id', $versionId)
             ->where('report_id', $report->id)
             ->firstOrFail();
 
         $report->update([
-            'content'  => $version->content,
+            'content' => $version->content,
             'settings' => $version->settings,
-            'title'    => $version->title,
+            'title' => $version->title,
         ]);
 
         UserActivity::log(auth()->id(), 'report_version_restored', 'report', $report->id, [
-            'version_id'    => $versionId,
-            'version_label' => $version->label
+            'version_id' => $versionId,
+            'version_label' => $version->label,
         ]);
 
         // Create a snapshot before restore for safety
-        $this->createVersionSnapshot($report, 'Restored from version #' . $versionId);
+        $this->createVersionSnapshot($report, 'Restored from version #'.$versionId);
 
         return response()->json(['message' => 'Version restored successfully']);
     }
@@ -582,21 +595,21 @@ class ReportController extends Controller
     {
         $report = Report::where('slug', $slug)->firstOrFail();
 
-        if (!$report->share_token) {
+        if (! $report->share_token) {
             $report->update([
                 'share_token' => Str::random(32),
-                'is_public'   => true,
+                'is_public' => true,
             ]);
         } else {
             $report->update(['is_public' => true]);
         }
 
         UserActivity::log(auth()->id(), 'report_share_link_generated', 'report', $report->id, [
-            'share_token' => $report->share_token
+            'share_token' => $report->share_token,
         ]);
 
         return response()->json([
-            'url'   => route('reports.public-preview', $report->share_token),
+            'url' => route('reports.public-preview', $report->share_token),
             'token' => $report->share_token,
         ]);
     }
@@ -610,7 +623,7 @@ class ReportController extends Controller
 
         $report->update([
             'share_token' => null,
-            'is_public'   => false,
+            'is_public' => false,
         ]);
 
         UserActivity::log(auth()->id(), 'report_share_link_revoked', 'report', $report->id, []);
@@ -628,7 +641,7 @@ class ReportController extends Controller
             ->firstOrFail();
 
         return Inertia::render('Reports/Preview', [
-            'report'   => $report,
+            'report' => $report,
             'readOnly' => true,
         ]);
     }
@@ -638,15 +651,15 @@ class ReportController extends Controller
      */
     public function publicDownload($token)
     {
-        $report   = Report::where('share_token', $token)
+        $report = Report::where('share_token', $token)
             ->where('is_public', true)
             ->firstOrFail();
-        $filename = Str::slug($report->title) . '.pdf';
+        $filename = Str::slug($report->title).'.pdf';
 
-        if (class_exists(\Spatie\Browsershot\Browsershot::class)) {
+        if (class_exists(Browsershot::class)) {
             $previewUrl = route('reports.public-preview', $token);
-            
-            $pdf = \Spatie\Browsershot\Browsershot::url($previewUrl)
+
+            $pdf = Browsershot::url($previewUrl)
                 ->waitUntilNetworkIdle()
                 ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
                 ->paperSize(
@@ -657,14 +670,14 @@ class ReportController extends Controller
                 ->pdf();
 
             return response($pdf, 200, [
-                'Content-Type'        => 'application/pdf',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             ]);
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdfs.report', [
-            'report'   => $report,
-            'content'  => $report->content,
+        $pdf = Pdf::loadView('pdfs.report', [
+            'report' => $report,
+            'content' => $report->content,
             'settings' => $report->settings ?? [],
         ]);
 
@@ -681,7 +694,7 @@ class ReportController extends Controller
             ->firstOrFail();
 
         return Inertia::render('Reports/Preview', [
-            'report'   => $report,
+            'report' => $report,
             'readOnly' => true,
         ]);
     }
@@ -694,12 +707,12 @@ class ReportController extends Controller
         $report = Report::where('slug', $slug)->firstOrFail();
 
         // Only owner or admin can assign
-        if (!auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
+        if (! auth()->user()->hasRole('admin') && $report->user_id !== auth()->id()) {
             abort(403);
         }
 
         $request->validate([
-            'user_id'    => 'required|exists:users,id',
+            'user_id' => 'required|exists:users,id',
             'permission' => 'required|in:view,edit,manage',
             'expires_at' => 'nullable|date|after:today',
         ]);
@@ -708,9 +721,9 @@ class ReportController extends Controller
             ['report_id' => $report->id, 'user_id' => $request->user_id],
             [
                 'assigned_by' => auth()->id(),
-                'permission'  => $request->permission,
-                'expires_at'  => $request->expires_at,
-                'is_active'   => true,
+                'permission' => $request->permission,
+                'expires_at' => $request->expires_at,
+                'is_active' => true,
             ]
         );
 
@@ -719,12 +732,12 @@ class ReportController extends Controller
 
         UserActivity::log(auth()->id(), 'report_assigned', 'report', $report->id, [
             'assigned_to' => $request->user_id,
-            'permission'  => $request->permission
+            'permission' => $request->permission,
         ]);
 
         return response()->json([
-            'message'    => 'Report assigned successfully',
-            'assignment' => $assignment
+            'message' => 'Report assigned successfully',
+            'assignment' => $assignment,
         ]);
     }
 
@@ -733,7 +746,7 @@ class ReportController extends Controller
      */
     public function removeAssignment($slug, $assignmentId)
     {
-        $report     = Report::where('slug', $slug)->firstOrFail();
+        $report = Report::where('slug', $slug)->firstOrFail();
         $assignment = ReportAssignment::where('id', $assignmentId)
             ->where('report_id', $report->id)
             ->firstOrFail();
@@ -741,7 +754,7 @@ class ReportController extends Controller
         $assignment->delete();
 
         UserActivity::log(auth()->id(), 'report_unassigned', 'report', $report->id, [
-            'removed_user' => $assignment->user_id
+            'removed_user' => $assignment->user_id,
         ]);
 
         return response()->json(['message' => 'Assignment removed']);
@@ -757,17 +770,17 @@ class ReportController extends Controller
         $assignments = ReportAssignment::where('report_id', $report->id)
             ->with(['user', 'assignedBy'])
             ->get()
-            ->map(function($a) {
+            ->map(function ($a) {
                 return [
-                    'id'          => $a->id,
-                    'user_id'     => $a->user_id,
-                    'user_name'   => $a->user->name,
-                    'user_email'  => $a->user->email,
-                    'permission'  => $a->permission,
+                    'id' => $a->id,
+                    'user_id' => $a->user_id,
+                    'user_name' => $a->user->name,
+                    'user_email' => $a->user->email,
+                    'permission' => $a->permission,
                     'assigned_by' => $a->assignedBy->name,
                     'assigned_at' => $a->assigned_at,
-                    'expires_at'  => $a->expires_at,
-                    'is_active'   => $a->is_active,
+                    'expires_at' => $a->expires_at,
+                    'is_active' => $a->is_active,
                 ];
             });
 
@@ -786,7 +799,7 @@ class ReportController extends Controller
         NotificationService::restoreForNotifiable($report);
 
         UserActivity::log(auth()->id(), 'report_restored', 'report', $report->id, [
-            'report_title' => $report->title
+            'report_title' => $report->title,
         ]);
 
         return redirect()->route('reports.index')
@@ -801,12 +814,12 @@ class ReportController extends Controller
         $report = Report::withTrashed()->where('slug', $slug)->firstOrFail();
 
         UserActivity::log(auth()->id(), 'report_force_deleted', 'report', $report->id, [
-            'report_title' => $report->title
+            'report_title' => $report->title,
         ]);
 
         // Force delete related notifications
         NotificationService::forceDeleteForNotifiable($report);
-        
+
         $report->forceDelete();
 
         return redirect()->route('reports.index')
@@ -819,17 +832,17 @@ class ReportController extends Controller
     public function trashed(Request $request)
     {
         $user = auth()->user();
-        
+
         $reports = Report::onlyTrashed()
             ->where('user_id', $user->id)
-            ->when($request->search, fn($q) => $q->where('title', 'like', "%{$request->search}%"))
+            ->when($request->search, fn ($q) => $q->where('title', 'like', "%{$request->search}%"))
             ->orderBy('deleted_at', 'desc')
             ->paginate(12)
             ->withQueryString();
 
         return Inertia::render('Reports/Trashed', [
             'reports' => $reports,
-            'filters' => $request->only(['search'])
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -839,46 +852,50 @@ class ReportController extends Controller
     public function assignedReports()
     {
         $user = auth()->user();
-        
+
         $assignments = ReportAssignment::with(['report', 'assignedBy'])
             ->where('user_id', $user->id)
             ->where('is_active', true)
-            ->where(function($q) {
+            ->whereHas('report')
+            ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
             ->get()
-            ->map(function($assignment) {
-                $report          = $assignment->report;
-                $totalElements   = 0;
+            ->filter(function ($assignment) {
+                return $assignment->report !== null;
+            })
+            ->map(function ($assignment) {
+                $report = $assignment->report;
+                $totalElements = 0;
                 $completedElements = 0;
-                
+
                 if ($report && $report->content) {
                     foreach ($report->content as $page) {
                         $totalElements += count($page['elements'] ?? []);
                     }
                 }
-                
+
                 $progress = $totalElements > 0 ? min(100, round(($completedElements / $totalElements) * 100)) : 0;
-                
+
                 return [
-                    'id'          => $assignment->id,
-                    'permission'  => $assignment->permission,
+                    'id' => $assignment->id,
+                    'permission' => $assignment->permission,
                     'assigned_at' => $assignment->assigned_at,
-                    'expires_at'  => $assignment->expires_at,
-                    'progress'    => $progress,
+                    'expires_at' => $assignment->expires_at,
+                    'progress' => $progress,
                     'assigned_by' => $assignment->assignedBy?->name,
-                    'report'      => $report ? [
-                        'id'     => $report->id,
-                        'title'  => $report->title,
-                        'slug'   => $report->slug,
+                    'report' => $report ? [
+                        'id' => $report->id,
+                        'title' => $report->title,
+                        'slug' => $report->slug,
                         'status' => $report->status,
-                        'pages'  => count($report->content ?? []),
+                        'pages' => count($report->content ?? []),
                     ] : null,
                 ];
-            });
-        
+            })->values();
+
         return Inertia::render('Reports/AssignedReports', [
-            'assignments' => $assignments
+            'assignments' => $assignments,
         ]);
     }
 
@@ -899,10 +916,11 @@ class ReportController extends Controller
 
         return array_map(function (array $page) {
             return [
-                'id'       => (string) Str::uuid(),
-                'label'    => $page['label'] ?? 'Page',
+                'id' => (string) Str::uuid(),
+                'label' => $page['label'] ?? 'Page',
                 'elements' => array_map(function (array $el) {
                     $el['id'] = (string) Str::uuid();
+
                     return $el;
                 }, $page['elements'] ?? []),
             ];
@@ -922,12 +940,12 @@ class ReportController extends Controller
         $versionNumber = ($lastVersion ? $lastVersion->version_number + 1 : 1);
 
         ReportVersion::create([
-            'report_id'      => $report->id,
-            'user_id'        => auth()->id(),
-            'label'          => $label ?? 'Auto-saved',
-            'content'        => $report->content,
-            'settings'       => $report->settings,
-            'title'          => $report->title,
+            'report_id' => $report->id,
+            'user_id' => auth()->id(),
+            'label' => $label ?? 'Auto-saved',
+            'content' => $report->content,
+            'settings' => $report->settings,
+            'title' => $report->title,
             'version_number' => $versionNumber,
         ]);
 
@@ -945,27 +963,27 @@ class ReportController extends Controller
     private function defaultSettings(): array
     {
         return [
-            'page_size'         => 'A4',
-            'orientation'       => 'portrait',
-            'primary_color'     => '#6366f1',
-            'accent_color'      => '#8b5cf6',
-            'background_color'  => '#ffffff',
-            'text_color'        => '#0f172a',
-            'font_family'       => "'DM Sans', sans-serif",
-            'font_size'         => 14,
-            'margin'            => 40,
+            'page_size' => 'A4',
+            'orientation' => 'portrait',
+            'primary_color' => '#6366f1',
+            'accent_color' => '#8b5cf6',
+            'background_color' => '#ffffff',
+            'text_color' => '#0f172a',
+            'font_family' => "'DM Sans', sans-serif",
+            'font_size' => 14,
+            'margin' => 40,
             'show_page_numbers' => true,
-            'show_header'       => false,
-            'show_footer'       => false,
-            'header_text'       => '',
-            'footer_left'       => '',
-            'footer_right'      => '',
-            'header_color'      => '#1e293b',
-            'footer_color'      => '#1e293b',
-            'watermark'         => '',
-            'rtl'               => false,
-            'bg_image'          => '',
-            'page_radius'       => 0,
+            'show_header' => false,
+            'show_footer' => false,
+            'header_text' => '',
+            'footer_left' => '',
+            'footer_right' => '',
+            'header_color' => '#1e293b',
+            'footer_color' => '#1e293b',
+            'watermark' => '',
+            'rtl' => false,
+            'bg_image' => '',
+            'page_radius' => 0,
         ];
     }
 
@@ -975,16 +993,16 @@ class ReportController extends Controller
     private function getPaperWidth(array $settings): float
     {
         $sizes = [
-            'A4'     => ['portrait' => 210, 'landscape' => 297],
+            'A4' => ['portrait' => 210, 'landscape' => 297],
             'Letter' => ['portrait' => 215.9, 'landscape' => 279.4],
-            'Legal'  => ['portrait' => 215.9, 'landscape' => 355.6],
-            'A3'     => ['portrait' => 297, 'landscape' => 420],
-            'A5'     => ['portrait' => 148, 'landscape' => 210],
+            'Legal' => ['portrait' => 215.9, 'landscape' => 355.6],
+            'A3' => ['portrait' => 297, 'landscape' => 420],
+            'A5' => ['portrait' => 148, 'landscape' => 210],
         ];
-        
-        $size        = $settings['page_size'] ?? 'A4';
+
+        $size = $settings['page_size'] ?? 'A4';
         $orientation = $settings['orientation'] ?? 'portrait';
-        
+
         return $sizes[$size][$orientation] ?? $sizes['A4']['portrait'];
     }
 
@@ -994,16 +1012,16 @@ class ReportController extends Controller
     private function getPaperHeight(array $settings): float
     {
         $sizes = [
-            'A4'     => ['portrait' => 297, 'landscape' => 210],
+            'A4' => ['portrait' => 297, 'landscape' => 210],
             'Letter' => ['portrait' => 279.4, 'landscape' => 215.9],
-            'Legal'  => ['portrait' => 355.6, 'landscape' => 215.9],
-            'A3'     => ['portrait' => 420, 'landscape' => 297],
-            'A5'     => ['portrait' => 210, 'landscape' => 148],
+            'Legal' => ['portrait' => 355.6, 'landscape' => 215.9],
+            'A3' => ['portrait' => 420, 'landscape' => 297],
+            'A5' => ['portrait' => 210, 'landscape' => 148],
         ];
-        
-        $size        = $settings['page_size'] ?? 'A4';
+
+        $size = $settings['page_size'] ?? 'A4';
         $orientation = $settings['orientation'] ?? 'portrait';
-        
+
         return $sizes[$size][$orientation] ?? $sizes['A4']['portrait'];
     }
 
@@ -1013,63 +1031,63 @@ class ReportController extends Controller
     public function search(Request $request)
     {
         $query = $request->get('q', '');
-        
+
         $reports = Report::where('title', 'like', "%{$query}%")
             ->where('user_id', auth()->id())
             ->limit(10)
             ->get(['id', 'title', 'slug', 'status']);
-        
+
         return response()->json(['reports' => $reports]);
     }
 
     /**
- * Get element presets library.
- */
-public function getPresets()
-{
-    $presets = [
-        ['name' => 'Blue Header', 'type' => 'heading', 'styles' => ['fontSize' => 32, 'fontWeight' => '700', 'color' => '#1e40af']],
-        ['name' => 'Subtitle Gray', 'type' => 'subheading', 'styles' => ['fontSize' => 18, 'color' => '#64748b']],
-        ['name' => 'Metric Card', 'type' => 'metric', 'styles' => ['backgroundColor' => '#f8fafc', 'borderRadius' => 12]],
-        ['name' => 'CTA Button', 'type' => 'badge', 'styles' => ['backgroundColor' => '#6366f1', 'color' => '#ffffff', 'borderRadius' => 999]],
-        ['name' => 'Divider', 'type' => 'divider', 'styles' => ['color' => '#e2e8f0', 'height' => 2]],
-    ];
-    
-    return response()->json(['presets' => $presets]);
-}
+     * Get element presets library.
+     */
+    public function getPresets()
+    {
+        $presets = [
+            ['name' => 'Blue Header', 'type' => 'heading', 'styles' => ['fontSize' => 32, 'fontWeight' => '700', 'color' => '#1e40af']],
+            ['name' => 'Subtitle Gray', 'type' => 'subheading', 'styles' => ['fontSize' => 18, 'color' => '#64748b']],
+            ['name' => 'Metric Card', 'type' => 'metric', 'styles' => ['backgroundColor' => '#f8fafc', 'borderRadius' => 12]],
+            ['name' => 'CTA Button', 'type' => 'badge', 'styles' => ['backgroundColor' => '#6366f1', 'color' => '#ffffff', 'borderRadius' => 999]],
+            ['name' => 'Divider', 'type' => 'divider', 'styles' => ['color' => '#e2e8f0', 'height' => 2]],
+        ];
 
-/**
- * Save element as preset.
- */
-public function savePreset(Request $request)
-{
-    return response()->json(['message' => 'Preset saved', 'preset' => $request->all()]);
-}
+        return response()->json(['presets' => $presets]);
+    }
 
-/**
- * Get report statistics.
- */
-public function reportStats($slug)
-{
-    $report = Report::where('slug', $slug)->firstOrFail();
-    
-    $totalElements = 0;
-    $totalWords = 0;
-    
-    foreach ($report->content ?? [] as $page) {
-        foreach ($page['elements'] ?? [] as $el) {
-            $totalElements++;
-            if (!empty($el['content'])) {
-                $totalWords += str_word_count(strip_tags($el['content']));
+    /**
+     * Save element as preset.
+     */
+    public function savePreset(Request $request)
+    {
+        return response()->json(['message' => 'Preset saved', 'preset' => $request->all()]);
+    }
+
+    /**
+     * Get report statistics.
+     */
+    public function reportStats($slug)
+    {
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        $totalElements = 0;
+        $totalWords = 0;
+
+        foreach ($report->content ?? [] as $page) {
+            foreach ($page['elements'] ?? [] as $el) {
+                $totalElements++;
+                if (! empty($el['content'])) {
+                    $totalWords += str_word_count(strip_tags($el['content']));
+                }
             }
         }
+
+        return response()->json([
+            'total_pages' => count($report->content ?? []),
+            'total_elements' => $totalElements,
+            'total_words' => $totalWords,
+            'status' => $report->status,
+        ]);
     }
-    
-    return response()->json([
-        'total_pages'    => count($report->content ?? []),
-        'total_elements' => $totalElements,
-        'total_words'    => $totalWords,
-        'status'         => $report->status,
-    ]);
-}
 }

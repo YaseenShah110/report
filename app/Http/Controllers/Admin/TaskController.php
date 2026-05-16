@@ -454,8 +454,36 @@ class TaskController extends Controller
         $user = auth()->user();
         
         $tasks = Task::with(['assignedBy', 'report'])
+            ->when($request->status === 'trashed', fn($q) => $q->onlyTrashed())
             ->where('assigned_to', $user->id)
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->when($request->status, function ($q) use ($request) {
+                if ($request->status === 'trashed') {
+                    return;
+                }
+                if ($request->status === 'overdue') {
+                    $q->where(function ($subQ) {
+                        $subQ->where('status', 'overdue')
+                             ->orWhere(function ($dateQ) {
+                                 $dateQ->where('status', '!=', 'completed')
+                                       ->where('due_date', '<', now());
+                             });
+                    });
+                } elseif ($request->status === 'pending') {
+                    $q->where('status', 'pending')
+                      ->where(function ($dateQ) {
+                          $dateQ->whereNull('due_date')
+                                ->orWhere('due_date', '>=', now());
+                      });
+                } elseif ($request->status === 'in_progress') {
+                    $q->where('status', 'in_progress')
+                      ->where(function ($dateQ) {
+                          $dateQ->whereNull('due_date')
+                                ->orWhere('due_date', '>=', now());
+                      });
+                } else {
+                    $q->where('status', $request->status);
+                }
+            })
             ->when($request->priority, fn($q) => $q->where('priority', $request->priority))
             ->when($request->search, fn($q) => $q->where('title', 'like', "%{$request->search}%"))
             ->orderByRaw("CASE WHEN status = 'overdue' THEN 0 WHEN status = 'pending' THEN 1 WHEN status = 'in_progress' THEN 2 ELSE 3 END")
@@ -467,7 +495,7 @@ class TaskController extends Controller
                 'title'       => $task->title,
                 'description' => $task->description,
                 'priority'    => $task->priority,
-                'status'      => $task->isOverdue() ? 'overdue' : $task->status,
+                'status'      => $task->trashed() ? 'trashed' : ($task->isOverdue() ? 'overdue' : $task->status),
                 'due_date'    => $task->due_date,
                 'assigned_by' => $task->assignedBy?->name,
                 'report' => $task->report ? [
@@ -478,13 +506,24 @@ class TaskController extends Controller
             ]);
         
         $stats = [
-            'pending'     => Task::where('assigned_to', $user->id)->where('status', 'pending')->count(),
-            'in_progress' => Task::where('assigned_to', $user->id)->where('status', 'in_progress')->count(),
+            'pending'     => Task::where('assigned_to', $user->id)
+                ->where('status', 'pending')
+                ->where(function ($q) {
+                    $q->whereNull('due_date')->orWhere('due_date', '>=', now());
+                })
+                ->count(),
+            'in_progress' => Task::where('assigned_to', $user->id)
+                ->where('status', 'in_progress')
+                ->where(function ($q) {
+                    $q->whereNull('due_date')->orWhere('due_date', '>=', now());
+                })
+                ->count(),
             'completed'   => Task::where('assigned_to', $user->id)->where('status', 'completed')->count(),
             'overdue'     => Task::where('assigned_to', $user->id)
                 ->where('status', '!=', 'completed')
                 ->where('due_date', '<', now())
                 ->count(),
+            'trashed'     => Task::onlyTrashed()->where('assigned_to', $user->id)->count(),
         ];
         
         return Inertia::render('Tasks/MyTasks', [
