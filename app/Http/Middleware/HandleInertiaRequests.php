@@ -121,12 +121,12 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
                 'is_impersonating' => session()->has('impersonate'),
             ],
-            'flash' => [
-                'success' => session('success'),
-                'error' => session('error'),
-                'warning' => session('warning'),
-                'info' => session('info'),
-            ],
+           'flash' => [
+    'success' => session('success'),
+    'error'   => session('error'),
+    'warning' => session('warning'),
+    'info'    => session('info'),
+],
             'app' => [
                 'name' => config('app.name'),
                 'environment' => config('app.env'),

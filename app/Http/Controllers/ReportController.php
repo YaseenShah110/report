@@ -84,7 +84,49 @@ class ReportController extends Controller
 
         return Inertia::render('Reports/Index', compact('reports', 'stats', 'trashedReports'));
     }
-
+public function allReports(Request $request)
+{
+    // Gate: admin only
+    if (! auth()->user()->hasRole('admin')) {
+        abort(403, 'Admin access required.');
+    }
+ 
+    $query = Report::with(['template', 'user'])
+        ->withCount('assignments');
+ 
+    if ($request->filled('search')) {
+        $query->where('title', 'like', '%'.$request->search.'%');
+    }
+    if ($request->filled('status') && $request->status !== 'all') {
+        $query->where('status', $request->status);
+    }
+ 
+    $sort = $request->get('sort', 'updated_at');
+    $query->orderBy($sort === 'title' ? 'title' : $sort, $sort === 'title' ? 'asc' : 'desc');
+ 
+    $reports = $query->paginate(12)->withQueryString();
+ 
+    $stats = [
+        'total'     => Report::count(),
+        'published' => Report::where('status', 'published')->count(),
+        'draft'     => Report::where('status', 'draft')->count(),
+        'archived'  => Report::where('status', 'archived')->count(),
+        'trashed'   => Report::onlyTrashed()->count(),
+    ];
+ 
+    $trashedReports = Report::onlyTrashed()
+        ->select('id', 'title', 'slug', 'deleted_at', 'settings')
+        ->orderBy('deleted_at', 'desc')
+        ->get();
+ 
+    return Inertia::render('Reports/Index', [
+        'reports'        => $reports,
+        'stats'          => $stats,
+        'trashedReports' => $trashedReports,
+        'isAdminAllView' => true,
+        'authUser'       => auth()->user()->only(['id', 'role', 'is_admin']),
+    ]);
+}
     /**
      * Show create report form with available templates.
      */
@@ -608,10 +650,10 @@ class ReportController extends Controller
             'share_token' => $report->share_token,
         ]);
 
-        return response()->json([
-            'url' => route('reports.public-preview', $report->share_token),
-            'token' => $report->share_token,
-        ]);
+        return back()->with([
+    'success'     => 'Share link generated',
+    'share_token' => $report->fresh()->share_token,
+]);
     }
 
     /**
@@ -628,7 +670,7 @@ class ReportController extends Controller
 
         UserActivity::log(auth()->id(), 'report_share_link_revoked', 'report', $report->id, []);
 
-        return response()->json(['message' => 'Share link revoked']);
+        return back()->with(['message' => 'Share link revoked! now it is private']);
     }
 
     /**

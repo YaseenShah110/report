@@ -563,7 +563,7 @@
               <NavSubItem
                 :href="route('reports.index')"
                 icon="fa-solid fa-list-ul"
-                label="All Reports"
+                label="My Reports"
                 :active="isRoute('reports.index')"
               />
               <!-- Create Report -->

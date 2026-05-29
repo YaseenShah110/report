@@ -58,10 +58,10 @@ use Inertia\Inertia;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
-        'laravelVersion' => app()->version(),
-        'phpVersion' => PHP_VERSION,
+        'canLogin'      => Route::has('login'),
+        'canRegister'   => Route::has('register'),
+        'laravelVersion'=> app()->version(),
+        'phpVersion'    => PHP_VERSION,
     ]);
 })->name('home');
 
@@ -134,8 +134,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // ── Listing & Reading ───────────────────────────────────────
         Route::get('/', [ReportController::class, 'index'])
-            ->middleware('can:view-reports')
+            
             ->name('index');
+            Route::get('/all', [ReportController::class, 'allReports'])
+    ->name('reports.all')
+    ->middleware('can:view-reports');
+
         Route::get('/{report:slug}/preview', [ReportController::class, 'preview'])
             ->middleware('can:view-reports')
             ->name('preview');
@@ -267,7 +271,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     | MY TASKS - Tasks Assigned to Current User
     |======================================================================
     */
-    Route::get('/my-tasks', [TaskController::class, 'myTasks'])
+    Route::prefix('my-tasks')->name('my-tasks.')->group(function () {
+        Route::get('/', [TaskController::class, 'myTasks'])
+            ->middleware('can:view-tasks')
+            ->name('index');
+
+        // ✅ Dedicated My Tasks export route — scoped to current user's tasks only
+        Route::get('/export', [TaskController::class, 'exportMyTasks'])
+            ->middleware('can:view-tasks')
+            ->name('export');
+    });
+
+    // Keep backward-compatible named route alias used elsewhere in the app
+    Route::get('/my-tasks-legacy', [TaskController::class, 'myTasks'])
         ->middleware('can:view-tasks')
         ->name('admin.tasks.my');
 
@@ -415,9 +431,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', [TaskController::class, 'index'])
                     ->middleware('can:view-tasks')
                     ->name('index');
-                    Route::get('/create', [TaskController::class, 'create'])
-                        ->middleware('can:create-tasks')
-                        ->name('create');
+                Route::get('/create', [TaskController::class, 'create'])
+                    ->middleware('can:create-tasks')
+                    ->name('create');
                 Route::get('/{task}', [TaskController::class, 'show'])
                     ->middleware('can:view-tasks')
                     ->name('show');
@@ -467,7 +483,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->middleware('can:edit-tasks')
                     ->name('bulk-status');
 
-                // ── Export ─────────────────────────────────────────────
+                // ── Export (Admin — all tasks with filters) ────────────
                 Route::get('/export', [TaskController::class, 'export'])
                     ->middleware('can:view-tasks')
                     ->name('export');
@@ -533,7 +549,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::delete('/clear', [ActivityController::class, 'clear'])
                     ->middleware('can:manage-settings')
                     ->name('clear');
-
                 Route::get('/export', [ActivityController::class, 'export'])
                     ->middleware('can:view-activities')
                     ->name('export');
@@ -594,40 +609,39 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $path = $request->file('image')->store('report-images', 'public');
 
             return response()->json([
-                'url' => Storage::url($path),
-                'path' => $path,
+                'url'     => Storage::url($path),
+                'path'    => $path,
                 'message' => 'Image uploaded successfully.',
             ]);
         } catch (Exception $e) {
-            return response()->json(['error' => 'Upload failed: '.$e->getMessage()], 500);
+            return response()->json(['error' => 'Upload failed: ' . $e->getMessage()], 500);
         }
     });
 
     /*
     |======================================================================
-    | AI CONTENT GENERATION - Smart Text, Headlines, Summaries, Chart Data
+    | AI CONTENT GENERATION
     |======================================================================
     */
     Route::post('/api/ai/generate', function (Request $request) {
         $request->validate([
             'prompt' => 'required|string|max:1000',
-            'type' => 'required|in:text,chart_data,headline,summary',
+            'type'   => 'required|in:text,chart_data,headline,summary',
         ]);
 
         $prompt = strtolower($request->prompt);
 
-        // Smart Text Generation with Category Detection
         if ($request->type === 'text') {
             $templates = [
                 'business' => [
-                    'keywords' => ['revenue', 'growth', 'profit', 'sales', 'quarter', 'annual', 'business', 'company'],
+                    'keywords'  => ['revenue', 'growth', 'profit', 'sales', 'quarter', 'annual', 'business', 'company'],
                     'responses' => [
                         'Based on our analysis, the company has demonstrated consistent growth trajectory over the past fiscal year. Key metrics show a {percent}% increase in revenue, driven by strategic initiatives and market expansion.',
                         'The business performance report indicates strong operational efficiency with EBITDA margins improving by {percent}%. Cost optimization strategies have yielded significant results.',
                     ],
                 ],
                 'marketing' => [
-                    'keywords' => ['campaign', 'marketing', 'social', 'advertising', 'brand', 'engagement', 'roi'],
+                    'keywords'  => ['campaign', 'marketing', 'social', 'advertising', 'brand', 'engagement', 'roi'],
                     'responses' => [
                         'The marketing campaign exceeded KPI targets with a {percent}% increase in engagement. Social media reach expanded by {percent}%, driving significant brand awareness.',
                         'ROI analysis shows marketing spend efficiency improved by {percent}%. The multi-channel approach generated {number} new leads with a conversion rate of {percent}%.',
@@ -654,9 +668,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             }
 
             $responses = $templates[$category]['responses'] ?? $templates['default']['responses'];
-            $template = $responses[array_rand($responses)];
-            $percent = rand(8, 45);
-            $number = rand(5, 50);
+            $template  = $responses[array_rand($responses)];
+            $percent   = rand(8, 45);
+            $number    = rand(5, 50);
 
             $result = str_replace(
                 ['{percent}', '{number}', '{prompt}'],
@@ -664,7 +678,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 $template
             );
 
-            $result .= ' '.[
+            $result .= ' ' . [
                 'Further analysis is available upon request.',
                 'Detailed breakdown by region available.',
                 'Comparative data shows consistent improvement.',
@@ -675,7 +689,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return response()->json(['result' => $result]);
         }
 
-        // Smart Headline Generation
         if ($request->type === 'headline') {
             $templates = [
                 'Q{quarter} {year} {topic} Report: Key Insights & Analysis',
@@ -687,16 +700,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 '{topic} Report: From Data to Decisions',
             ];
 
-            $quarter = rand(1, 4);
-            $year = date('Y');
-            $percent = rand(10, 75);
-            $topic = ucwords(str_replace(['write', 'generate', 'about', 'for', 'a'], '', $request->prompt));
+            $quarter  = rand(1, 4);
+            $year     = date('Y');
+            $percent  = rand(10, 75);
+            $topic    = ucwords(str_replace(['write', 'generate', 'about', 'for', 'a'], '', $request->prompt));
             if (strlen($topic) < 3) {
                 $topic = 'Performance';
             }
 
             $template = $templates[array_rand($templates)];
-            $result = str_replace(
+            $result   = str_replace(
                 ['{quarter}', '{year}', '{topic}', '{percent}'],
                 [$quarter, $year, $topic, $percent],
                 $template
@@ -705,17 +718,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return response()->json(['result' => $result]);
         }
 
-        // Smart Summary Generation
         if ($request->type === 'summary') {
             $metrics = [
-                'revenue' => rand(50000, 500000),
-                'growth' => rand(5, 45),
-                'customers' => rand(1000, 50000),
+                'revenue'      => rand(50000, 500000),
+                'growth'       => rand(5, 45),
+                'customers'    => rand(1000, 50000),
                 'satisfaction' => rand(75, 98),
-                'efficiency' => rand(60, 95),
+                'efficiency'   => rand(60, 95),
             ];
 
-            $summary = 'Executive Summary: ';
+            $summary  = 'Executive Summary: ';
             $summary .= "Based on the analysis of \"{$request->prompt}\", ";
             $summary .= "the organization achieved {$metrics['growth']}% growth with revenue reaching \${$metrics['revenue']}. ";
             $summary .= "Customer satisfaction stands at {$metrics['satisfaction']}% with {$metrics['customers']}+ active users. ";
@@ -725,38 +737,37 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return response()->json(['result' => $summary]);
         }
 
-        // Smart Chart Data Generation
         if ($request->type === 'chart_data') {
-            $chartTypes = ['bar-chart', 'line-chart', 'area-chart', 'pie-chart'];
+            $chartTypes   = ['bar-chart', 'line-chart', 'area-chart', 'pie-chart'];
             $suggestedType = $chartTypes[array_rand($chartTypes)];
 
-            $periods = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            $periods         = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             $selectedPeriods = array_slice($periods, 0, rand(4, 8));
 
             $baseValue = rand(20000, 100000);
-            $values = [];
-            $current = $baseValue;
+            $values    = [];
+            $current   = $baseValue;
 
             for ($i = 0; $i < count($selectedPeriods); $i++) {
-                $change = rand(-10, 25);
+                $change  = rand(-10, 25);
                 $current = max(1000, $current + ($current * $change / 100));
                 $values[] = round($current);
             }
 
             $isTrending = end($values) > $values[0];
-            $title = $isTrending
-                ? 'Upward Trend in '.ucwords(str_replace(['generate', 'chart', 'data', 'for'], '', $request->prompt))
+            $title      = $isTrending
+                ? 'Upward Trend in ' . ucwords(str_replace(['generate', 'chart', 'data', 'for'], '', $request->prompt))
                 : 'Performance Analysis';
             if (strlen($title) < 5) {
                 $title = 'Key Performance Metrics';
             }
 
             return response()->json([
-                'labels' => $selectedPeriods,
-                'values' => $values,
-                'title' => $title,
-                'suggested_chart_type' => $suggestedType,
-                'summary' => $isTrending ? 'Showing overall growth trend' : 'Stable performance with minor fluctuations',
+                'labels'              => $selectedPeriods,
+                'values'              => $values,
+                'title'               => $title,
+                'suggested_chart_type'=> $suggestedType,
+                'summary'             => $isTrending ? 'Showing overall growth trend' : 'Stable performance with minor fluctuations',
             ]);
         }
 
@@ -765,52 +776,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |======================================================================
-    | AI CONTENT ENHANCEMENT - Make Content Professional/Concise/Detailed
+    | AI CONTENT ENHANCEMENT
     |======================================================================
     */
     Route::post('/api/ai/enhance', function (Request $request) {
         $request->validate([
             'content' => 'required|string|max:5000',
-            'style' => 'required|in:professional,concise,detailed,persuasive',
+            'style'   => 'required|in:professional,concise,detailed,persuasive',
         ]);
 
-        $content = $request->content;
-        $style = $request->style;
-
+        $content      = $request->content;
+        $style        = $request->style;
         $enhancements = [
             'professional' => [
-                'prefix' => 'Upon review, ',
-                'suffix' => ' This analysis was conducted using industry-standard methodologies.',
-                'replacements' => [
-                    'good' => 'satisfactory', 'great' => 'excellent', 'bad' => 'suboptimal',
-                    'think' => 'believe', 'show' => 'demonstrate', 'get' => 'obtain',
-                ],
+                'prefix'       => 'Upon review, ',
+                'suffix'       => ' This analysis was conducted using industry-standard methodologies.',
+                'replacements' => ['good' => 'satisfactory', 'great' => 'excellent', 'bad' => 'suboptimal', 'think' => 'believe', 'show' => 'demonstrate', 'get' => 'obtain'],
             ],
             'concise' => [
-                'prefix' => '',
-                'suffix' => ' In summary, the key takeaways are clear.',
-                'replacements' => [
-                    'in order to' => 'to', 'due to the fact that' => 'because', 'at this point in time' => 'now',
-                    'a large number of' => 'many', 'in the event that' => 'if',
-                ],
+                'prefix'       => '',
+                'suffix'       => ' In summary, the key takeaways are clear.',
+                'replacements' => ['in order to' => 'to', 'due to the fact that' => 'because', 'at this point in time' => 'now', 'a large number of' => 'many', 'in the event that' => 'if'],
             ],
             'detailed' => [
-                'prefix' => 'A comprehensive examination reveals that ',
-                'suffix' => ' Further analysis indicates additional opportunities for optimization.',
+                'prefix'       => 'A comprehensive examination reveals that ',
+                'suffix'       => ' Further analysis indicates additional opportunities for optimization.',
                 'replacements' => [],
             ],
             'persuasive' => [
-                'prefix' => 'Undoubtedly, ',
-                'suffix' => ' The evidence strongly supports this conclusion.',
-                'replacements' => [
-                    'good' => 'outstanding', 'important' => 'critical', 'help' => 'empower',
-                    'show' => 'prove', 'think' => 'are confident',
-                ],
+                'prefix'       => 'Undoubtedly, ',
+                'suffix'       => ' The evidence strongly supports this conclusion.',
+                'replacements' => ['good' => 'outstanding', 'important' => 'critical', 'help' => 'empower', 'show' => 'prove', 'think' => 'are confident'],
             ],
         ];
 
-        $config = $enhancements[$style];
-        $enhanced = $config['prefix'].$content.$config['suffix'];
+        $config   = $enhancements[$style];
+        $enhanced = $config['prefix'] . $content . $config['suffix'];
 
         foreach ($config['replacements'] as $old => $new) {
             $enhanced = str_ireplace($old, $new, $enhanced);
@@ -819,7 +820,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         return response()->json([
             'original' => $content,
             'enhanced' => $enhanced,
-            'style' => $style,
+            'style'    => $style,
             'word_count' => [
                 'original' => str_word_count($content),
                 'enhanced' => str_word_count($enhanced),
@@ -829,7 +830,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     /*
     |======================================================================
-    | AI CHART SUGGESTION - Suggest Best Chart Type for Data
+    | AI CHART SUGGESTION
     |======================================================================
     */
     Route::post('/api/ai/suggest-chart', function (Request $request) {
@@ -839,75 +840,68 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         if ($hasData && count($request->data) > 0) {
             $dataValues = array_values($request->data);
-            $avg = array_sum($dataValues) / count($dataValues);
-            $max = max($dataValues);
-            $min = min($dataValues);
-            $range = $max - $min;
+            $avg        = array_sum($dataValues) / count($dataValues);
+            $max        = max($dataValues);
+            $min        = min($dataValues);
+            $range      = $max - $min;
 
             if ($range / $max < 0.1) {
                 $chartType = 'bar-chart';
-                $reason = 'Values are similar, bar chart shows comparison effectively';
+                $reason    = 'Values are similar, bar chart shows comparison effectively';
             } elseif ($range / $max > 0.5) {
                 $chartType = 'line-chart';
-                $reason = 'High variance detected, line chart shows trend clearly';
+                $reason    = 'High variance detected, line chart shows trend clearly';
             } else {
                 $chartType = 'area-chart';
-                $reason = 'Moderate variance, area chart emphasizes magnitude';
+                $reason    = 'Moderate variance, area chart emphasizes magnitude';
             }
 
-            $labels = [];
+            $labels        = [];
             $defaultLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             for ($i = 0; $i < count($dataValues); $i++) {
-                $labels[] = $defaultLabels[$i % 12].' '.(floor($i / 12) + 1);
+                $labels[] = $defaultLabels[$i % 12] . ' ' . (floor($i / 12) + 1);
             }
 
             return response()->json([
                 'suggested_type' => $chartType,
-                'reason' => $reason,
-                'labels' => $labels,
-                'values' => $dataValues,
-                'title' => 'Data Visualization',
-                'insights' => "Values range from {$min} to {$max} with an average of ".round($avg, 2),
+                'reason'         => $reason,
+                'labels'         => $labels,
+                'values'         => $dataValues,
+                'title'          => 'Data Visualization',
+                'insights'       => "Values range from {$min} to {$max} with an average of " . round($avg, 2),
             ]);
         }
 
-        $sampleData = [
-            'labels' => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-            'values' => [12500, 18200, 15800, 22400, 19600, 28300],
-            'title' => 'Revenue Trend (Suggested)',
+        return response()->json([
+            'labels'         => ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            'values'         => [12500, 18200, 15800, 22400, 19600, 28300],
+            'title'          => 'Revenue Trend (Suggested)',
             'suggested_type' => 'line-chart',
-            'reason' => 'Line chart best shows the upward trend in revenue over time',
-            'insights' => 'Showing 126% growth from January to June',
-        ];
-
-        return response()->json($sampleData);
+            'reason'         => 'Line chart best shows the upward trend in revenue over time',
+            'insights'       => 'Showing 126% growth from January to June',
+        ]);
     });
 
     /*
     |======================================================================
-    | STOCK IMAGE SEARCH - Free Placeholder Images from Picsum
+    | STOCK IMAGE SEARCH
     |======================================================================
     */
     Route::get('/api/unsplash/search', function (Request $request) {
-        $query = $request->get('q', 'business');
-        $page = $request->get('page', 1);
+        $query  = $request->get('q', 'business');
+        $page   = $request->get('page', 1);
         $images = collect(range(1, 20))->map(function ($i) {
             $seed = $i * 7 + (time() % 100);
-
             return [
-                'id' => $i,
-                'url' => "https://picsum.photos/800/600?random={$seed}",
-                'thumb' => "https://picsum.photos/200/150?random={$seed}",
-                'author' => 'Free Stock Photo',
+                'id'           => $i,
+                'url'          => "https://picsum.photos/800/600?random={$seed}",
+                'thumb'        => "https://picsum.photos/200/150?random={$seed}",
+                'author'       => 'Free Stock Photo',
                 'download_url' => "https://picsum.photos/800/600?random={$seed}",
             ];
         });
 
-        return response()->json([
-            'images' => $images,
-            'total' => 20,
-            'page' => $page,
-        ]);
+        return response()->json(['images' => $images, 'total' => 20, 'page' => $page]);
     });
 
     /*
@@ -916,19 +910,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |======================================================================
     */
     Route::post('/api/qr/generate', function (Request $request) {
-        $text = $request->get('text', 'https://example.com');
-        $size = $request->get('size', 200);
-        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data=".urlencode($text);
-
-        return response()->json([
-            'qr_url' => $qrUrl,
-            'text' => $text,
-        ]);
+        $text  = $request->get('text', 'https://example.com');
+        $size  = $request->get('size', 200);
+        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size={$size}x{$size}&data=" . urlencode($text);
+        return response()->json(['qr_url' => $qrUrl, 'text' => $text]);
     });
 
     /*
     |======================================================================
-    | AVAILABLE ICONS LIST - FontAwesome Icons
+    | AVAILABLE ICONS LIST
     |======================================================================
     */
     Route::get('/api/icons', function () {
@@ -950,26 +940,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'fa-solid fa-circle-check', 'fa-solid fa-circle-xmark', 'fa-solid fa-circle-exclamation',
             'fa-solid fa-circle-info', 'fa-solid fa-circle-question',
         ];
-
         return response()->json(['icons' => $icons]);
     });
 
     /*
     |======================================================================
-    | SEARCH ENDPOINTS - Users, Reports, Tasks
+    | SEARCH ENDPOINTS
     |======================================================================
     */
-    Route::get('/api/search/users', [UserController::class, 'search']);
+    Route::get('/api/search/users',   [UserController::class, 'search']);
     Route::get('/api/search/reports', [ReportController::class, 'search']);
-    Route::get('/api/search/tasks', [TaskController::class, 'search']);
+    Route::get('/api/search/tasks',   [TaskController::class, 'search']);
 
     /*
     |======================================================================
     | NOTIFICATIONS API
     |======================================================================
     */
-    Route::get('/api/notifications', [DashboardController::class, 'notifications']);
-    Route::post('/api/notifications/read', [DashboardController::class, 'markNotificationsRead']);
+    Route::get('/api/notifications',        [DashboardController::class, 'notifications']);
+    Route::post('/api/notifications/read',  [DashboardController::class, 'markNotificationsRead']);
 
     /*
     |======================================================================
@@ -977,7 +966,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     |======================================================================
     */
     Route::get('/api/stats/dashboard', [DashboardController::class, 'quickStats']);
-    Route::get('/api/stats/reports', [ReportController::class, 'quickStats']);
+    Route::get('/api/stats/reports',   [ReportController::class, 'quickStats']);
 
     /*
     |======================================================================
@@ -989,20 +978,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| HEALTH CHECK - Application Status
+| HEALTH CHECK
 |--------------------------------------------------------------------------
 */
 Route::get('/api/health', function () {
     return response()->json([
-        'status' => 'healthy',
+        'status'    => 'healthy',
         'timestamp' => now(),
-        'app_name' => config('app.name'),
+        'app_name'  => config('app.name'),
     ]);
 });
 
 /*
 |--------------------------------------------------------------------------
-| AUTH ROUTES - Laravel Breeze/Jetstream (Authentication)
+| AUTH ROUTES
 |--------------------------------------------------------------------------
 */
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

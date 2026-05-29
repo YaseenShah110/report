@@ -33,7 +33,7 @@ class Task extends Model
      * Type casting for model attributes
      */
     protected $casts = [
-        'due_date'      => 'date',        // Cast to Carbon date object
+        'due_date'      => 'datetime',        // Cast to Carbon date object
         'completed_at'  => 'datetime',    // Cast to Carbon datetime object
         'deleted_at'    => 'datetime',    // Soft delete timestamp
     ];

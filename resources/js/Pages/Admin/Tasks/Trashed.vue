@@ -13,25 +13,23 @@
           <h2 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Trashed Tasks</h2>
           <p class="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1">Tasks that have been soft-deleted</p>
         </div>
-        <Link :href="route('admin.tasks.index')" class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+        <Link :href="route('admin.tasks.index')"
+          class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
           <i class="fa-solid fa-arrow-left text-xs"></i> Back to Tasks
         </Link>
       </div>
     </template>
 
     <div class="py-6 sm:py-8 px-3 sm:px-4 lg:px-6 max-w-7xl mx-auto">
-      
+
       <!-- Search Bar -->
-      <div class="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6 border border-slate-200 dark:border-slate-700">
+      <div
+        class="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6 border border-slate-200 dark:border-slate-700">
         <div class="relative max-w-md">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input 
-            v-model="filters.search" 
-            type="text" 
-            placeholder="Search trashed tasks by title..." 
+          <input v-model="filters.search" type="text" placeholder="Search trashed tasks by title..."
             @keyup.enter="applyFilters"
-            class="w-full pl-9 pr-3 py-2 sm:py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-          >
+            class="w-full pl-9 pr-3 py-2 sm:py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
         </div>
       </div>
 
@@ -41,78 +39,94 @@
           <table class="w-full">
             <thead class="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Task</th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">Assigned To</th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell">Priority</th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell">Status</th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">Deleted At</th>
-                <th class="px-3 sm:px-6 py-3 sm:py-4 text-right text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Task</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
+                  Assigned To</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell">
+                  Priority</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell">
+                  Status</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-left text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
+                  Deleted At</th>
+                <th
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-right text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-              <tr v-for="task in tasks.data" :key="task.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                
+              <tr v-for="task in tasks.data" :key="task.id"
+                class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+
                 <!-- Task Title & Description -->
                 <td class="px-3 sm:px-6 py-3 sm:py-4">
                   <div>
                     <p class="font-medium text-slate-900 dark:text-white text-xs sm:text-sm">{{ task.title }}</p>
-                    <p class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">{{ task.description || 'No description' }}</p>
+                    <p class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">{{
+                      task.description || 'No description' }}</p>
                   </div>
                 </td>
-                
+
                 <!-- Assigned To (hidden on mobile) -->
                 <td class="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell">
                   <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold flex-shrink-0">
+                    <div
+                      class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] sm:text-xs font-bold flex-shrink-0">
                       {{ task.assigned_to?.name?.charAt(0) || '?' }}
                     </div>
-                    <span class="text-xs sm:text-sm text-slate-700 dark:text-slate-300 truncate">{{ task.assigned_to?.name || 'Unassigned' }}</span>
+                    <span class="text-xs sm:text-sm text-slate-700 dark:text-slate-300 truncate">{{
+                      task.assigned_to?.name
+                      || 'Unassigned' }}</span>
                   </div>
                 </td>
-                
+
                 <!-- Priority Badge (hidden on mobile) -->
                 <td class="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell">
-                  <span :class="getPriorityBadgeClass(task.priority)" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full capitalize">
+                  <span :class="getPriorityBadgeClass(task.priority)"
+                    class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full capitalize">
                     {{ task.priority }}
                   </span>
                 </td>
-                
+
                 <!-- Status Badge (hidden on mobile) -->
                 <td class="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell">
-                  <span :class="getStatusBadgeClass(task.status)" class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full capitalize">
+                  <span :class="getStatusBadgeClass(task.status)"
+                    class="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full capitalize">
                     {{ task.status }}
                   </span>
                 </td>
-                
+
                 <!-- Deleted At (hidden on tablet) -->
-                <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-slate-500 dark:text-slate-400 hidden lg:table-cell">
-                  {{ formatDate(task.deleted_at) }}
+                <td
+                  class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-slate-500 dark:text-slate-400 hidden lg:table-cell">
+                  {{ formatDateTime(task.deleted_at) }}
                 </td>
-                
+
                 <!-- Action Buttons -->
                 <td class="px-3 sm:px-6 py-3 sm:py-4 text-right">
                   <div class="flex items-center justify-end gap-1 sm:gap-2">
                     <!-- Restore Button -->
-                    <button 
-                      @click="restoreTask(task)" 
+                    <button @click="restoreTask(task)"
                       class="p-1.5 sm:p-2 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-colors"
-                      title="Restore task"
-                    >
+                      title="Restore task">
                       <i class="fa-solid fa-rotate-left text-xs sm:text-sm"></i>
                     </button>
-                    
+
                     <!-- Force Delete Button -->
-                    <button 
-                      @click="confirmForceDelete(task)" 
+                    <button @click="confirmForceDelete(task)"
                       class="p-1.5 sm:p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors"
-                      title="Permanently delete task"
-                    >
+                      title="Permanently delete task">
                       <i class="fa-solid fa-trash-can text-xs sm:text-sm"></i>
                     </button>
                   </div>
                 </td>
               </tr>
-              
+
               <!-- Empty State -->
               <tr v-if="!tasks.data || tasks.data.length === 0">
                 <td colspan="6" class="px-6 py-12 text-center">
@@ -125,24 +139,20 @@
             </tbody>
           </table>
         </div>
-        
+
         <!-- Pagination -->
-        <div v-if="tasks.links && tasks.links.length > 3" class="px-3 sm:px-6 py-3 sm:py-4 border-t border-slate-200 dark:border-slate-700">
+        <div v-if="tasks.links && tasks.links.length > 3"
+          class="px-3 sm:px-6 py-3 sm:py-4 border-t border-slate-200 dark:border-slate-700">
           <Pagination :links="tasks.links" :from="tasks.from" :to="tasks.to" :total="tasks.total" />
         </div>
       </div>
     </div>
 
     <!-- Permanent Delete Confirmation Modal -->
-    <ConfirmationModal 
-      :show="deleteModal.show" 
-      title="Permanently Delete Task?" 
+    <ConfirmationModal :show="deleteModal.show" title="Permanently Delete Task?"
       :message="`Are you sure you want to permanently delete &quot;${deleteModal.task?.title}&quot;? This action CANNOT be undone.`"
-      confirm-text="Delete Forever"
-      icon="fa-solid fa-triangle-exclamation"
-      @close="deleteModal.show = false" 
-      @confirm="forceDeleteTask" 
-    />
+      confirm-text="Delete Forever" icon="fa-solid fa-triangle-exclamation" @close="deleteModal.show = false"
+      @confirm="forceDeleteTask" />
   </AuthenticatedLayout>
 </template>
 
@@ -158,26 +168,26 @@ import Pagination from '@/Components/Pagination.vue'
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'
 
 // Props from Laravel controller
-const props = defineProps({ 
+const props = defineProps({
   tasks: Object,    // Paginated trashed tasks
   filters: Object   // Search filter parameters
 })
 
 // Search filter (reactive)
-const filters = reactive({ 
-  search: props.filters?.search || '' 
+const filters = reactive({
+  search: props.filters?.search || ''
 })
 
 // Delete confirmation modal state
-const deleteModal = ref({ 
-  show: false, 
-  task: null 
+const deleteModal = ref({
+  show: false,
+  task: null
 })
 
 /**
- * Format date for display
+ * Format date+time for display
  */
-const formatDate = (date) => {
+const formatDateTime = (date) => {
   if (!date) return 'N/A'
   return new Date(date).toLocaleString('en-US', {
     month: 'short',
@@ -185,6 +195,18 @@ const formatDate = (date) => {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
+  })
+}
+
+/**
+ * Format date only (legacy, kept for consistency)
+ */
+const formatDate = (date) => {
+  if (!date) return 'N/A'
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
   })
 }
 
@@ -218,8 +240,8 @@ const getStatusBadgeClass = (status) => {
  * Apply search filter and reload page
  */
 const applyFilters = () => {
-  router.get(route('admin.tasks.trashed'), filters, { 
-    preserveState: true 
+  router.get(route('admin.tasks.trashed'), filters, {
+    preserveState: true
   })
 }
 
@@ -239,9 +261,9 @@ const restoreTask = (task) => {
  * Show confirmation modal before permanent deletion
  */
 const confirmForceDelete = (task) => {
-  deleteModal.value = { 
-    show: true, 
-    task: task 
+  deleteModal.value = {
+    show: true,
+    task: task
   }
 }
 

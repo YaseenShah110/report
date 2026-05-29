@@ -1,262 +1,97 @@
 <template>
-  <div
-    ref="editorShell"
-    class="editor-shell"
+  <div ref="editorShell" class="editor-shell"
     :class="{ 'is-dark': isDark, 'is-fullscreen': isFullscreen, 'is-presenting': presentationMode }"
-    @keydown="handleKeyboard"
-    tabindex="0"
-  >
+    @keydown="handleKeyboard" tabindex="0">
     <!-- TOP TOOLBAR -->
-    <TopToolbar
-      :report="report"
-      :settings="settings"
-      :is-dirty="isDirty"
-      :is-saving="isSaving"
-      :last-saved="lastSaved"
-      :zoom="zoom"
-      :can-undo="canUndo"
-      :can-redo="canRedo"
-      :selected-el="selectedEl"
-      :selected-els="selectedEls"
-      :show-grid="showGrid"
-      :snap-to-grid="snapToGrid"
-      :show-rulers="showRulers"
-      :is-dark="isDark"
-      :is-fullscreen="isFullscreen"
-      :show-ai="showAI"
-      :left-collapsed="leftCollapsed"
-      :right-collapsed="rightCollapsed"
-      :report-slug="report.slug"
-      @update:title="report.title = $event; markDirty()"
-      @save="saveNow"
-      @undo="undo"
-      @redo="redo"
-      @zoom-in="zoomIn"
-      @zoom-out="zoomOut"
-      @zoom-reset="zoom = 100"
-      @toggle-grid="showGrid = !showGrid"
-      @toggle-snap="snapToGrid = !snapToGrid"
-      @toggle-rulers="showRulers = !showRulers"
-      @toggle-dark="toggleDark"
-      @toggle-fullscreen="toggleFullscreen"
-      @toggle-ai="showAI = !showAI"
-      @preview="previewReport"
-      @print-preview="printPreview"
-      @export-pdf="exportFile('pdf')"
-      @export-png="exportFile('image')"
-      @export-excel="exportFile('excel')"
-      @export-csv="exportFile('csv')"
-      @share="shareReport"
-      @change-status="cycleStatus"
-      @apply-style="applyStyle"
-      @toggle-fmt="toggleFmt"
-      @delete-el="deleteSelected"
-      @duplicate-el="duplicateSelected"
-      @lock-el="lockElement"
-      @bring-front="bringToFront"
-      @send-back="sendToBack"
-      @toggle-left-panel="leftCollapsed = !leftCollapsed"
-      @toggle-right-panel="rightCollapsed = !rightCollapsed"
-      @toggle-measure="measureMode = !measureMode"
-      @toggle-find="showFindReplace = !showFindReplace"
-      @toggle-command="showCommandPalette = !showCommandPalette"
-      @presentation="startPresentation"
-      @email-report="emailReport"
-      @group-elements="groupSelected"
-      @ungroup-elements="ungroupSelected"
-      @align-elements="alignSelected"
-    />
+    <TopToolbar :report="report" :settings="settings" :is-dirty="isDirty" :is-saving="isSaving" :last-saved="lastSaved"
+      :zoom="zoom" :can-undo="canUndo" :can-redo="canRedo" :selected-el="selectedEl" :selected-els="selectedEls"
+      :show-grid="showGrid" :snap-to-grid="snapToGrid" :show-rulers="showRulers" :is-dark="isDark"
+      :is-fullscreen="isFullscreen" :show-ai="showAI" :left-collapsed="leftCollapsed" :right-collapsed="rightCollapsed"
+      :report-slug="report.slug" @update:title="report.title = $event; markDirty()" @save="saveNow" @undo="undo"
+      @redo="redo" @zoom-in="zoomIn" @zoom-out="zoomOut" @zoom-reset="zoom = 100" @toggle-grid="showGrid = !showGrid"
+      @toggle-snap="snapToGrid = !snapToGrid" @toggle-rulers="showRulers = !showRulers" @toggle-dark="toggleDark"
+      @toggle-fullscreen="toggleFullscreen" @toggle-ai="showAI = !showAI" @preview="previewReport"
+      @print-preview="printPreview" @export-pdf="exportFile('pdf')" @export-png="exportFile('image')"
+      @export-excel="exportFile('excel')" @export-csv="exportFile('csv')" @share="shareReport"
+      @change-status="cycleStatus" @apply-style="applyStyle" @toggle-fmt="toggleFmt" @delete-el="deleteSelected"
+      @duplicate-el="duplicateSelected" @lock-el="lockElement" @bring-front="bringToFront" @send-back="sendToBack"
+      @toggle-left-panel="leftCollapsed = !leftCollapsed" @toggle-right-panel="rightCollapsed = !rightCollapsed"
+      @toggle-measure="measureMode = !measureMode" @toggle-find="showFindReplace = !showFindReplace"
+      @toggle-command="showCommandPalette = !showCommandPalette" @presentation="startPresentation"
+      @email-report="emailReport" @group-elements="groupSelected" @ungroup-elements="ungroupSelected"
+      @align-elements="alignSelected" />
 
     <!-- EDITOR BODY -->
     <div class="editor-body">
       <!-- LEFT SIDEBAR -->
-      <LeftSidebar
-        :report="report"
-        :settings="settings"
-        :current-page="currentPage"
-        :selected-el-idx="selectedElIdx"
-        :selected-els="selectedEls"
-        :active-tab="activeLeftTab"
-        :is-collapsed="leftCollapsed"
-        :is-dark="isDark"
-        @add-element-center="addElementCenter"
-        @select-page="goToPage"
-        @add-page="addPage"
-        @duplicate-page="duplicatePage"
-        @delete-page="deletePage"
-        @rename-page="renamePage"
-        @move-page="movePage"
-        @select-element="selectElementByIdx"
-        @deselect-all="deselectAll"
-        @toggle-visibility="toggleVis"
-        @toggle-lock="toggleLock"
-        @upload-image="handleUploadedImage"
-        @apply-template="applyQuickTemplate"
-        @update:settings="onSettingsUpdate"
-        @update:active-tab="activeLeftTab = $event"
-        @canvas-drag-start="onElDragStart"
-        @update:is-collapsed="leftCollapsed = $event"
-        @add-element-at="addElementAtCoords"
-      />
+      <LeftSidebar :report="report" :settings="settings" :current-page="currentPage" :selected-el-idx="selectedElIdx"
+        :selected-els="selectedEls" :active-tab="activeLeftTab" :is-collapsed="leftCollapsed" :is-dark="isDark"
+        @add-element-center="addElementCenter" @select-page="goToPage" @add-page="addPage"
+        @duplicate-page="duplicatePage" @delete-page="deletePage" @rename-page="renamePage" @move-page="movePage"
+        @select-element="selectElementByIdx" @deselect-all="deselectAll" @toggle-visibility="toggleVis"
+        @toggle-lock="toggleLock" @upload-image="handleUploadedImage" @apply-template="applyQuickTemplate"
+        @update:settings="onSettingsUpdate" @update:active-tab="activeLeftTab = $event"
+        @canvas-drag-start="onElDragStart" @update:is-collapsed="leftCollapsed = $event"
+        @add-element-at="addElementAtCoords" />
 
       <!-- MAIN CANVAS -->
-      <EditorCanvas
-        :report="report"
-        :settings="settings"
-        :current-page="currentPage"
-        :selected-el-idx="selectedElIdx"
-        :selected-els="selectedEls"
-        :editing-el-idx="editingElIdx"
-        :zoom="zoom"
-        :show-grid="showGrid"
-        :snap-to-grid="snapToGrid"
-        :show-rulers="showRulers"
-        :grid-size="gridSize"
-        :is-dragging-el="isDraggingEl"
-        :rubber-band="rubberBand"
-        :drop-target-page="dropTargetPage"
-        :measure-mode="measureMode"
-        :is-dark="isDark"
-        :page-count="report.content.length"
-        :style-painter-active="stylePainterActive"
-        @select-element="selectElementByIdx"
-        @deselect-all="deselectAll"
-        @add-element="addElementAtPosition"
-        @select-page="goToPage"
-        @add-page="addPage"
-        @start-editing="startEditing"
-        @stop-editing="editingElIdx = null"
-        @update-text-content="updateTextContent"
-        @element-mouse-down="onElementMouseDown"
-        @resize-start="startResize"
-        @rotate-start="startRotate"
-        @canvas-drop="onCanvasDrop"
-        @canvas-drag-end="isDraggingEl = false"
-        @rubber-band-start="startRubberBand"
-        @rubber-band-move="handleRubberBandMove"
-        @rubber-band-end="endRubberBand"
-        @zoom-wheel="handleZoomWheel"
-        @page-dblclick="onPageDblClick"
-        @context-menu="showElContextMenu"
-        @image-upload="triggerImageUpload"
-        @image-replace="triggerImageReplace"
-        @go-to-page="goToPage"
-        @mark-dirty="markDirty"
-        @zoom-reset="zoom = 100"
-        @element-cross-page="moveElementToPage"
-        @scroll-to-page="scrollToPage"
-        @style-painter-apply="applyStylePainter"
-        @duplicate-page="duplicatePage"
-        @delete-page="deletePage"
-      />
+      <EditorCanvas :report="report" :settings="settings" :current-page="currentPage" :selected-el-idx="selectedElIdx"
+        :selected-els="selectedEls" :editing-el-idx="editingElIdx" :zoom="zoom" :show-grid="showGrid"
+        :snap-to-grid="snapToGrid" :show-rulers="showRulers" :grid-size="gridSize" :is-dragging-el="isDraggingEl"
+        :rubber-band="rubberBand" :drop-target-page="dropTargetPage" :measure-mode="measureMode" :is-dark="isDark"
+        :page-count="report.content.length" :style-painter-active="stylePainterActive"
+        @select-element="selectElementByIdx" @deselect-all="deselectAll" @add-element="addElementAtPosition"
+        @select-page="goToPage" @add-page="addPage" @start-editing="startEditing" @stop-editing="editingElIdx = null"
+        @update-text-content="updateTextContent" @element-mouse-down="onElementMouseDown" @resize-start="startResize"
+        @rotate-start="startRotate" @canvas-drop="onCanvasDrop" @canvas-drag-end="isDraggingEl = false"
+        @rubber-band-start="startRubberBand" @rubber-band-move="handleRubberBandMove" @rubber-band-end="endRubberBand"
+        @zoom-wheel="handleZoomWheel" @page-dblclick="onPageDblClick" @context-menu="showElContextMenu"
+        @image-upload="triggerImageUpload" @image-replace="triggerImageReplace" @go-to-page="goToPage"
+        @mark-dirty="markDirty" @zoom-reset="zoom = 100" @element-cross-page="moveElementToPage"
+        @scroll-to-page="scrollToPage" @style-painter-apply="applyStylePainter" @duplicate-page="duplicatePage"
+        @delete-page="deletePage" />
 
       <!-- RIGHT SIDEBAR -->
-      <RightSidebar
-        :selected-el="selectedEl"
-        :selected-els-count="selectedEls.length"
-        :settings="settings"
-        :active-section="activeRightSection"
-        :current-page-elements="currentPageElements"
-        :clipboard="clipboard"
-        :style-painter-clipboard="stylePainterClipboard"
-        :is-collapsed="rightCollapsed"
-        :is-dark="isDark"
-        :current-page="currentPage"
-        :total-pages="report.content.length"
-        @update:style="applyStyle"
-        @update:content="updateElementContent"
-        @delete-el="deleteSelected"
-        @duplicate-el="duplicateSelected"
-        @copy-el="copyElement"
-        @paste-el="pasteElement"
-        @lock-el="lockElement"
-        @bring-front="bringToFront"
-        @send-back="sendToBack"
-        @align-to-page="alignToPage"
-        @update:settings="onSettingsUpdate"
-        @update:active-section="activeRightSection = $event"
-        @add-table-row="addTableRow"
-        @add-table-col="addTableColumn"
-        @remove-table-row="removeTableRow"
-        @remove-table-col="removeTableColumn"
-        @set-chart-labels="setChartLabels"
-        @set-chart-values="setChartValues"
-        @add-timeline-item="addTimelineItem"
-        @remove-timeline-item="removeTimelineItem"
-        @add-checklist-item="addChecklistItem"
-        @remove-checklist-item="removeChecklistItem"
-        @add-stat-item="addStatItem"
-        @remove-stat-item="removeStatItem"
-        @reset-styles="resetElementStyles"
-        @style-painter-copy="stylePainterCopy"
-        @style-painter-paste="stylePainterPaste"
-        @style-painter-activate="stylePainterActive = !stylePainterActive"
-        @mark-dirty="markDirty"
-        @image-replace="triggerImageReplace"
-        @refresh-toc="refreshTOC"
-        @update:is-collapsed="rightCollapsed = $event"
-        @update-el-prop="updateElProp"
-        @update-position="updatePosition"
-        @move-element-to-page="moveElementToPage"
-      />
+      <RightSidebar :selected-el="selectedEl" :selected-els-count="selectedEls.length" :settings="settings"
+        :active-section="activeRightSection" :current-page-elements="currentPageElements" :clipboard="clipboard"
+        :style-painter-clipboard="stylePainterClipboard" :is-collapsed="rightCollapsed" :is-dark="isDark"
+        :current-page="currentPage" :total-pages="report.content.length" @update:style="applyStyle"
+        @update:content="updateElementContent" @delete-el="deleteSelected" @duplicate-el="duplicateSelected"
+        @copy-el="copyElement" @paste-el="pasteElement" @lock-el="lockElement" @bring-front="bringToFront"
+        @send-back="sendToBack" @align-to-page="alignToPage" @update:settings="onSettingsUpdate"
+        @update:active-section="activeRightSection = $event" @add-table-row="addTableRow"
+        @add-table-col="addTableColumn" @remove-table-row="removeTableRow" @remove-table-col="removeTableColumn"
+        @set-chart-labels="setChartLabels" @set-chart-values="setChartValues" @add-timeline-item="addTimelineItem"
+        @remove-timeline-item="removeTimelineItem" @add-checklist-item="addChecklistItem"
+        @remove-checklist-item="removeChecklistItem" @add-stat-item="addStatItem" @remove-stat-item="removeStatItem"
+        @reset-styles="resetElementStyles" @style-painter-copy="stylePainterCopy"
+        @style-painter-paste="stylePainterPaste" @style-painter-activate="stylePainterActive = !stylePainterActive"
+        @mark-dirty="markDirty" @image-replace="triggerImageReplace" @refresh-toc="refreshTOC"
+        @update:is-collapsed="rightCollapsed = $event" @update-el-prop="updateElProp" @update-position="updatePosition"
+        @move-element-to-page="moveElementToPage" />
     </div>
 
     <!-- STATUS BAR -->
-    <StatusBar
-      :current-page="currentPage"
-      :total-pages="report.content.length"
-      :elements-count="currentPageElements.length"
-      :selected-el="selectedEl"
-      :selected-count="selectedEls.length"
-      :zoom="zoom"
-      :is-dirty="isDirty"
-      :is-saving="isSaving"
-      :last-saved="lastSaved"
-      :page-size="settings.page_size"
-      :orientation="settings.orientation"
-      :words-count="wordsCount"
-      :cursor-pos="cursorPos"
-      :is-dark="isDark"
-      :grid-size="gridSize"
-      :snap-to-grid="snapToGrid"
-      :measure-mode="measureMode"
-      @zoom-reset="zoom = 100"
-      @zoom-to="zoom = $event"
-      @toggle-snap="snapToGrid = !snapToGrid"
-      @toggle-measure="measureMode = !measureMode"
-      @update-grid-size="gridSize = $event"
-    />
+    <StatusBar :current-page="currentPage" :total-pages="report.content.length"
+      :elements-count="currentPageElements.length" :selected-el="selectedEl" :selected-count="selectedEls.length"
+      :zoom="zoom" :is-dirty="isDirty" :is-saving="isSaving" :last-saved="lastSaved" :page-size="settings.page_size"
+      :orientation="settings.orientation" :words-count="wordsCount" :cursor-pos="cursorPos" :is-dark="isDark"
+      :grid-size="gridSize" :snap-to-grid="snapToGrid" :measure-mode="measureMode" @zoom-reset="zoom = 100"
+      @zoom-to="zoom = $event" @toggle-snap="snapToGrid = !snapToGrid" @toggle-measure="measureMode = !measureMode"
+      @update-grid-size="gridSize = $event" />
 
     <!-- OVERLAYS -->
-    <AiPanel
-      v-if="showAI"
-      :visible="showAI"
-      :report="report"
-      :is-dark="isDark"
-      :selected-element="selectedEl"
-      @close="showAI = false"
-      @insert-content="insertAiContent"
-      @insert-chart="insertAiChart"
-    />
+    <AiPanel v-if="showAI" :visible="showAI" :report="report" :is-dark="isDark" :selected-element="selectedEl"
+      @close="showAI = false" @insert-content="insertAiContent" @insert-chart="insertAiChart" />
 
-    <CommandPalette
-      v-if="showCommandPalette"
-      :is-dark="isDark"
-      @close="showCommandPalette = false"
-      @execute="executeCommand"
-    />
+    <CommandPalette v-if="showCommandPalette" :is-dark="isDark" @close="showCommandPalette = false"
+      @execute="executeCommand" />
 
     <ShortcutOverlay v-if="showShortcuts" @close="showShortcuts = false" />
     <OnboardingTour v-if="showOnboarding" @complete="completeOnboarding" />
 
-    <ContextMenu
-      :show="contextMenu.show"
-      :x="contextMenu.x"
-      :y="contextMenu.y"
-      :items="contextMenu.items"
-      :is-dark="isDark"
-      @close="contextMenu.show = false"
-    />
+    <ContextMenu :show="contextMenu.show" :x="contextMenu.x" :y="contextMenu.y" :items="contextMenu.items"
+      :is-dark="isDark" @close="contextMenu.show = false" />
 
     <ConfettiOverlay v-if="showConfetti" @complete="showConfetti = false" />
     <ToastContainer :toasts="toasts" @remove="removeToast" />
@@ -272,20 +107,25 @@
           </div>
           <div class="fr-body">
             <div class="fr-row">
-              <input v-model="findText" class="fr-input" placeholder="Find..." @input="findInReport" @keydown.enter="replaceOne" />
+              <input v-model="findText" class="fr-input" placeholder="Find..." @input="findInReport"
+                @keydown.enter="replaceOne" />
             </div>
             <div class="fr-row">
               <input v-model="replaceText" class="fr-input" placeholder="Replace with..." @keydown.enter="replaceAll" />
             </div>
-            <div v-if="findMatches.length" class="fr-count">{{ findCurrentIdx + 1 }} / {{ findMatches.length }} matches</div>
+            <div v-if="findMatches.length" class="fr-count">{{ findCurrentIdx + 1 }} / {{ findMatches.length }} matches
+            </div>
             <div class="fr-actions">
-              <button @click="navigateMatch(-1)" class="fr-btn secondary" :disabled="!findMatches.length"><i class="fa-solid fa-chevron-up"></i></button>
-              <button @click="navigateMatch(1)" class="fr-btn secondary" :disabled="!findMatches.length"><i class="fa-solid fa-chevron-down"></i></button>
+              <button @click="navigateMatch(-1)" class="fr-btn secondary" :disabled="!findMatches.length"><i
+                  class="fa-solid fa-chevron-up"></i></button>
+              <button @click="navigateMatch(1)" class="fr-btn secondary" :disabled="!findMatches.length"><i
+                  class="fa-solid fa-chevron-down"></i></button>
               <button @click="replaceOne" class="fr-btn secondary" :disabled="!findMatches.length">Replace</button>
               <button @click="replaceAll" class="fr-btn">Replace All</button>
             </div>
             <div class="fr-results">
-              <div v-for="(m, i) in findMatches.slice(0, 10)" :key="i" class="fr-match" :class="{ active: i === findCurrentIdx }" @click="goToMatch(m, i)">
+              <div v-for="(m, i) in findMatches.slice(0, 10)" :key="i" class="fr-match"
+                :class="{ active: i === findCurrentIdx }" @click="goToMatch(m, i)">
                 <span class="fr-match-page">P{{ m.pi + 1 }}</span>
                 <span class="fr-match-preview">{{ m.preview }}</span>
               </div>
@@ -299,12 +139,15 @@
     <Teleport to="body">
       <div v-if="presentationMode" class="pres-overlay" @click.self="nextSlide">
         <div class="pres-page" v-if="report.content[presentationPage]" :style="getPresPageStyle()">
-          <div v-for="el in getSortedElements(report.content[presentationPage]?.elements || [])" :key="el.id" :style="getPresElStyle(el)" v-html="getPresElContent(el)"></div>
+          <div v-for="el in getSortedElements(report.content[presentationPage]?.elements || [])" :key="el.id"
+            :style="getPresElStyle(el)" v-html="getPresElContent(el)"></div>
         </div>
         <div class="pres-controls" @click.stop>
-          <button @click.stop="prevSlide" :disabled="presentationPage === 0"><i class="fa-solid fa-chevron-left"></i></button>
+          <button @click.stop="prevSlide" :disabled="presentationPage === 0"><i
+              class="fa-solid fa-chevron-left"></i></button>
           <span>{{ presentationPage + 1 }} / {{ report.content.length }}</span>
-          <button @click.stop="nextSlide" :disabled="presentationPage >= report.content.length - 1"><i class="fa-solid fa-chevron-right"></i></button>
+          <button @click.stop="nextSlide" :disabled="presentationPage >= report.content.length - 1"><i
+              class="fa-solid fa-chevron-right"></i></button>
           <span class="pres-sep">|</span>
           <button @click.stop="presentationMode = false"><i class="fa-solid fa-xmark"></i> Exit</button>
         </div>
@@ -513,7 +356,7 @@ async function saveNow() {
       // Local draft backup
       try {
         localStorage.setItem(`rg_draft_${report.slug}`, JSON.stringify({ ...payload, savedAt: Date.now() }))
-      } catch (_) {}
+      } catch (_) { }
     }
   } catch (e) {
     showToast('Auto-save failed', 'error')
@@ -1243,7 +1086,7 @@ function endRubberBand(e) {
   const sel = []
   currentPageElements.value.forEach((el, i) => {
     if (el.position.x < bx + bw && el.position.x + el.styles.width > bx &&
-        el.position.y < by + bh && el.position.y + el.styles.height > by) sel.push(i)
+      el.position.y < by + bh && el.position.y + el.styles.height > by) sel.push(i)
   })
   if (sel.length) { selectedEls.value = sel; selectedElIdx.value = sel[0] }
 }
@@ -1590,7 +1433,7 @@ onMounted(() => {
       }
       localStorage.removeItem(`rg_draft_${report.slug}`)
     }
-  } catch (_) {}
+  } catch (_) { }
 
   autoSaveInterval = setInterval(() => { if (isDirty.value) saveNow() }, 30000)
   document.addEventListener('fullscreenchange', () => { isFullscreen.value = !!document.fullscreenElement })
@@ -1643,25 +1486,33 @@ window.showToast = showToast
   --text-muted: #94a3b8;
   --accent: #6366f1;
   --accent-hover: #4f46e5;
-  --accent-light: rgba(99,102,241,0.08);
-  --accent-soft: rgba(99,102,241,0.15);
+  --accent-light: rgba(99, 102, 241, 0.08);
+  --accent-soft: rgba(99, 102, 241, 0.15);
   --danger: #ef4444;
-  --danger-light: rgba(239,68,68,0.08);
+  --danger-light: rgba(239, 68, 68, 0.08);
   --success: #10b981;
   --warning: #f59e0b;
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
-  --shadow-xl: 0 12px 40px rgba(0,0,0,0.16);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.16);
 
-  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
   font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-  background: var(--bg); color: var(--text-primary); font-size: 13px;
-  line-height: 1.5; outline: none;
-  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  outline: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   /* Isolate from parent page styles */
-  isolation: isolate; contain: layout style;
+  isolation: isolate;
+  contain: layout style;
 }
 
 /* Dark theme applied via data attribute, NOT class on html */
@@ -1679,91 +1530,293 @@ window.showToast = showToast
   --text-muted: #64748b;
   --accent: #818cf8;
   --accent-hover: #6366f1;
-  --accent-light: rgba(129,140,248,0.1);
-  --accent-soft: rgba(129,140,248,0.18);
+  --accent-light: rgba(129, 140, 248, 0.1);
+  --accent-soft: rgba(129, 140, 248, 0.18);
   --danger: #f87171;
-  --danger-light: rgba(248,113,113,0.1);
+  --danger-light: rgba(248, 113, 113, 0.1);
   --success: #34d399;
   --warning: #fbbf24;
-  --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
-  --shadow-xl: 0 12px 40px rgba(0,0,0,0.6);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 
-.editor-shell.is-fullscreen { position: fixed; inset: 0; z-index: 9999; }
+.editor-shell.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
 
 /* Reset within editor */
-.editor-shell *, .editor-shell *::before, .editor-shell *::after { box-sizing: border-box; margin: 0; padding: 0; }
-.editor-shell input, .editor-shell select, .editor-shell textarea, .editor-shell button { font-family: inherit; font-size: inherit; }
-.editor-shell .hidden { display: none !important; }
+.editor-shell *,
+.editor-shell *::before,
+.editor-shell *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-.editor-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+.editor-shell input,
+.editor-shell select,
+.editor-shell textarea,
+.editor-shell button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.editor-shell .hidden {
+  display: none !important;
+}
+
+.editor-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
 
 /* Scrollbar */
-.editor-shell ::-webkit-scrollbar { width: 5px; height: 5px; }
-.editor-shell ::-webkit-scrollbar-track { background: transparent; }
-.editor-shell ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-.editor-shell ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
-.editor-shell ::selection { background: var(--accent); color: #fff; }
-.editor-shell *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.editor-shell ::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.editor-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-shell ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+}
+
+.editor-shell ::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.editor-shell ::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+.editor-shell *:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Find & Replace Panel */
 .fr-panel {
-  position: fixed; right: 20px; top: 80px; width: 340px; max-height: 480px;
-  background: var(--bg-panel); border: 1px solid var(--border);
-  border-radius: 14px; box-shadow: var(--shadow-xl); z-index: 500; display: flex; flex-direction: column;
+  position: fixed;
+  right: 20px;
+  top: 80px;
+  width: 340px;
+  max-height: 480px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xl);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
 }
-.fr-panel.dark { --bg-panel: #1a2236; --border: #263348; --text-primary: #e2e8f0; --bg-secondary: #111827; }
+
+.fr-panel.dark {
+  --bg-panel: #1a2236;
+  --border: #263348;
+  --text-primary: #e2e8f0;
+  --bg-secondary: #111827;
+}
+
 .fr-header {
-  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
-  border-bottom: 1px solid var(--border); font-weight: 700; font-size: 12px; color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
 }
-.fr-header i { color: var(--accent); }
-.fr-header button { margin-left: auto; background: transparent; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; }
-.fr-body { padding: 10px; overflow-y: auto; }
-.fr-row { margin-bottom: 6px; }
+
+.fr-header i {
+  color: var(--accent);
+}
+
+.fr-header button {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.fr-body {
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.fr-row {
+  margin-bottom: 6px;
+}
+
 .fr-input {
-  width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 7px;
-  background: var(--bg-secondary); color: var(--text-primary); font-size: 12px; outline: none;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
 }
-.fr-input:focus { border-color: var(--accent); }
-.fr-count { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
-.fr-actions { display: flex; gap: 4px; margin-bottom: 8px; }
+
+.fr-input:focus {
+  border-color: var(--accent);
+}
+
+.fr-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.fr-actions {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
 .fr-btn {
-  flex: 1; padding: 6px 10px; border: none; background: var(--accent); color: #fff;
-  border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; font-family: inherit;
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
 }
-.fr-btn.secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); }
-.fr-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.fr-results { max-height: 200px; overflow-y: auto; }
-.fr-match { padding: 6px 8px; font-size: 11px; color: var(--text-secondary); cursor: pointer; border-radius: 4px; display: flex; gap: 6px; }
-.fr-match:hover, .fr-match.active { background: var(--accent-light); color: var(--accent); }
-.fr-match-page { font-weight: 700; color: var(--accent); flex-shrink: 0; }
+
+.fr-btn.secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.fr-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fr-results {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.fr-match {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  gap: 6px;
+}
+
+.fr-match:hover,
+.fr-match.active {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.fr-match-page {
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
 
 /* Presentation */
 .pres-overlay {
-  position: fixed; inset: 0; background: #000; z-index: 9999;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
 }
-.pres-page { box-shadow: 0 20px 60px rgba(0,0,0,0.5); transition: none; }
+
+.pres-page {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transition: none;
+}
+
 .pres-controls {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(255,255,255,0.12); backdrop-filter: blur(12px);
-  padding: 10px 20px; border-radius: 99px; color: #fff;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  padding: 10px 20px;
+  border-radius: 99px;
+  color: #fff;
 }
+
 .pres-controls button {
-  width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: rgba(255,255,255,0.15); color: #fff; cursor: pointer; font-size: 14px;
-  display: flex; align-items: center; justify-content: center; transition: background 0.15s;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
 }
-.pres-controls button:hover { background: rgba(255,255,255,0.25); }
-.pres-controls button:disabled { opacity: 0.3; }
-.pres-sep { opacity: 0.3; }
+
+.pres-controls button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.pres-controls button:disabled {
+  opacity: 0.3;
+}
+
+.pres-sep {
+  opacity: 0.3;
+}
 
 /* Animations */
-.slide-up-enter-active { animation: slideUp 0.25s ease; }
-.slide-up-leave-active { animation: slideUp 0.2s ease reverse; }
-@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.slide-up-enter-active {
+  animation: slideUp 0.25s ease;
+}
+
+.slide-up-leave-active {
+  animation: slideUp 0.2s ease reverse;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>

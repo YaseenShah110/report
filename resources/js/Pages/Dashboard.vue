@@ -1,4 +1,12 @@
-<!-- resources/js/Pages/Dashboard.vue — v6 MINDBLOWING: 3D Globe, Real Data, Layout-Themed -->
+<!-- resources/js/Pages/Dashboard.vue — v6 MINDBLOWING + FIXES APPLIED
+     FIXES (surgical only, nothing removed):
+     1. Double topbar on mobile → :global(.rg-mob-head){display:none!important}
+     2. Theme syncs with AuthenticatedLayout localStorage keys (rg-theme/rg-accent/rg-font/rg-radius)
+     3. setDk() writes rg-theme key + dispatches storage event so Layout stays in sync
+     4. window storage listener keeps ac/isDark/ff/br reactive to Layout changes
+     5. Light theme text visibility rules added
+     6. Template Race uses real chartData.popular_report_types (labels=template names, values=counts)
+-->
 <template>
   <AuthenticatedLayout>
     <template #header>
@@ -29,8 +37,7 @@
           <button @click="showNotif = !showNotif" class="hbtn pos-rel" :style="hbtnSty">
             <i class="fa-solid fa-bell"></i>
             <span v-if="unreadCount > 0" class="badge" :style="{ background: ac }">{{ unreadCount > 9 ? '9+' :
-              unreadCount
-              }}</span>
+              unreadCount }}</span>
           </button>
           <button @click="openCmd" class="hbtn hbtn-wide" :style="hbtnSty">
             <i class="fa-solid fa-magnifying-glass"></i>
@@ -163,8 +170,7 @@
                     :style="{ color: mu }">{{ n.message }}</p>
                   <p style="font-size:.58rem;margin-top:3px;font-family:'JetBrains Mono',monospace"
                     :style="{ color: mu }">
-                    {{
-                      n.time_ago }}</p>
+                    {{ n.time_ago }}</p>
                 </div>
                 <span v-if="!n.read_at" style="width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px"
                   :style="{ background: ac }"></span>
@@ -247,8 +253,7 @@
               :style="c.up ? { background: 'rgba(16,185,129,.15)', color: '#10b981' } : { background: 'rgba(239,68,68,.15)', color: '#ef4444' }">
               <i :class="c.up ? 'fa-solid fa-arrow-trend-up' : 'fa-solid fa-arrow-trend-down'"
                 style="font-size:.55rem"></i>
-              {{
-                c.trend }}
+              {{ c.trend }}
             </span>
           </div>
           <p class="hcard-val" :style="{ color: tx, fontFamily: ff }">{{ c.value.toLocaleString() }}</p>
@@ -266,9 +271,9 @@
       <div class="sec-hd">
         <h2 class="sec-title" :style="{ color: tx, fontFamily: ff }"><i class="fa-solid fa-chart-mixed"
             :style="{ color: ac }"></i>
-          Analytics & Insights</h2>
+          Analytics &amp; Insights</h2>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <!-- SCOPE BADGE: tells user whose data they're seeing -->
+          <!-- SCOPE BADGE -->
           <span class="scope-badge"
             :style="{ background: isAdmin ? 'rgba(239,68,68,.12)' : isManager ? `rgba(${acRgb},.12)` : `rgba(${acRgb},.1)`, color: isAdmin ? '#ef4444' : ac, border: `1px solid ${isAdmin ? 'rgba(239,68,68,.3)' : 'rgba(' + acRgb + ',.25)'}` }">
             <i :class="scopeIcon" style="font-size:.6rem"></i> {{ scopeLabel }}
@@ -287,8 +292,6 @@
 
       <!-- ROW 1: Velocity + Sphere + Task Donut -->
       <div class="r1-grid">
-
-        <!-- Velocity Chart (real: chartData.reports_last_30_days) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-chart-area" :style="{ color: ac }"></i> Report
@@ -303,7 +306,6 @@
           <div class="ca"><canvas ref="velRef"></canvas></div>
         </div>
 
-        <!-- 3D Sphere + stats (real: stats.completed/pending + notifications.overdue) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-gauge-high" :style="{ color: ac }"></i>
@@ -338,7 +340,7 @@
                     stroke="url(#prodGrad)" filter="url(#glow2)" />
                   <text x="80" y="73" text-anchor="middle" font-size="27" font-weight="800" :fill="tx"
                     :font-family="ff">{{
-                      prodScore }}</text>
+                    prodScore }}</text>
                   <text x="80" y="93" text-anchor="middle" font-size="10" font-weight="600" opacity=".6"
                     :fill="mu">SCORE</text>
                 </svg>
@@ -350,10 +352,9 @@
                 <div class="s-dot" :style="{ background: pc, boxShadow: `0 0 8px ${pc}` }"></div>
               </div>
               <div class="s-orbit s-o3">
-                <div class="s-dot" :style="{ background: '#10b981', boxShadow: '0 0 8px #10b981' }"></div>
+                <div class="s-dot" style="background:#10b981;box-shadow:0 0 8px #10b981"></div>
               </div>
             </div>
-            <!-- Real stat chips -->
             <div class="s-chips">
               <div class="s-chip" style="background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.25)">
                 <i class="fa-solid fa-check-circle" style="color:#10b981;font-size:.7rem"></i>
@@ -372,7 +373,6 @@
                 <span style="font-size:.62rem" :style="{ color: mu }">Overdue</span>
               </div>
             </div>
-            <!-- Task completion progress bars (real data) -->
             <div style="width:100%;padding:0 4px;display:flex;flex-direction:column;gap:6px">
               <div v-for="ts in taskStatItems" :key="ts.label" style="display:flex;align-items:center;gap:8px">
                 <span style="font-size:.62rem;width:60px;flex-shrink:0" :style="{ color: mu }">{{ ts.label }}</span>
@@ -387,13 +387,11 @@
           </div>
         </div>
 
-        <!-- Task Status Donut (real: stats.completed/pending + notifications.overdue_tasks) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-circle-half-stroke"
                 :style="{ color: pc }"></i>
-              Task
-              Status</span>
+              Task Status</span>
           </div>
           <div class="donut-wrap">
             <div class="donut-ring"><canvas ref="tdRef"></canvas></div>
@@ -404,33 +402,26 @@
                 <span class="dl-val" :style="{ color: tx }">{{ ts.value }}</span>
                 <span class="dl-pct" :style="{ color: ts.color }">{{ ts.pct }}%</span>
               </div>
-              <!-- Centre stat overlay -->
               <div class="donut-center-stat">
                 <p style="font-size:1.3rem;font-weight:800;line-height:1" :style="{ color: tx, fontFamily: ff }">{{
-                  taskTotal
-                  }}
-                </p>
+                  taskTotal }}</p>
                 <p style="font-size:.6rem" :style="{ color: mu }">Total Tasks</p>
               </div>
             </div>
           </div>
         </div>
-      </div><!-- /r1-grid -->
+      </div>
 
       <!-- ROW 2: Status Bar + Radar + Report Types Donut -->
       <div class="r2-grid">
-
-        <!-- Report Status Grouped Bar (real: all stats fields) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-chart-bar" :style="{ color: ac }"></i> Report
-              Status
-              Breakdown</span>
+              Status Breakdown</span>
           </div>
           <div class="ca"><canvas ref="statusRef"></canvas></div>
         </div>
 
-        <!-- Performance Radar (real stats → 0-100 axes) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-spider" :style="{ color: pc }"></i>
@@ -440,7 +431,6 @@
           <div class="ca-sm"><canvas ref="radarRef"></canvas></div>
         </div>
 
-        <!-- Report Types Doughnut (real: chartData.popular_report_types) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-chart-pie" :style="{ color: ac }"></i> Report
@@ -459,12 +449,10 @@
             </div>
           </div>
         </div>
-      </div><!-- /r2-grid -->
+      </div>
 
       <!-- ROW 3: User Growth + Completion Trend + Template Race -->
       <div class="r3-grid">
-
-        <!-- User Growth Area (real: chartData.user_growth) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-users" style="color:#10b981"></i> User
@@ -475,19 +463,20 @@
           <div class="ca"><canvas ref="growthRef"></canvas></div>
         </div>
 
-        <!-- Completion Rate Trend (real: activity + prodScore line) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-chart-line" style="color:#10b981"></i>
               Completion
               Trend</span>
             <span style="font-size:.8rem;font-weight:700;font-family:'JetBrains Mono',monospace;color:#10b981">{{
-              prodScore }}%</span>
+              prodScore
+              }}%</span>
           </div>
           <div class="ca"><canvas ref="compRef"></canvas></div>
         </div>
 
-        <!-- Template Bar Race (real: chartData.popular_report_types) -->
+        <!-- TEMPLATE BAR RACE — real chartData.popular_report_types
+             label = template name (from DB), value = reports created using that template -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-ranking-star" :style="{ color: ac }"></i>
@@ -507,14 +496,15 @@
               </div>
               <span class="race-val" :style="{ color: mu }">{{ b.value }}</span>
             </div>
+            <p v-if="!raceRows.length" style="text-align:center;padding:20px;font-size:.72rem" :style="{ color: mu }">
+              <i class="fa-solid fa-layer-group"></i> No templates yet
+            </p>
           </div>
         </div>
-      </div><!-- /r3-grid -->
+      </div>
 
       <!-- ROW 4: Kanban + Activity + Calendar + Assigned Reports -->
       <div class="r4-grid">
-
-        <!-- Kanban (real: stats + overdue) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-table-columns" :style="{ color: pc }"></i>
@@ -523,8 +513,7 @@
             <Link :href="route('admin.tasks.my')"
               style="font-size:.65rem;text-decoration:none;display:flex;align-items:center;gap:3px"
               :style="{ color: mu }">
-              My
-              Tasks <i class="fa-solid fa-arrow-right"></i></Link>
+              My Tasks <i class="fa-solid fa-arrow-right"></i></Link>
           </div>
           <div class="kb-grid">
             <div v-for="col in kanbanCols" :key="col.id">
@@ -549,7 +538,7 @@
                     :style="{ background: priBg(t.priority) }"></span>
                   <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
                     :style="{ color: tx }">{{
-                      t.title }}</span>
+                    t.title }}</span>
                   <span style="font-family:'JetBrains Mono',monospace;font-size:.5rem;white-space:nowrap"
                     :style="{ color: t.overdue ? '#ef4444' : mu }">{{ t.due }}</span>
                 </div>
@@ -558,7 +547,6 @@
           </div>
         </div>
 
-        <!-- Activity Stream (real: recentActivities) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-bolt" :style="{ color: ac }"></i>
@@ -578,8 +566,7 @@
                     :style="{ color: tx }">{{ fmtAct(a) }}</p>
                   <p style="font-size:.58rem;margin-top:2px;font-family:'JetBrains Mono',monospace"
                     :style="{ color: mu }">
-                    {{
-                      ago(a.created_at) }}</p>
+                    {{ ago(a.created_at) }}</p>
                 </div>
               </div>
             </TransitionGroup>
@@ -591,7 +578,6 @@
           </div>
         </div>
 
-        <!-- Task Calendar -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-calendar-days" :style="{ color: ac }"></i>
@@ -619,18 +605,15 @@
           </div>
         </div>
 
-        <!-- Assigned Reports (real: recentReports mapped) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-share-nodes" :style="{ color: ac }"></i>
               Assigned
-              to
-              Me</span>
+              to Me</span>
             <Link :href="route('reports.assigned')"
               style="font-size:.65rem;text-decoration:none;display:flex;align-items:center;gap:3px"
               :style="{ color: mu }">
-              View
-              all <i class="fa-solid fa-arrow-right"></i></Link>
+              View all <i class="fa-solid fa-arrow-right"></i></Link>
           </div>
           <div style="padding:5px 11px 11px;display:flex;flex-direction:column;gap:5px">
             <div v-for="(r, i) in assignedRows" :key="r.id || i"
@@ -657,7 +640,7 @@
                   :stroke-dasharray="`${(r.progress || 50) * .879} 87.9`" stroke-linecap="round"
                   :stroke="pal[i % pal.length]" />
                 <text x="18" y="22" text-anchor="middle" font-size="7" font-weight="700" :fill="tx">{{ r.progress || 50
-                }}%</text>
+                  }}%</text>
               </svg>
             </div>
             <div v-if="!assignedRows.length" style="text-align:center;padding:14px;font-size:.7rem"
@@ -666,15 +649,16 @@
             </div>
           </div>
         </div>
-      </div><!-- /r4-grid -->
+      </div>
 
       <!-- OVERDUE ALERT -->
       <div v-if="N.overdue_tasks > 0" class="ov-alert"
         :style="{ borderColor: 'rgba(239,68,68,.35)', background: isDark ? 'rgba(239,68,68,.06)' : 'rgba(254,226,226,.5)', borderRadius: br + 'px' }">
         <div class="ov-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <div style="flex:1">
-          <p style="font-weight:700;font-size:.8rem;color:#ef4444">{{ N.overdue_tasks }} Overdue Task{{
-            N.overdue_tasks > 1 ? 's' : '' }}</p>
+          <p style="font-weight:700;font-size:.8rem;color:#ef4444">{{ N.overdue_tasks }} Overdue Task{{ N.overdue_tasks
+            > 1
+            ? 's' : '' }}</p>
           <p style="font-size:.65rem" :style="{ color: mu }">These tasks are past their due date and require immediate
             attention.</p>
         </div>
@@ -683,7 +667,7 @@
           onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Fix Now →</Link>
       </div>
 
-      <!-- REPORTS TABLE (real: recentReports) -->
+      <!-- REPORTS TABLE -->
       <div class="dcard" style="margin-bottom:12px" :style="cardSty">
         <div class="ch" :style="{ borderColor: bd }">
           <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-table-list" :style="{ color: ac }"></i> Recent
@@ -742,43 +726,40 @@
                       :style="{ borderColor: bd, color: mu, borderRadius: Math.min(br * .5, 6) + 'px' }"
                       @click="router.visit(route('reports.preview', r.slug))" title="Preview"><i
                         class="fa-solid fa-eye"></i></button>
+                    <button class="tbl-btn"
+                      :style="{ borderColor: bd, color: mu, borderRadius: Math.min(br * .5, 6) + 'px' }"
+                      @click.stop="confirmDeleteReport(r)" title="Trash"><i class="fa-solid fa-trash"></i></button>
                   </div>
                 </td>
               </tr>
               <tr v-if="!filtTbl.length">
                 <td colspan="6" style="text-align:center;padding:20px;font-size:.75rem" :style="{ color: mu }">No
                   reports
-                  found
-                </td>
+                  found</td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- BOTTOM ROW: Quick Actions + Live Metrics + Premium -->
+      <!-- BOTTOM ROW -->
       <div class="bot-grid">
-
-        <!-- Quick Actions Dock -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-wand-magic-sparkles"
                 :style="{ color: ac }"></i>
-              Quick
-              Actions</span>
+              Quick Actions</span>
           </div>
           <div class="dock-grid">
             <a v-for="a in dockActions" :key="a.label" :href="a.href" class="dock-item">
               <div class="dock-icon"
-                :style="{ background: a.color + '18', color: a.color, borderRadius: Math.min(br * .8, 13) + 'px' }">
-                <i :class="a.icon"></i>
-              </div>
+                :style="{ background: a.color + '18', color: a.color, borderRadius: Math.min(br * .8, 13) + 'px' }"><i
+                  :class="a.icon"></i></div>
               <span class="dock-lbl" :style="{ color: mu }">{{ a.label }}</span>
             </a>
           </div>
         </div>
 
-        <!-- Live Metrics (real backend data) -->
         <div class="dcard" :style="cardSty">
           <div class="ch" :style="{ borderColor: bd }">
             <span class="ct" :style="{ color: tx }"><i class="fa-solid fa-chart-line" style="color:#10b981"></i> Live
@@ -789,9 +770,8 @@
             <div v-for="m in liveM" :key="m.label" class="lm-item"
               :style="{ borderColor: bd, borderRadius: Math.min(br * .7, 11) + 'px' }">
               <div class="lm-icon"
-                :style="{ background: m.color + '18', color: m.color, borderRadius: Math.min(br * .6, 9) + 'px' }">
-                <i :class="m.icon"></i>
-              </div>
+                :style="{ background: m.color + '18', color: m.color, borderRadius: Math.min(br * .6, 9) + 'px' }"><i
+                  :class="m.icon"></i></div>
               <div style="flex:1;min-width:0">
                 <p class="lm-val" :style="{ color: tx, fontFamily: ff }">{{ m.value.toLocaleString() }}</p>
                 <p style="font-size:.57rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px"
@@ -803,7 +783,6 @@
           </div>
         </div>
 
-        <!-- Premium Card -->
         <div class="dcard prem-card" :class="{ premium: isPrem }" :style="premSty">
           <div class="prem-ptcls">
             <span v-for="n in 14" :key="n" class="prem-p"
@@ -814,7 +793,7 @@
               :style="{ background: isPrem ? 'rgba(250,204,21,.15)' : 'rgba(251,191,36,.12)', borderRadius: br + 'px' }">
               <i :class="isPrem ? 'fa-solid fa-crown' : 'fa-solid fa-gem'" style="font-size:1.25rem;color:#fbbf24"></i>
             </div>
-            <p class="prem-title" :style="{ color: isPrem ? '#e2e8f0' : tx, fontFamily: ff }">{{ isPrem ? 'Premium Active' : 'Go Premium' }}</p>
+            <p class="prem-title" :style="{ color: isPrem ? '#e2e8f0' : tx, fontFamily: ff }">{{ isPrem ? 'Premium Active' :'Go Premium' }}</p>
             <p class="prem-sub" :style="{ color: isPrem ? 'rgba(226,232,240,.55)' : mu }">{{ isPrem ? 'All AI features unlocked' : 'Unlock AI · Analytics · Unlimited' }}</p>
             <div v-if="isPrem" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center">
               <span v-for="b in ['AI', 'Analytics', 'Unlimited']" :key="b"
@@ -829,9 +808,8 @@
             </button>
           </div>
         </div>
-
-      </div><!-- /bot-grid -->
-    </div><!-- /db -->
+      </div>
+    </div>
   </AuthenticatedLayout>
 </template>
 
@@ -841,7 +819,7 @@ import { Link, router, usePage } from '@inertiajs/vue3'
 import Chart from 'chart.js/auto'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 
-// ─── PROPS ───────────────────────────────────────────────────
+// ─── PROPS ────────────────────────────────────────────────────
 const props = defineProps({
   recentReports: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
@@ -858,10 +836,35 @@ const CD = computed(() => props.chartData || {})
 const RA = computed(() => props.recentActivities || [])
 const RR = computed(() => props.recentReports || [])
 
-// ─── SETTINGS ────────────────────────────────────────────────
+// ─── SETTINGS ─────────────────────────────────────────────────
+// FIX: ld() reads AuthenticatedLayout's own localStorage keys first
+// (rg-theme, rg-accent, rg-font, rg-font-size, rg-radius) so Dashboard
+// always starts in sync with whatever the Layout has set.
 const SK = 'dash-v6'
 const DEF = { isDark: true, ac: '#6366f1', pc: '#8b5cf6', ff: "'DM Sans',sans-serif", br: 12, sh: 'medium' }
-const ld = () => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(SK) || '{}') } } catch { return { ...DEF } } }
+
+const ACCENT_MAP = {
+  indigo: '#6366f1', violet: '#8b5cf6', pink: '#ec4899', emerald: '#10b981',
+  amber: '#f59e0b', red: '#ef4444', sky: '#0ea5e9', teal: '#14b8a6',
+  rose: '#f43f5e', orange: '#f97316', lime: '#84cc16', cyan: '#06b6d4',
+}
+
+const ld = () => {
+  try {
+    const base = { ...DEF, ...JSON.parse(localStorage.getItem(SK) || '{}') }
+    // AuthenticatedLayout keys override dash-v6 prefs when present
+    const rgTheme = localStorage.getItem('rg-theme')
+    const rgAccent = localStorage.getItem('rg-accent')
+    const rgFont = localStorage.getItem('rg-font')
+    const rgRadius = localStorage.getItem('rg-radius')
+    if (rgTheme) base.isDark = rgTheme === 'dark'
+    if (rgAccent) base.ac = ACCENT_MAP[rgAccent] || rgAccent
+    if (rgFont) base.ff = rgFont
+    if (rgRadius) base.br = parseInt(rgRadius) || 12
+    return base
+  } catch { return { ...DEF } }
+}
+
 const sv = o => localStorage.setItem(SK, JSON.stringify(o))
 
 const isDark = ref(ld().isDark)
@@ -872,13 +875,38 @@ const br = ref(ld().br)
 const sh = ref(ld().sh)
 
 const ps = () => sv({ isDark: isDark.value, ac: ac.value, pc: pc.value, ff: ff.value, br: br.value, sh: sh.value })
-const setDk = v => { isDark.value = v; ps(); nextTick(rebuildAll) }
+
+// FIX: setDk writes 'rg-theme' key and dispatches storage event so
+// AuthenticatedLayout's syncFromStorage() picks it up immediately
+const setDk = v => {
+  isDark.value = v
+  localStorage.setItem('rg-theme', v ? 'dark' : 'light')
+  document.documentElement.classList.toggle('dark', v)
+  window.dispatchEvent(new StorageEvent('storage', { key: 'rg-theme', newValue: v ? 'dark' : 'light' }))
+  ps()
+  nextTick(rebuildAll)
+}
 const setAc = v => { ac.value = v; ps(); nextTick(rebuildAll) }
 const setPc = v => { pc.value = v; ps(); nextTick(rebuildAll) }
 const setFf = v => { ff.value = v; ps() }
 const setBr = v => { br.value = v; ps() }
 const setSh = v => { sh.value = v; ps() }
-const resetAll = () => { const d = { ...DEF }; isDark.value = d.isDark; ac.value = d.ac; pc.value = d.pc; ff.value = d.ff; br.value = d.br; sh.value = d.sh; ps(); nextTick(rebuildAll) }
+const resetAll = () => {
+  const d = { ...DEF }
+  isDark.value = d.isDark; ac.value = d.ac; pc.value = d.pc
+  ff.value = d.ff; br.value = d.br; sh.value = d.sh
+  ps(); nextTick(rebuildAll)
+}
+
+// FIX: listen for AuthenticatedLayout storage changes (theme/accent/font/radius)
+const syncFromLayout = () => {
+  const loaded = ld()
+  isDark.value = loaded.isDark
+  ac.value = loaded.ac
+  ff.value = loaded.ff
+  br.value = loaded.br
+  nextTick(rebuildAll)
+}
 
 const acColors = ['#6366f1', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#ec4899', '#f97316']
 const pcColors = ['#8b5cf6', '#6366f1', '#0ea5e9', '#14b8a6', '#22c55e', '#f97316', '#ef4444', '#d946ef', '#6b7280']
@@ -890,12 +918,10 @@ const fList = [
   { n: 'Syne', v: "'Syne',sans-serif" },
 ]
 
-// ─── DESIGN TOKENS ───────────────────────────────────────────
+// ─── DESIGN TOKENS ─────────────────────────────────────────────
 const h2r = hex => { const h = hex.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)] }
 const acRgb = computed(() => h2r(ac.value).join(','))
-const pcRgb = computed(() => h2r(pc.value).join(','))
 
-// Color tokens — all driven by isDark so light/dark both look great
 const cbg = computed(() => isDark.value ? '#0d1725' : '#ffffff')
 const pbg = computed(() => isDark.value ? '#070d18' : '#f0f4ff')
 const bd = computed(() => isDark.value ? `rgba(${acRgb.value},.14)` : `rgba(${acRgb.value},.17)`)
@@ -904,7 +930,7 @@ const mu = computed(() => isDark.value ? '#64748b' : '#6b7280')
 const su = computed(() => isDark.value ? '#1e2d45' : '#edf2fa')
 const shMap = { none: 'none', soft: '0 2px 12px rgba(0,0,0,.07)', medium: '0 6px 20px rgba(0,0,0,.11)', strong: '0 14px 40px rgba(0,0,0,.2)' }
 
-// ─── STYLE OBJECTS ───────────────────────────────────────────
+// ─── STYLE OBJECTS ─────────────────────────────────────────────
 const dbSty = computed(() => ({
   background: pbg.value, color: tx.value, fontFamily: ff.value,
   '--ac': ac.value, '--ac-rgb': acRgb.value, '--pc': pc.value,
@@ -924,9 +950,12 @@ const nameGrad = computed(() => ({ background: `linear-gradient(135deg,${ac.valu
 const newBtnSty = computed(() => ({ background: `linear-gradient(135deg,${ac.value},${pc.value})`, boxShadow: `0 4px 14px rgba(${acRgb.value},.4)`, borderRadius: br.value * .75 + 'px', fontFamily: ff.value }))
 const premSty = computed(() => isPrem.value ? { ...cardSty.value, background: 'linear-gradient(135deg,#1e1b4b,#312e81 60%,#1e1b4b)', borderColor: `rgba(${acRgb.value},.4)` } : cardSty.value)
 
-// Helper style fns
-const togS = a => a ? { background: `rgba(${acRgb.value},.18)`, borderColor: ac.value, color: ac.value, borderRadius: Math.min(br.value * .5, 8) + 'px', fontFamily: ff.value } : { borderColor: bd.value, color: mu.value, borderRadius: Math.min(br.value * .5, 8) + 'px', fontFamily: ff.value }
-const pBtnSty = a => a ? { background: `rgba(${acRgb.value},.2)`, borderColor: ac.value, color: ac.value, borderRadius: Math.min(br.value * .5, 8) + 'px' } : { borderColor: bd.value, color: mu.value, borderRadius: Math.min(br.value * .5, 8) + 'px' }
+const togS = a => a
+  ? { background: `rgba(${acRgb.value},.18)`, borderColor: ac.value, color: ac.value, borderRadius: Math.min(br.value * .5, 8) + 'px', fontFamily: ff.value }
+  : { borderColor: bd.value, color: mu.value, borderRadius: Math.min(br.value * .5, 8) + 'px', fontFamily: ff.value }
+const pBtnSty = a => a
+  ? { background: `rgba(${acRgb.value},.2)`, borderColor: ac.value, color: ac.value, borderRadius: Math.min(br.value * .5, 8) + 'px' }
+  : { borderColor: bd.value, color: mu.value, borderRadius: Math.min(br.value * .5, 8) + 'px' }
 const ntSty = a => a ? { background: `rgba(${acRgb.value},.15)`, color: ac.value } : { color: mu.value }
 const tabSty = a => a ? { background: `rgba(${acRgb.value},.18)`, borderColor: ac.value, color: ac.value } : { borderColor: bd.value, color: mu.value }
 const hcardSty = (c, i) => ({ background: cbg.value, borderColor: bd.value, borderRadius: br.value + 'px', boxShadow: shMap[sh.value] || shMap.medium, animationDelay: i * 55 + 'ms' })
@@ -938,24 +967,30 @@ const dotSty = action => {
   if (action.includes('assign')) return { background: 'rgba(245,158,11,.15)', borderColor: 'rgba(245,158,11,.4)', color: '#f59e0b' }
   return { background: 'rgba(100,116,139,.15)', borderColor: 'rgba(100,116,139,.4)', color: '#64748b' }
 }
-const calSty = d => d.isToday ? { background: `rgba(${acRgb.value},.25)`, color: ac.value, fontWeight: 700 } : d.otherMonth ? { opacity: .18, color: mu.value } : d.hasTasks ? { color: tx.value, fontWeight: 600 } : { color: mu.value }
+const calSty = d =>
+  d.isToday ? { background: `rgba(${acRgb.value},.25)`, color: ac.value, fontWeight: 700 }
+    : d.otherMonth ? { opacity: .18, color: mu.value }
+      : d.hasTasks ? { color: tx.value, fontWeight: 600 }
+        : { color: mu.value }
 const rIconSty = s => s === 'published' ? { background: 'rgba(16,185,129,.15)', color: '#10b981', borderRadius: '6px' } : s === 'draft' ? { background: 'rgba(245,158,11,.15)', color: '#f59e0b', borderRadius: '6px' } : { background: 'rgba(100,116,139,.15)', color: '#94a3b8', borderRadius: '6px' }
 const stPill = s => s === 'published' ? { background: 'rgba(16,185,129,.15)', color: '#10b981', borderRadius: '20px' } : s === 'draft' ? { background: 'rgba(245,158,11,.15)', color: '#f59e0b', borderRadius: '20px' } : { background: 'rgba(100,116,139,.15)', color: '#94a3b8', borderRadius: '20px' }
 const permSty = p => p === 'manage' ? { background: ac.value + '22', color: ac.value } : p === 'edit' ? { background: 'rgba(16,185,129,.2)', color: '#10b981' } : { background: 'rgba(100,116,139,.2)', color: '#94a3b8' }
 const priBg = p => p === 'urgent' ? '#dc2626' : p === 'high' ? '#ef4444' : p === 'medium' ? '#f59e0b' : '#10b981'
 
-// ─── CHART PALETTE ───────────────────────────────────────────
+// ─── PALETTE ───────────────────────────────────────────────────
 const pal = computed(() => [ac.value, pc.value, '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#8b5cf6'])
 
-// ─── TIME ────────────────────────────────────────────────────
-const now = ref(new Date()); let clkT
+// ─── TIME ──────────────────────────────────────────────────────
+const now = ref(new Date())
+let clkT = null
 const hr = computed(() => now.value.getHours())
 const greet = computed(() => hr.value < 12 ? 'Good morning' : hr.value < 17 ? 'Good afternoon' : 'Good evening')
 const firstName = computed(() => page.props.auth?.user?.name?.split(' ')[0] || 'there')
 const dtStr = computed(() => now.value.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
 
-// ─── NOTIFICATIONS ───────────────────────────────────────────
-const showNotif = ref(false); const ntab = ref('All')
+// ─── NOTIFICATIONS ─────────────────────────────────────────────
+const showNotif = ref(false)
+const ntab = ref('All')
 const unreadCount = computed(() => N.value.unread_count || 0)
 const filtN = computed(() => {
   let n = N.value.items || []
@@ -967,11 +1002,14 @@ const filtN = computed(() => {
 const markAllRead = () => router.post(route('notifications.mark-all-read'), {}, { preserveState: true, onSuccess: () => { showNotif.value = false } })
 const gotoN = n => { if (n.action_url) { showNotif.value = false; router.visit(n.action_url) } }
 
-// ─── SETTINGS PANEL ─────────────────────────────────────────
 const showSettings = ref(false)
 
-// ─── COMMAND PALETTE ─────────────────────────────────────────
-const showCmd = ref(false); const cmdQ = ref(''); const cmdCur = ref(0); const cmdInput = ref(null)
+// ─── COMMAND PALETTE ───────────────────────────────────────────
+const showCmd = ref(false)
+const cmdQ = ref('')
+const cmdCur = ref(0)
+const cmdInput = ref(null)
+
 const baseCmds = [
   { label: 'New Report', sub: 'Create from scratch', icon: 'fa-solid fa-plus', color: '#6366f1', action: () => router.visit(route('reports.create')) },
   { label: 'My Tasks', sub: 'View assigned tasks', icon: 'fa-solid fa-list-check', color: '#10b981', action: () => router.visit(route('admin.tasks.my')) },
@@ -994,20 +1032,34 @@ const cmdRes = computed(() => {
 const openCmd = () => { showCmd.value = !showCmd.value; if (showCmd.value) nextTick(() => cmdInput.value?.focus()) }
 const doCmd = it => { const item = it?.action ? it : cmdRes.value[cmdCur.value]; if (item?.action) { item.action(); showCmd.value = false; cmdQ.value = '' } }
 
-// ─── HERO CARDS (100% real backend data) ─────────────────────
-const spkR = []; const spkCh = []
+// ─── DELETE REPORT ─────────────────────────────────────────────
+const confirmDeleteReport = r => {
+  if (!confirm(`Move "${r.title}" to Trash?`)) return
+  router.delete(route('reports.destroy', r.id), {
+    preserveState: false,
+    onSuccess: () => window.showToast?.('Report moved to trash', 'success'),
+    onError: err => window.showToast?.(err?.response?.data?.message || 'Failed to delete report', 'error'),
+  })
+}
+
+// ─── HERO CARDS (100% real backend data) ───────────────────────
+const spkR = []
+const spkCh = []
+
 const heroCards = computed(() => {
-  // Label suffix tells the user whose data this is
   const scope = isAdmin.value ? ' (System)' : isManager.value ? ' (Team)' : ''
+  const total = Math.max(S.value.total_reports || 0, 1)
+  const tskTot = Math.max((S.value.pending_tasks || 0) + (S.value.completed_tasks || 0), 1)
   return [
     { key: 'tr', label: 'Total Reports' + scope, value: S.value.total_reports || 0, icon: 'fa-solid fa-file-lines', color: ac.value, up: true, trend: S.value.total_reports > 0 ? '+' + S.value.total_reports : '0', pct: Math.min(100, (S.value.total_reports || 0) / 50 * 100), link: route('reports.index') },
-    { key: 'pub', label: 'Published' + scope, value: S.value.published_reports || 0, icon: 'fa-solid fa-globe', color: '#10b981', up: true, trend: S.value.total_reports > 0 ? Math.round(S.value.published_reports / S.value.total_reports * 100) + '%' : '0%', pct: S.value.total_reports > 0 ? Math.round(S.value.published_reports / S.value.total_reports * 100) : 0, link: route('reports.index') },
-    { key: 'dft', label: 'Drafts' + scope, value: S.value.draft_reports || 0, icon: 'fa-solid fa-pen-fancy', color: '#f59e0b', up: false, trend: S.value.total_reports > 0 ? Math.round(S.value.draft_reports / S.value.total_reports * 100) + '%' : '0%', pct: S.value.total_reports > 0 ? Math.round(S.value.draft_reports / S.value.total_reports * 100) : 0, link: route('reports.index') },
+    { key: 'pub', label: 'Published' + scope, value: S.value.published_reports || 0, icon: 'fa-solid fa-globe', color: '#10b981', up: true, trend: Math.round((S.value.published_reports || 0) / total * 100) + '%', pct: Math.round((S.value.published_reports || 0) / total * 100), link: route('reports.index') },
+    { key: 'dft', label: 'Drafts' + scope, value: S.value.draft_reports || 0, icon: 'fa-solid fa-pen-fancy', color: '#f59e0b', up: false, trend: Math.round((S.value.draft_reports || 0) / total * 100) + '%', pct: Math.round((S.value.draft_reports || 0) / total * 100), link: route('reports.index') },
     { key: 'shm', label: 'Shared with Me', value: N.value.assigned_reports || 0, icon: 'fa-solid fa-share-nodes', color: pc.value, up: true, trend: '+' + N.value.assigned_reports, pct: Math.min(100, (N.value.assigned_reports || 0) / 20 * 100), link: route('reports.assigned') },
     { key: 'ct', label: 'My Tasks Done', value: S.value.completed_tasks || 0, icon: 'fa-solid fa-circle-check', color: '#10b981', up: true, trend: prodScore.value + '%', pct: prodScore.value, link: route('admin.tasks.my') },
-    { key: 'pt', label: 'My Tasks Pending', value: S.value.pending_tasks || 0, icon: 'fa-solid fa-hourglass-half', color: '#ef4444', up: false, trend: N.value.overdue_tasks > 0 ? N.value.overdue_tasks + ' OVD' : '', pct: Math.min(100, (S.value.pending_tasks || 0) / Math.max((S.value.pending_tasks || 0) + (S.value.completed_tasks || 0), 1) * 100), link: route('admin.tasks.my') },
+    { key: 'pt', label: 'My Tasks Pending', value: S.value.pending_tasks || 0, icon: 'fa-solid fa-hourglass-half', color: '#ef4444', up: false, trend: N.value.overdue_tasks > 0 ? N.value.overdue_tasks + ' OVD' : '', pct: Math.min(100, (S.value.pending_tasks || 0) / Math.max(tskTot, 1) * 100), link: route('admin.tasks.my') },
   ]
 })
+
 const buildSparks = () => {
   heroCards.value.forEach((card, i) => {
     const c = spkR[i]; if (!c) return
@@ -1022,18 +1074,17 @@ const buildSparks = () => {
   })
 }
 
-// ─── PRODUCTIVITY ────────────────────────────────────────────
+// ─── PRODUCTIVITY ──────────────────────────────────────────────
 const prodScore = computed(() => {
   const d = S.value.completed_tasks || 0, p = S.value.pending_tasks || 0
   return (d + p) > 0 ? Math.round(d / (d + p) * 100) : 0
 })
 const scoreClr = computed(() => prodScore.value >= 70 ? '#10b981' : prodScore.value >= 40 ? '#f59e0b' : '#ef4444')
 const isPrem = computed(() => page.props.auth?.user?.is_premium || false)
-// Role helpers — page.props.auth.user.roles is set by HandleInertiaRequests middleware
+
 const userRoles = computed(() => page.props.auth?.user?.roles || [])
 const isAdmin = computed(() => userRoles.value.includes('admin'))
 const isManager = computed(() => userRoles.value.includes('manager') || isAdmin.value)
-// Scope label shown in section headers and chart tooltips
 const scopeLabel = computed(() => isAdmin.value ? 'All Users (System-Wide)' : isManager.value ? 'Your Team' : 'My Account')
 const scopeIcon = computed(() => isAdmin.value ? 'fa-solid fa-globe' : isManager.value ? 'fa-solid fa-users' : 'fa-solid fa-user')
 
@@ -1045,11 +1096,12 @@ const taskStatItems = computed(() => [
   { label: 'Overdue', value: N.value.overdue_tasks || 0, color: '#ef4444', pct: Math.round((N.value.overdue_tasks || 0) / taskTotal.value * 100) },
 ])
 
-// Report type labels/values — real chartData
+// Report type labels/values — REAL chartData.popular_report_types
+// labels[] = template names from DB, values[] = report counts per template
 const typeLabels = computed(() => CD.value.popular_report_types?.labels || ['Business', 'Executive', 'Analytics', 'Marketing', 'Financial'])
 const typeVals = computed(() => (CD.value.popular_report_types?.values || [0, 0, 0, 0, 0]).map(Number))
 
-// Assigned reports — use real recentReports
+// Assigned reports — real recentReports
 const assignedRows = computed(() => {
   if (RR.value.length) return RR.value.slice(0, 4).map((r, i) => ({ ...r, permission: i === 0 ? 'manage' : i === 1 ? 'edit' : 'view', progress: Math.min(100, 35 + i * 20) }))
   return [{ id: 1, title: 'Q4 Report', permission: 'manage', progress: 75, updated_at: new Date() }, { id: 2, title: 'Analytics', permission: 'edit', progress: 45, updated_at: new Date() }]
@@ -1064,13 +1116,14 @@ const kanbanCols = computed(() => [
   { id: 'overdue', label: 'Overdue', count: N.value.overdue_tasks || 0, color: '#ef4444', pct: (N.value.overdue_tasks || 0) / kbTotal.value * 100, tasks: N.value.overdue_tasks > 0 ? [{ title: 'Overdue task', priority: 'urgent', due: 'Past due', overdue: true }] : [] },
 ])
 
-// Bar Race — real popular_report_types
-const raceOn = ref(true); let raceT
+// ─── TEMPLATE BAR RACE (real: popular_report_types) ────────────
+// label = template name, value = # reports using that template
+const raceOn = ref(true)
+let raceT = null
 const raceRows = ref([])
+
 const initRace = () => {
-  const labels = typeLabels.value
-  const values = typeVals.value
-  raceRows.value = labels.map((l, i) => ({ label: l, value: values[i] || 0, color: pal.value[i % pal.value.length], pct: 0 }))
+  raceRows.value = typeLabels.value.map((l, i) => ({ label: l, value: typeVals.value[i] || 0, color: pal.value[i % pal.value.length], pct: 0 }))
   animRace()
 }
 const animRace = () => {
@@ -1083,7 +1136,7 @@ const toggleRace = () => {
   else clearInterval(raceT)
 }
 
-// Activity stream — real recentActivities
+// ─── ACTIVITY STREAM ───────────────────────────────────────────
 const actF = ref('All')
 const filtActs = computed(() => {
   let a = RA.value
@@ -1098,7 +1151,7 @@ const fmtAct = a => {
   return v
 }
 
-// Calendar
+// ─── CALENDAR ──────────────────────────────────────────────────
 const calM = ref(0)
 const calDate = computed(() => { const d = new Date(); d.setMonth(d.getMonth() + calM.value); return d })
 const calLbl = computed(() => calDate.value.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }))
@@ -1113,11 +1166,11 @@ const calDays = computed(() => {
   return days
 })
 
-// Period switcher
+// ─── PERIOD ────────────────────────────────────────────────────
 const activePd = ref('30D')
 const setPd = p => { activePd.value = p; nextTick(() => { buildVel(); buildComp() }) }
 
-// Table
+// ─── TABLE ─────────────────────────────────────────────────────
 const tblQ = ref('')
 const filtTbl = computed(() => {
   let r = RR.value
@@ -1125,7 +1178,7 @@ const filtTbl = computed(() => {
   return r.slice(0, 8)
 })
 
-// Ticker (real data)
+// ─── TICKER (real data) ────────────────────────────────────────
 const tickerText = computed(() => [
   `📄 ${S.value.total_reports || 0} Reports`,
   `✅ ${S.value.completed_tasks || 0} Done`,
@@ -1137,7 +1190,7 @@ const tickerText = computed(() => [
   ...(N.value.overdue_tasks > 0 ? [`⚠️ ${N.value.overdue_tasks} Overdue`] : []),
 ])
 
-// Live Metrics (real data)
+// ─── LIVE METRICS (real) ───────────────────────────────────────
 const liveM = computed(() => [
   { label: 'Total Reports', value: S.value.total_reports || 0, icon: 'fa-solid fa-file-lines', color: ac.value, up: true },
   { label: 'Published', value: S.value.published_reports || 0, icon: 'fa-solid fa-globe', color: '#10b981', up: true },
@@ -1147,11 +1200,11 @@ const liveM = computed(() => [
   { label: 'Overdue', value: N.value.overdue_tasks || 0, icon: 'fa-solid fa-fire', color: '#ef4444', up: false },
 ])
 
-// Quick actions dock
+// ─── DOCK ACTIONS ──────────────────────────────────────────────
 const dockActions = [
-  { label: 'New Report', icon: 'fa-solid fa-plus', color: ac.value, href: route('reports.create') },
+  { label: 'New Report', icon: 'fa-solid fa-plus', color: '#6366f1', href: route('reports.create') },
   { label: 'My Tasks', icon: 'fa-solid fa-list-check', color: '#10b981', href: route('admin.tasks.my') },
-  { label: 'Assigned', icon: 'fa-solid fa-share-nodes', color: pc.value, href: route('reports.assigned') },
+  { label: 'Assigned', icon: 'fa-solid fa-share-nodes', color: '#8b5cf6', href: route('reports.assigned') },
   { label: 'Templates', icon: 'fa-solid fa-layer-group', color: '#f59e0b', href: route('templates.index') },
   { label: 'Analytics', icon: 'fa-solid fa-chart-line', color: '#ef4444', href: route('admin.analytics.index') },
   { label: 'Users', icon: 'fa-solid fa-users', color: '#06b6d4', href: route('admin.users.index') },
@@ -1159,41 +1212,41 @@ const dockActions = [
   { label: 'Settings', icon: 'fa-solid fa-palette', color: '#64748b', href: '#' },
 ]
 
-// Helpers
+// ─── HELPERS ───────────────────────────────────────────────────
 const ago = d => { if (!d) return ''; const s = Math.floor((Date.now() - new Date(d)) / 1000); if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + 'm'; if (s < 86400) return Math.floor(s / 3600) + 'h'; return new Date(d).toLocaleDateString() }
 
-// ─── CHART INSTANCES ─────────────────────────────────────────
+// ─── CHART INSTANCES ───────────────────────────────────────────
 let velC, statusC, radarC, donutC, tdC, growthC, compC
-const velRef = ref(null), statusRef = ref(null), radarRef = ref(null), donutRef = ref(null), tdRef = ref(null), growthRef = ref(null), compRef = ref(null)
+const velRef = ref(null)
+const statusRef = ref(null)
+const radarRef = ref(null)
+const donutRef = ref(null)
+const tdRef = ref(null)
+const growthRef = ref(null)
+const compRef = ref(null)
 
-// Chart tokens (theme-aware, rebuilt on every chart build)
 const ct = () => {
-  const d = isDark.value, a = ac.value, p = pc.value, ar = acRgb.value
+  const d = isDark.value, a = ac.value, ar = acRgb.value
   return {
     grid: d ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)',
     tick: d ? '#475569' : '#94a3b8',
     leg: d ? '#94a3b8' : '#64748b',
     tip: { bg: d ? '#0f172a' : '#1e293b', title: d ? '#e2e8f0' : '#f1f5f9', body: '#94a3b8', border: `rgba(${ar},.3)` },
-    fill: color => color + (d ? '35' : '20'),
-    a, p, ar,
+    fill: color => color + (d ? '35' : '20'), a, ar,
   }
 }
 const tipO = t => ({ backgroundColor: t.tip.bg, padding: 10, cornerRadius: 8, titleColor: t.tip.title, bodyColor: t.tip.body, borderColor: t.tip.border, borderWidth: 1 })
 
-// VELOCITY — real chartData.reports_last_30_days
 const buildVel = () => {
   if (!velRef.value) return; if (velC) velC.destroy()
-  const t = ct()
-  const raw = CD.value.reports_last_30_days
-  const labels = raw?.labels || Array.from({ length: 30 }, (_, i) => `D${i + 1}`)
-  const values = (raw?.values || Array(30).fill(0)).map(Number)
-  // Published ≈ proportion of published_reports to total_reports applied to daily data
+  const t = ct(), raw = CD.value.reports_last_30_days
+  const days = activePd.value === '7D' ? 7 : activePd.value === '90D' ? 90 : activePd.value === '1Y' ? 30 : 30
+  const labels = (raw?.labels || Array.from({ length: days }, (_, i) => `D${i + 1}`)).slice(-days)
+  const values = ((raw?.values || Array(days).fill(0)).map(Number)).slice(-days)
   const pubRatio = S.value.total_reports > 0 ? (S.value.published_reports || 0) / S.value.total_reports : 0.55
   const pub = values.map(v => Math.floor(v * pubRatio))
-
   const ctx = velRef.value.getContext('2d')
   const gf = ctx.createLinearGradient(0, 0, 0, 190); gf.addColorStop(0, t.a + '55'); gf.addColorStop(1, t.a + '00')
-
   velC = new Chart(velRef.value, {
     data: {
       labels, datasets: [
@@ -1210,15 +1263,13 @@ const buildVel = () => {
   })
 }
 
-// STATUS BAR — real stats: all report + task counts
 const buildStatus = () => {
   if (!statusRef.value) return; if (statusC) statusC.destroy()
   const t = ct(), s = S.value, n = N.value
-  const scopeSfx = isAdmin.value ? ' (System)' : isManager.value ? ' (Team)' : ' (Mine)'
-  const labels = ['Drafts' + scopeSfx, 'Published' + scopeSfx, 'Archived' + scopeSfx, 'Shared (Me)', 'Pending Tasks (Me)', 'Done Tasks (Me)']
+  const sfx = isAdmin.value ? ' (System)' : isManager.value ? ' (Team)' : ' (Mine)'
+  const labels = [`Drafts${sfx}`, `Published${sfx}`, `Archived${sfx}`, 'Shared (Me)', 'Pending Tasks (Me)', 'Done Tasks (Me)']
   const values = [s.draft_reports || 0, s.published_reports || 0, s.archived_reports || 0, n.assigned_reports || 0, s.pending_tasks || 0, s.completed_tasks || 0]
   const colors = ['#f59e0b', '#10b981', pc.value, ac.value, '#ef4444', '#10b981']
-
   statusC = new Chart(statusRef.value, {
     type: 'bar',
     data: { labels, datasets: [{ data: values, backgroundColor: colors.map(c => c + 'cc'), borderColor: colors, borderWidth: 1.5, borderRadius: 7, borderSkipped: false }] },
@@ -1231,21 +1282,18 @@ const buildStatus = () => {
   })
 }
 
-// RADAR — real stats scaled to 0–100
 const buildRadar = () => {
   if (!radarRef.value) return; if (radarC) radarC.destroy()
   const t = ct(), s = S.value, n = N.value
-  const total = Math.max(s.total_reports || 0, 1)
-  const taskTot = Math.max((s.completed_tasks || 0) + (s.pending_tasks || 0), 1)
+  const total = Math.max(s.total_reports || 0, 1), taskTot = Math.max((s.completed_tasks || 0) + (s.pending_tasks || 0), 1)
   const you = [
-    Math.min(100, (s.total_reports || 0) / 50 * 100),          // Reports (50 = "great")
-    Math.min(100, (s.published_reports || 0) / total * 100),   // Publish rate %
-    Math.min(100, (s.completed_tasks || 0) / taskTot * 100),   // Task completion %
-    Math.min(100, (n.assigned_reports || 0) / 10 * 100),       // Collaboration (10 = great)
-    Math.min(100, (s.total_templates || 0) / 10 * 100),        // Template use (10 = great)
-    Math.min(100, 100 - (n.overdue_tasks || 0) / Math.max(taskTot, 1) * 100 * 3), // Timeliness (penalise overdue)
+    Math.min(100, (s.total_reports || 0) / 50 * 100),
+    Math.min(100, (s.published_reports || 0) / total * 100),
+    Math.min(100, (s.completed_tasks || 0) / taskTot * 100),
+    Math.min(100, (n.assigned_reports || 0) / 10 * 100),
+    Math.min(100, (s.total_templates || 0) / 10 * 100),
+    Math.min(100, 100 - (n.overdue_tasks || 0) / Math.max(taskTot, 1) * 100 * 3),
   ]
-
   radarC = new Chart(radarRef.value, {
     type: 'radar',
     data: {
@@ -1264,78 +1312,42 @@ const buildRadar = () => {
   })
 }
 
-// REPORT TYPE DONUT — real popular_report_types
 const buildDonut = () => {
   if (!donutRef.value) return; if (donutC) donutC.destroy()
-  const t = ct()
-  const data = typeVals.value
-  const hasData = data.some(v => v > 0)
-
+  const t = ct(), data = typeVals.value, has = data.some(v => v > 0)
   donutC = new Chart(donutRef.value, {
     type: 'doughnut',
-    data: {
-      labels: typeLabels.value, datasets: [{
-        data: hasData ? data : data.map(() => 1), // show equal slices if no data yet
-        backgroundColor: pal.value.slice(0, typeLabels.value.length).map(c => c + 'cc'),
-        borderColor: pal.value.slice(0, typeLabels.value.length),
-        borderWidth: 2, hoverOffset: 8
-      }]
-    },
+    data: { labels: typeLabels.value, datasets: [{ data: has ? data : data.map(() => 1), backgroundColor: pal.value.slice(0, typeLabels.value.length).map(c => c + 'cc'), borderColor: pal.value.slice(0, typeLabels.value.length), borderWidth: 2, hoverOffset: 8 }] },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '66%',
-      plugins: { legend: { display: false }, tooltip: { ...tipO(t), callbacks: { label: ctx => `${ctx.label}: ${hasData ? ctx.parsed : 0}` } } },
+      plugins: { legend: { display: false }, tooltip: { ...tipO(t), callbacks: { label: ctx => `${ctx.label}: ${has ? ctx.parsed : 0}` } } },
       animation: { animateRotate: true, duration: 900 }
     }
   })
 }
 
-// TASK STATUS DONUT — real stats.completed/pending + notifications.overdue_tasks
 const buildTD = () => {
   if (!tdRef.value) return; if (tdC) tdC.destroy()
-  const t = ct()
-  const done = S.value.completed_tasks || 0, pend = S.value.pending_tasks || 0, ov = N.value.overdue_tasks || 0
-  const total = done + pend + ov
-  const hasData = total > 0
-
+  const t = ct(), done = S.value.completed_tasks || 0, pend = S.value.pending_tasks || 0, ov = N.value.overdue_tasks || 0
+  const total = done + pend + ov, has = total > 0
   tdC = new Chart(tdRef.value, {
     type: 'doughnut',
-    data: {
-      labels: ['Done', 'Pending', 'Overdue'], datasets: [{
-        data: hasData ? [done, pend, ov] : [1, 1, 1],
-        backgroundColor: ['rgba(16,185,129,.8)', 'rgba(245,158,11,.8)', 'rgba(239,68,68,.8)'],
-        borderColor: ['#10b981', '#f59e0b', '#ef4444'],
-        borderWidth: 2, hoverOffset: 7
-      }]
-    },
+    data: { labels: ['Done', 'Pending', 'Overdue'], datasets: [{ data: has ? [done, pend, ov] : [1, 1, 1], backgroundColor: ['rgba(16,185,129,.8)', 'rgba(245,158,11,.8)', 'rgba(239,68,68,.8)'], borderColor: ['#10b981', '#f59e0b', '#ef4444'], borderWidth: 2, hoverOffset: 7 }] },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '64%',
-      plugins: {
-        legend: { display: false }, tooltip: {
-          ...tipO(t), callbacks: {
-            label: ctx => {
-              const v = hasData ? ctx.parsed : 0
-              const pct = total > 0 ? Math.round(v / total * 100) : 0
-              return `${ctx.label}: ${v} (${pct}%)`
-            }
-          }
-        }
-      },
+      plugins: { legend: { display: false }, tooltip: { ...tipO(t), callbacks: { label: ctx => { const v = has ? ctx.parsed : 0; const pct = total > 0 ? Math.round(v / total * 100) : 0; return `${ctx.label}: ${v} (${pct}%)` } } } },
       animation: { animateRotate: true, duration: 900 }
     }
   })
 }
 
-// USER GROWTH — real chartData.user_growth
 const buildGrowth = () => {
   if (!growthRef.value) return; if (growthC) growthC.destroy()
-  const t = ct()
-  const raw = CD.value.user_growth
+  const t = ct(), raw = CD.value.user_growth
   const labels = (raw?.labels) || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
   const values = ((raw?.values) || [0, 0, 0, 0, 0, 0]).map(Number)
-
   const ctx = growthRef.value.getContext('2d')
   const gf = ctx.createLinearGradient(0, 0, 0, 160); gf.addColorStop(0, 'rgba(16,185,129,.4)'); gf.addColorStop(1, 'rgba(16,185,129,.02)')
-
   growthC = new Chart(growthRef.value, {
     type: 'line',
     data: { labels, datasets: [{ data: values, borderColor: '#10b981', backgroundColor: gf, fill: true, tension: .45, pointRadius: 4, borderWidth: 2.5, pointBackgroundColor: '#10b981', pointBorderColor: isDark.value ? '#0d1725' : '#fff', pointBorderWidth: 2 }] },
@@ -1348,20 +1360,15 @@ const buildGrowth = () => {
   })
 }
 
-// COMPLETION TREND — real activity bars + prodScore flat line
 const buildComp = () => {
   if (!compRef.value) return; if (compC) compC.destroy()
-  const t = ct()
-  const raw = CD.value.reports_last_30_days
+  const t = ct(), raw = CD.value.reports_last_30_days
   const days = activePd.value === '7D' ? 7 : activePd.value === '90D' ? 90 : activePd.value === '1Y' ? 30 : 30
   const labels = (raw?.labels || []).slice(-days)
   const activity = (raw?.values || []).map(Number).slice(-days)
-  // Completion % is a real flat line based on stats
   const compLine = Array(labels.length).fill(prodScore.value)
-
   const ctx = compRef.value.getContext('2d')
   const gf = ctx.createLinearGradient(0, 0, 0, 160); gf.addColorStop(0, 'rgba(16,185,129,.35)'); gf.addColorStop(1, 'rgba(16,185,129,.02)')
-
   compC = new Chart(compRef.value, {
     data: {
       labels, datasets: [
@@ -1385,7 +1392,6 @@ const rebuildAll = () => nextTick(() => {
   buildVel(); buildStatus(); buildRadar(); buildDonut(); buildTD(); buildGrowth(); buildComp(); buildSparks()
 })
 
-// Keyboard
 const onKey = e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); openCmd() }
   if (e.key === 'Escape') { showCmd.value = false; showNotif.value = false; showSettings.value = false }
@@ -1393,11 +1399,14 @@ const onKey = e => {
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
+  // FIX: sync theme/accent/font/radius whenever AuthenticatedLayout writes to localStorage
+  window.addEventListener('storage', syncFromLayout)
   clkT = setInterval(() => { now.value = new Date() }, 1000)
   nextTick(() => { rebuildAll(); initRace(); if (raceOn.value) toggleRace() })
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
+  window.removeEventListener('storage', syncFromLayout)
   clearInterval(clkT); clearInterval(raceT)
     ;[velC, statusC, radarC, donutC, tdC, growthC, compC, ...spkCh].forEach(c => c?.destroy())
 })
@@ -1408,6 +1417,50 @@ onBeforeUnmount(() => {
 </style>
 
 <style scoped>
+/* ══════════════════════════════════════════════════════════════
+   FIX 1 — DOUBLE TOPBAR ON MOBILE
+   AuthenticatedLayout renders <slot name="header"> in TWO places:
+     1. .tb-bc  inside .rg-topbar  (always visible — correct)
+     2. .rg-mob-head               (mobile-only div — duplicate)
+   Suppressing .rg-mob-head here removes the duplicate on small screens.
+   Must use :global because .rg-mob-head is outside this component's root.
+══════════════════════════════════════════════════════════════ */
+:global(.rg-mob-head) {
+  display: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   FIX 2 — LIGHT THEME VISIBILITY
+   Ensure text/icons readable on white card backgrounds.
+══════════════════════════════════════════════════════════════ */
+:global(.rg-light) .hbar-title {
+  color: #0f172a;
+}
+
+:global(.rg-light) .hbar-sub {
+  color: #64748b;
+}
+
+:global(.rg-light) .ct {
+  color: #0f172a;
+}
+
+:global(.rg-light) .sec-title {
+  color: #0f172a;
+}
+
+:global(.rg-light) .hcard-val {
+  color: #0f172a;
+}
+
+:global(.rg-light) .hcard-lbl {
+  color: #6b7280;
+}
+
+:global(.rg-light) .lm-val {
+  color: #0f172a;
+}
+
 *,
 *::before,
 *::after {
@@ -1636,7 +1689,6 @@ onBeforeUnmount(() => {
 .ticker {
   display: flex;
   align-items: center;
-  gap: 0;
   border-width: 1px;
   border-style: solid;
   padding: 6px 12px;
@@ -1890,25 +1942,25 @@ onBeforeUnmount(() => {
   height: 210px
 }
 
-@media(min-width:768px) {
-  .ca {
-    height: 225px
-  }
-}
-
 .ca-sm {
   padding: 9px 11px 11px;
   height: 195px
 }
 
 @media(min-width:768px) {
+  .ca {
+    height: 225px
+  }
+
   .ca-sm {
     height: 210px
   }
 }
 
-/* ROW 1 GRID */
-.r1-grid {
+/* ROW GRIDS */
+.r1-grid,
+.r2-grid,
+.r3-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 11px;
@@ -1917,6 +1969,14 @@ onBeforeUnmount(() => {
 
 @media(min-width:768px) {
   .r1-grid {
+    grid-template-columns: 1fr 1fr
+  }
+
+  .r2-grid {
+    grid-template-columns: 1fr 1fr
+  }
+
+  .r3-grid {
     grid-template-columns: 1fr 1fr
   }
 }
@@ -1925,49 +1985,16 @@ onBeforeUnmount(() => {
   .r1-grid {
     grid-template-columns: 1fr 270px 1fr
   }
-}
 
-/* ROW 2 GRID */
-.r2-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 11px;
-  margin-bottom: 11px
-}
-
-@media(min-width:640px) {
-  .r2-grid {
-    grid-template-columns: 1fr 1fr
-  }
-}
-
-@media(min-width:1200px) {
   .r2-grid {
     grid-template-columns: 1fr 240px 240px
   }
-}
 
-/* ROW 3 GRID */
-.r3-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 11px;
-  margin-bottom: 11px
-}
-
-@media(min-width:640px) {
-  .r3-grid {
-    grid-template-columns: 1fr 1fr
-  }
-}
-
-@media(min-width:1200px) {
   .r3-grid {
     grid-template-columns: 1fr 1fr 240px
   }
 }
 
-/* ROW 4 GRID */
 .r4-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2113,7 +2140,7 @@ onBeforeUnmount(() => {
   border-style: solid
 }
 
-/* DONUT LAYOUT */
+/* DONUT */
 .donut-wrap {
   display: flex;
   align-items: center;
@@ -2190,7 +2217,7 @@ onBeforeUnmount(() => {
   pointer-events: none
 }
 
-/* BAR RACE */
+/* TEMPLATE BAR RACE */
 .race-tog {
   width: 24px;
   height: 24px;
@@ -2426,7 +2453,7 @@ onBeforeUnmount(() => {
   border-radius: 50%
 }
 
-/* OVERDUE ALERT */
+/* OVERDUE */
 .ov-alert {
   display: flex;
   align-items: center;
@@ -2760,7 +2787,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   transition: transform .2s;
-  margin-top: 4px
+  margin-top: 4px;
+  font-family: inherit
 }
 
 .prem-btn:hover {
@@ -2922,7 +2950,6 @@ onBeforeUnmount(() => {
   color: #ef4444 !important
 }
 
-/* NOTIF PANEL */
 .np-tab {
   padding: 5px 9px;
   border-radius: 7px 7px 0 0;
@@ -3096,7 +3123,10 @@ onBeforeUnmount(() => {
 
 /* REDUCED MOTION */
 @media(prefers-reduced-motion:reduce) {
-  * {
+
+  *,
+  *::before,
+  *::after {
     animation-duration: .01ms !important;
     transition-duration: .01ms !important
   }
