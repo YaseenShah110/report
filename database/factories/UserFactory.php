@@ -63,6 +63,7 @@ class UserFactory extends Factory
     public function admin(): static
     {
         return $this->afterCreating(function (User $user) {
+            \Spatie\Permission\Models\Role::findOrCreate('admin');
             $user->assignRole('admin');
         });
     }
@@ -75,6 +76,7 @@ class UserFactory extends Factory
         return $this->afterCreating(function (User $user) {
             // Only assign role if no roles assigned yet (prevent duplicate in seeder)
             if ($user->roles()->count() === 0) {
+                \Spatie\Permission\Models\Role::findOrCreate('user');
                 $user->assignRole('user');
             }
         });

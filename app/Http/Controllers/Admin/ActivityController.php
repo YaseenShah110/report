@@ -210,7 +210,6 @@ class ActivityController extends Controller
             
             // Parse timestamp
             $ts = $a->created_at ? \Carbon\Carbon::parse($a->created_at) : null;
-            dd($a->action ?? '');
             return [
                 '#' . ($idx + 1),                                           // Sequence
                 $ts ? $ts->format('Y-m-d') : '',                          // Date

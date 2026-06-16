@@ -649,10 +649,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
-import axios from 'axios'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import Pagination from '@/Components/Pagination.vue'
 import ConfirmationModal from '@/Components/ConfirmationModal.vue'
+
+// Use the globally configured axios instance which has CSRF headers configured
+const axios = window.axios
 
 // ── Props ──────────────────────────────────────────────────────────────────
 const props = defineProps({

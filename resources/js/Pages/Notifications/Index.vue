@@ -146,8 +146,10 @@
  */
 import { ref, computed, watch } from 'vue'
 import { router } from '@inertiajs/vue3'
-import axios from 'axios'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
+
+// Use the globally configured axios instance which has CSRF headers configured
+const axios = window.axios
 import Pagination from '@/Components/Pagination.vue'
 
 // Props from Laravel controller

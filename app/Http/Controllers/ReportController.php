@@ -674,6 +674,58 @@ public function allReports(Request $request)
     }
 
     /**
+     * Send report link via email.
+     */
+    public function emailReport(Request $request, $slug)
+    {
+        $report = Report::where('slug', $slug)->firstOrFail();
+
+        // Check view permission
+        if (! $report->canBeViewedBy(auth()->user())) {
+            abort(403, 'You do not have permission to view this report.');
+        }
+
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $recipient = $request->email;
+        $user = auth()->user();
+
+        // Send the mail (using Laravel Mail facade)
+        \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($recipient, $report, $user) {
+            $message->to($recipient)
+                ->subject("Shared Report: {$report->title}")
+                ->html("
+                    <div style='font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px;'>
+                        <h2 style='color: #4f46e5; margin-bottom: 10px;'>Report Shared With You</h2>
+                        <p>Hello,</p>
+                        <p><strong>{$user->name}</strong> has shared a report with you from the Report Generator System.</p>
+                        
+                        <div style='margin: 20px 0; padding: 15px; background-color: #f8fafc; border-radius: 6px; border-left: 4px solid #4f46e5;'>
+                            <h3 style='margin: 0 0 5px 0; color: #1e293b;'>{$report->title}</h3>
+                            <p style='margin: 0; font-size: 14px; color: #475569;'>Status: " . ucfirst($report->status) . "</p>
+                        </div>
+                        
+                        <div style='margin-top: 25px;'>
+                            <a href='" . route('reports.preview', $report->slug) . "' style='background-color: #4f46e5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;'>View Report</a>
+                        </div>
+                        
+                        <hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0 15px 0;' />
+                        <p style='font-size: 12px; color: #94a3b8; margin: 0;'>This is an automated message from the Report Generator System. Please do not reply directly to this email.</p>
+                    </div>
+                ");
+        });
+
+        // Log activity
+        UserActivity::log(auth()->id(), 'report_emailed', 'report', $report->id, [
+            'recipient' => $recipient,
+        ]);
+
+        return response()->json(['message' => 'Report emailed successfully']);
+    }
+
+    /**
      * Public preview of a shared report (no authentication required).
      */
     public function publicPreview($token)
