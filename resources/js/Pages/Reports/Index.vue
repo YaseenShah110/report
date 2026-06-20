@@ -1,7 +1,7 @@
 <!--
   Reports/Index.vue — Production-Grade Report Manager
   Stack: Laravel 12 + Inertia.js + Vue 3 (Composition API)
-  Features:
+  Features:z
   - Animated blinking "Shared" badge on shared reports
   - Working clipboard copy with SweetAlert2 toast feedback
   - WhatsApp, Twitter, Email, LinkedIn, Telegram share options

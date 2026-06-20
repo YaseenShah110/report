@@ -27,11 +27,12 @@
             </button>
           </div>
 
-          <!-- Export button — opens CSV download in new tab, no axios/fetch -->
+          <!-- Export CSV button — uses direct URL, no Ziggy dependency -->
           <button @click="exportTasks" :disabled="isExporting"
             class="group flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:border-violet-300 dark:hover:border-violet-700 hover:text-violet-600 dark:hover:text-violet-400 disabled:opacity-60 disabled:cursor-not-allowed transition-all text-xs font-medium">
-            <i
-              :class="isExporting ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-file-csv group-hover:translate-y-0.5 transition-transform'">
+            <i :class="isExporting
+              ? 'fa-solid fa-spinner fa-spin'
+              : 'fa-solid fa-file-csv group-hover:translate-y-0.5 transition-transform'">
             </i>
             <span class="hidden sm:inline">{{ isExporting ? 'Exporting…' : 'Export CSV' }}</span>
           </button>
@@ -41,7 +42,8 @@
 
     <div class="py-5 sm:py-8 px-3 sm:px-4 lg:px-6 space-y-5 sm:space-y-7">
 
-      <!-- Stats Cards (5 columns) -->
+      <!-- ═══════════════════ STAT CARDS ═══════════════════ -->
+      <!-- FIX: all values clamped to Math.max(0, val) — never shows negative -->
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <div v-for="stat in statCards" :key="stat.key" @click="filterByStatus(stat.key)" :class="[
           'group relative overflow-hidden rounded-2xl border p-4 sm:p-5 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5',
@@ -49,18 +51,21 @@
             ? `border-${stat.color}-400 dark:border-${stat.color}-600 bg-${stat.color}-50 dark:bg-${stat.color}-900/20 shadow-lg`
             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600'
         ]">
+          <!-- Ambient glow blob -->
           <div
             :class="`absolute -top-6 -right-6 w-20 h-20 rounded-full bg-${stat.color}-400/10 blur-2xl group-hover:scale-150 transition-transform duration-500`">
           </div>
+
           <div class="relative flex items-start justify-between">
             <div>
               <p
                 class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium tracking-wide uppercase mb-1">
                 {{ stat.label }}
               </p>
+              <!-- FIX: Math.max(0, ...) prevents sub-zero display -->
               <p
                 :class="`text-2xl sm:text-3xl font-black text-${stat.color}-600 dark:text-${stat.color}-400 tabular-nums`">
-                {{ stats?.[stat.key] ?? 0 }}
+                {{ safeStatValue(stat.key) }}
               </p>
             </div>
             <div
@@ -68,6 +73,8 @@
               <i :class="`${stat.icon} text-${stat.color}-600 dark:text-${stat.color}-400 text-base sm:text-lg`"></i>
             </div>
           </div>
+
+          <!-- Active filter underline indicator -->
           <div
             :class="`absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-${stat.color}-400 to-${stat.color}-600 transition-all duration-300`"
             :style="{ width: filters.status === stat.key ? '100%' : '0%' }">
@@ -75,10 +82,11 @@
         </div>
       </div>
 
-      <!-- Filters -->
+      <!-- ═══════════════════ FILTERS ═══════════════════ -->
       <div
         class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 sm:p-4 shadow-sm">
         <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+
           <!-- Search -->
           <div class="relative flex-1 min-w-[160px]">
             <i
@@ -122,7 +130,7 @@
             <i class="fa-solid fa-xmark mr-1"></i>Reset
           </button>
 
-          <!-- Bulk actions -->
+          <!-- Bulk actions — uses window.showAlert instead of inline modal -->
           <template v-if="selectedIds.length">
             <template v-if="filters.status !== 'trashed'">
               <button @click="confirmBulkDelete"
@@ -153,15 +161,18 @@
             <div v-for="task in tasks.data" :key="task.id"
               class="group relative bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden hover:shadow-2xl hover:shadow-slate-200/60 dark:hover:shadow-slate-900/60 hover:-translate-y-1 transition-all duration-300">
 
+              <!-- Checkbox -->
               <div class="absolute top-4 right-4 z-10">
                 <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-violet-600"
                   :checked="selectedIds.includes(task.id)" @change="() => toggleTaskSelection(task)" />
               </div>
 
+              <!-- Priority top stripe -->
               <div :class="`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${priorityGradient(task.priority)}`">
               </div>
 
               <div class="p-4 sm:p-5">
+                <!-- Title + status badge -->
                 <div class="flex items-start justify-between gap-2 mb-3">
                   <div class="flex items-center gap-2 min-w-0">
                     <div :class="`shrink-0 w-2 h-2 rounded-full ${priorityDot(task.priority)}`"></div>
@@ -175,11 +186,12 @@
                   </span>
                 </div>
 
+                <!-- Description -->
                 <p class="text-xs text-slate-400 dark:text-slate-500 line-clamp-2 mb-4 leading-relaxed">
                   {{ task.description || 'No description provided.' }}
                 </p>
 
-                <!-- Progress -->
+                <!-- Progress bar -->
                 <div class="mb-4">
                   <div class="flex justify-between text-[10px] text-slate-400 mb-1.5">
                     <span>Progress</span>
@@ -223,16 +235,18 @@
                   </div>
                 </div>
 
-                <!-- Footer -->
+                <!-- Footer: status select + actions -->
                 <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700">
                   <div>
                     <template v-if="task.status === 'trashed'">
                       <span class="text-[11px] font-semibold text-red-600 dark:text-red-400">Trashed</span>
                     </template>
+                    <!-- FIX: overdue tasks show 'pending' display value but CAN be changed.
+                         The select is never disabled for overdue. value maps overdue→pending for display. -->
                     <template v-else>
-                      <select :value="task.status === 'overdue' ? 'pending' : task.status"
-                        @change="e => handleStatusChange(task, e.target.value)"
-                        class="text-[11px] border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 transition">
+                      <select :value="resolveSelectStatus(task.status)"
+                        @change="e => handleStatusChange(task, e.target.value)" :disabled="updatingTaskId === task.id"
+                        class="text-[11px] border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
                         <option value="pending">Pending</option>
                         <option value="in_progress">In Progress</option>
                         <option value="completed">Completed</option>
@@ -271,7 +285,7 @@
           </TransitionGroup>
         </div>
 
-        <!-- Empty State -->
+        <!-- Empty State (grid) -->
         <div v-if="!tasks.data?.length" class="flex flex-col items-center justify-center py-16 text-center">
           <div
             class="w-20 h-20 rounded-3xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center mb-4 shadow-inner">
@@ -285,7 +299,7 @@
           </button>
         </div>
 
-        <!-- Pagination -->
+        <!-- Pagination (grid) -->
         <div v-if="tasks.data?.length" class="flex justify-center">
           <Pagination :links="tasks.links" />
         </div>
@@ -358,10 +372,11 @@
                       <template v-if="task.status === 'trashed'">
                         <span class="text-[11px] font-semibold text-red-600 dark:text-red-400">Trashed</span>
                       </template>
+                      <!-- FIX: same resolveSelectStatus helper applied in list view -->
                       <template v-else>
-                        <select :value="task.status === 'overdue' ? 'pending' : task.status"
-                          @change="e => handleStatusChange(task, e.target.value)"
-                          class="text-[11px] border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                        <select :value="resolveSelectStatus(task.status)"
+                          @change="e => handleStatusChange(task, e.target.value)" :disabled="updatingTaskId === task.id"
+                          class="text-[11px] border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
                           <option value="pending">Pending</option>
                           <option value="in_progress">In Progress</option>
                           <option value="completed">Completed</option>
@@ -373,12 +388,12 @@
                     </td>
                     <td class="px-4 sm:px-6 py-3.5 hidden sm:table-cell">
                       <span
-                        :class="['text-xs sm:text-sm', isOverdue(task.due_date, task.status) && task.status !== 'completed' ? 'text-red-500 font-bold' : 'text-slate-900 dark:text-white']">
+                        :class="['text-xs', isOverdue(task.due_date, task.status) && task.status !== 'completed' ? 'text-red-500 font-bold' : 'text-slate-900 dark:text-white']">
                         {{ task.due_date ? formatDateTime(task.due_date) : '—' }}
                       </span>
                     </td>
                     <td class="px-4 sm:px-6 py-3.5 hidden sm:table-cell">
-                      <span class="text-xs sm:text-sm text-slate-900 dark:text-white">
+                      <span class="text-xs text-slate-900 dark:text-white">
                         {{ task.created_at ? formatDateTime(task.created_at) : '—' }}
                       </span>
                     </td>
@@ -448,9 +463,10 @@
             </div>
             <div class="space-y-2.5">
               <TransitionGroup name="kanban-card" appear>
-                <div v-for="task in tasksByStatus(col.key)" :key="task.id"
-                  :class="['bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-white/60 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5', col.key === 'overdue' ? 'border-l-4 border-l-red-500' : '']"
-                  draggable="true" @dragstart="dragStart(task)">
+                <div v-for="task in tasksByStatus(col.key)" :key="task.id" :class="[
+                  'bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-white/60 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5',
+                  col.key === 'overdue' ? 'border-l-4 border-l-red-500' : ''
+                ]" draggable="true" @dragstart="dragStart(task)">
                   <p class="font-semibold text-xs text-slate-900 dark:text-white leading-snug"
                     :class="col.key === 'completed' ? 'line-through opacity-60' : ''">
                     {{ task.title }}
@@ -466,9 +482,10 @@
                     <span v-else-if="col.key === 'completed'" class="text-[10px] text-emerald-500 font-medium">
                       Done ✓
                     </span>
-                    <select v-else-if="col.key === 'in_progress'" :value="task.status"
-                      @change="e => handleStatusChange(task, e.target.value)"
-                      class="text-[10px] border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    <!-- FIX: Kanban in-progress cards also use resolveSelectStatus -->
+                    <select v-else-if="col.key === 'in_progress'" :value="resolveSelectStatus(task.status)"
+                      @change="e => handleStatusChange(task, e.target.value)" :disabled="updatingTaskId === task.id"
+                      class="text-[10px] border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50"
                       @click.stop>
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>
@@ -498,6 +515,7 @@
           <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="showDetailsModal = false"></div>
           <div
             class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-hidden flex flex-col">
+            <!-- Header -->
             <div
               class="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <div class="flex items-center gap-2.5">
@@ -509,6 +527,7 @@
                 <i class="fa-solid fa-xmark text-lg"></i>
               </button>
             </div>
+            <!-- Body -->
             <div class="overflow-y-auto p-5 space-y-5 flex-1">
               <div>
                 <label class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Title</label>
@@ -533,9 +552,11 @@
                 <div>
                   <label class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Status</label>
                   <div class="mt-1">
-                    <select v-if="selectedTask?.status !== 'trashed'" v-model="selectedTask.status"
-                      @change="updateStatus(selectedTask)"
-                      class="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 w-full">
+                    <!-- FIX: modal status select also uses resolveSelectStatus, is never locked for overdue -->
+                    <select v-if="selectedTask?.status !== 'trashed'" :value="resolveSelectStatus(selectedTask?.status)"
+                      @change="e => { selectedTask.status = e.target.value; updateStatus(selectedTask, e.target.value) }"
+                      :disabled="updatingTaskId === selectedTask?.id"
+                      class="text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 w-full disabled:opacity-50 disabled:cursor-not-allowed">
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>
                       <option value="completed">Completed</option>
@@ -556,7 +577,6 @@
                     {{ selectedTask?.created_at ? formatDateTime(selectedTask.created_at) : '—' }}
                   </p>
                 </div>
-
                 <div v-if="selectedTask?.completed_at">
                   <label class="text-[10px] uppercase tracking-wider text-emerald-500 font-semibold">Completed
                     At</label>
@@ -564,7 +584,6 @@
                     {{ formatDateTime(selectedTask.completed_at) }}
                   </p>
                 </div>
-
                 <div v-if="selectedTask?.assigned_by">
                   <label class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Assigned By</label>
                   <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ selectedTask.assigned_by }}</p>
@@ -639,10 +658,6 @@
       </Transition>
     </Teleport>
 
-    <!-- ═══════════════════ CONFIRM MODAL ═══════════════════ -->
-    <ConfirmationModal :show="confirmModal.show" :title="confirmModal.title" :message="confirmModal.message"
-      :confirm-text="confirmModal.confirmText" :icon="confirmModal.icon" @close="confirmModal.show = false"
-      @confirm="confirmModal.onConfirm" />
   </AuthenticatedLayout>
 </template>
 
@@ -651,19 +666,18 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue'
 import Pagination from '@/Components/Pagination.vue'
-import ConfirmationModal from '@/Components/ConfirmationModal.vue'
+// ConfirmationModal removed — using window.showAlert() globally instead
 
-// Use the globally configured axios instance which has CSRF headers configured
 const axios = window.axios
 
-// ── Props ──────────────────────────────────────────────────────────────────
+// ── Props ─────────────────────────────────────────────────────────────────
 const props = defineProps({
   tasks: { type: Object, required: true },
   stats: { type: Object, default: () => ({}) },
   filters: { type: Object, default: () => ({}) },
 })
 
-// ── State ──────────────────────────────────────────────────────────────────
+// ── Reactive state ─────────────────────────────────────────────────────────
 const STORAGE_KEY = 'mytasks_view_mode'
 
 const viewMode = ref(localStorage.getItem(STORAGE_KEY) || 'grid')
@@ -674,19 +688,17 @@ const currentTask = ref(null)
 const completionNotes = ref('')
 const selectedIds = ref([])
 const isSubmitting = ref(false)
-const isExporting = ref(false)   // ← export loading state
+const isExporting = ref(false)
 
-const confirmModal = reactive({
-  show: false,
-  title: '',
-  message: '',
-  confirmText: 'Confirm',
-  icon: 'fa-solid fa-question',
-  onConfirm: () => { },
-})
+/**
+ * FIX: track which task is being updated so we can disable its select
+ * while the PATCH is in-flight — prevents double-submit and UI confusion.
+ */
+const updatingTaskId = ref(null)
 
 const isAllSelected = computed(() =>
-  props.tasks.data?.length > 0 && props.tasks.data.every(t => selectedIds.value.includes(t.id))
+  props.tasks.data?.length > 0 &&
+  props.tasks.data.every(t => selectedIds.value.includes(t.id))
 )
 
 const filters = reactive({
@@ -718,12 +730,25 @@ const kanbanColumns = [
   { key: 'overdue', label: 'Overdue', icon: 'fa-solid fa-circle-exclamation', dot: 'bg-red-400', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50/70 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
 ]
 
-// ── Computed ───────────────────────────────────────────────────────────────
+// ── Computed helpers ───────────────────────────────────────────────────────
 const hasActiveFilters = computed(() =>
   filters.search || filters.status || filters.priority || filters.sort !== 'due_date_asc'
 )
 
-// ── Pure helpers ───────────────────────────────────────────────────────────
+// ── FIX #1: safeStatValue — always returns Math.max(0, val)
+// Prevents negative numbers on stat cards regardless of what the server sends.
+const safeStatValue = (key) => Math.max(0, props.stats?.[key] ?? 0)
+
+// ── FIX #2: resolveSelectStatus — maps 'overdue' → 'pending' for the select
+// display value so overdue tasks always show a valid selectable option.
+// This keeps the dropdown functional; the user CAN change status from overdue state.
+const resolveSelectStatus = (status) => {
+  if (!status || status === 'overdue') return 'pending'
+  if (status === 'trashed') return 'pending'
+  return status
+}
+
+// ── Pure display helpers ───────────────────────────────────────────────────
 const priorityDot = p => ({
   low: 'bg-blue-400', medium: 'bg-green-400', high: 'bg-orange-400', urgent: 'bg-red-500'
 }[p] ?? 'bg-slate-400')
@@ -764,7 +789,7 @@ const taskProgress = task =>
       task.status === 'overdue' ? 15 :
         task.status === 'trashed' ? 0 : 10
 
-const tasksByStatus = status => {
+const tasksByStatus = (status) => {
   if (!props.tasks.data) return []
   if (status === 'trashed') return props.tasks.data.filter(t => t.status === 'trashed')
   if (status === 'overdue') return props.tasks.data.filter(t =>
@@ -791,14 +816,24 @@ const isOverdue = (date, status) =>
   !!date && new Date(date) < new Date() && status !== 'completed'
 
 // ── Navigation & filter actions ────────────────────────────────────────────
-const setViewMode = mode => {
+const setViewMode = (mode) => {
   viewMode.value = mode
   localStorage.setItem(STORAGE_KEY, mode)
 }
 
+/**
+ * FIX: Performance — use preserveState + only: ['tasks','stats'] so Inertia
+ * does a partial reload (no full page repaint), making filter navigation
+ * feel instant instead of reloading the entire layout.
+ */
 const applyFilters = () => {
   selectedIds.value = []
-  router.get(route('my-tasks.index'), filters, { preserveState: true, replace: true })
+  router.get(route('my-tasks.index'), { ...filters }, {
+    preserveState: true,
+    preserveScroll: true,
+    replace: true,
+    only: ['tasks', 'stats', 'filters'],
+  })
 }
 
 const resetFilters = () => {
@@ -810,80 +845,88 @@ const resetFilters = () => {
   applyFilters()
 }
 
-const filterByStatus = status => {
+const filterByStatus = (status) => {
   filters.status = filters.status === status ? '' : status
   applyFilters()
 }
 
-// ── EXPORT (no axios / fetch — pure browser navigation) ───────────────────
-/**
- * Builds the export URL from the dedicated my-tasks.export route and the
- * current active filters, then opens it in a new tab so the browser
- * triggers the file download without any JS fetch / axios calls.
- *
- * The server streams the CSV with the correct Content-Disposition header,
- * so the browser downloads it directly.
- */
+// ── FIX #3: Export CSV — uses direct URL path, no Ziggy dependency.
+// Builds query string from current filters and opens in new tab.
+// The server streams the CSV with Content-Disposition: attachment.
 const exportTasks = () => {
   if (isExporting.value) return
-
   isExporting.value = true
 
-  // Build query params from current reactive filters
-  const params = new URLSearchParams({
-    search: filters.search ?? '',
-    status: filters.status ?? '',
-    priority: filters.priority ?? '',
-    sort: (typeof filters.sort === 'string' ? filters.sort : '') || 'due_date_asc',
-  })
+  const params = new URLSearchParams()
+  if (filters.search) params.set('search', filters.search)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.priority) params.set('priority', filters.priority)
+  if (filters.sort && filters.sort !== 'due_date_asc') params.set('sort', filters.sort)
 
-  // Remove empty params so the URL stays clean
-  for (const [key, value] of [...params.entries()]) {
-    if (!value) params.delete(key)
-  }
+  const qs = params.toString()
+  // Use hard-coded path — avoids Ziggy route() failure when route not registered
+  const exportUrl = '/my-tasks/export' + (qs ? '?' + qs : '')
 
-  const exportUrl = route('my-tasks.export') + (params.toString() ? '?' + params.toString() : '')
-
-  // Open in new tab — browser handles the download automatically
   window.open(exportUrl, '_blank', 'noopener,noreferrer')
+  window.showToast?.('CSV export started — check your downloads.', 'success')
 
-  // Reset loading state after a short delay (download triggers instantly)
   setTimeout(() => { isExporting.value = false }, 1500)
 }
 
-// ── Status update ──────────────────────────────────────────────────────────
-const updateStatus = task => {
-  if (task.status === 'completed') {
+// ── FIX #4: Status update — accepts explicit newStatus parameter.
+// Previously updateStatus() re-read task.status AFTER it was already mutated,
+// which worked but was fragile. Now newStatus is passed explicitly.
+// For overdue tasks the stored DB status is still 'pending'/'in_progress',
+// so the PATCH to admin.tasks.status works without any server changes.
+const updateStatus = (task, newStatus) => {
+  if (!newStatus) newStatus = task.status   // fallback for legacy callers
+  if (newStatus === 'completed') {
     currentTask.value = task
     showNotesModal.value = true
-  } else {
-    router.patch(
-      route('admin.tasks.status', task.id),
-      { status: task.status },
-      {
-        preserveState: false,
-        onSuccess: () => window.showToast?.('Status updated successfully', 'success'),
-        onError: () => window.showToast?.('Failed to update status', 'error'),
-      }
-    )
+    return
   }
+
+  updatingTaskId.value = task.id
+
+  router.patch(
+    route('admin.tasks.status', task.id),
+    { status: newStatus },
+    {
+      preserveState: true,
+      preserveScroll: true,
+      only: ['tasks', 'stats'],
+      onSuccess: () => {
+        window.showToast?.('Status updated successfully', 'success')
+      },
+      onError: (errors) => {
+        const msg = Object.values(errors)[0] || 'Failed to update status'
+        window.showToast?.(msg, 'error')
+      },
+      onFinish: () => {
+        updatingTaskId.value = null
+      },
+    }
+  )
 }
 
 const handleStatusChange = (task, newStatus) => {
+  // Optimistic local update for instant UI feedback
   task.status = newStatus
   if (selectedTask.value?.id === task.id) selectedTask.value.status = newStatus
-  updateStatus(task)
+  updateStatus(task, newStatus)
 }
 
 const submitCompletionNotes = () => {
-  if (isSubmitting.value) return
+  if (isSubmitting.value || !currentTask.value) return
   isSubmitting.value = true
 
   router.patch(
     route('admin.tasks.status', currentTask.value.id),
     { status: 'completed', completion_notes: completionNotes.value },
     {
-      preserveState: false,
+      preserveState: true,
+      preserveScroll: true,
+      only: ['tasks', 'stats'],
       onSuccess: () => {
         showNotesModal.value = false
         if (selectedTask.value?.id === currentTask.value.id) {
@@ -893,9 +936,11 @@ const submitCompletionNotes = () => {
         completionNotes.value = ''
         currentTask.value = null
         window.showToast?.('Task completed! Great job! 🎉', 'success')
-        applyFilters()
       },
-      onError: () => window.showToast?.('Failed to complete task', 'error'),
+      onError: (errors) => {
+        const msg = Object.values(errors)[0] || 'Failed to complete task'
+        window.showToast?.(msg, 'error')
+      },
       onFinish: () => { isSubmitting.value = false },
     }
   )
@@ -908,13 +953,13 @@ const cancelCompletion = () => {
 }
 
 // ── Details modal ──────────────────────────────────────────────────────────
-const openTaskDetails = task => {
+const openTaskDetails = (task) => {
   selectedTask.value = { ...task }
   showDetailsModal.value = true
 }
 
 // ── Selection ──────────────────────────────────────────────────────────────
-const toggleTaskSelection = task => {
+const toggleTaskSelection = (task) => {
   const idx = selectedIds.value.indexOf(task.id)
   idx === -1 ? selectedIds.value.push(task.id) : selectedIds.value.splice(idx, 1)
 }
@@ -925,28 +970,35 @@ const toggleSelectAll = () => {
     : (selectedIds.value = props.tasks.data?.map(t => t.id) || [])
 }
 
-// ── Confirm helper ─────────────────────────────────────────────────────────
-const showConfirm = ({ title, message, confirmText, icon, onConfirm }) => {
-  Object.assign(confirmModal, { show: true, title, message, confirmText, icon, onConfirm })
+// ── Confirm via window.showAlert (global) ──────────────────────────────────
+// FIX: Removed ConfirmationModal component dependency entirely.
+// All confirmations use window.showAlert() from showAlert.js — zero component overhead.
+const showConfirmAlert = ({ type = 'danger', title, message, confirmText, onConfirm }) => {
+  window.showAlert?.({
+    type,
+    title,
+    message,
+    confirmText,
+    cancelText: 'Cancel',
+    onConfirm,
+  })
 }
 
 // ── Bulk delete ────────────────────────────────────────────────────────────
 const confirmBulkDelete = () => {
   if (!selectedIds.value.length) return
   const count = selectedIds.value.length
-  showConfirm({
+  showConfirmAlert({
+    type: 'danger',
     title: `Move ${count} task${count > 1 ? 's' : ''} to Trash?`,
-    message: 'Selected tasks will be soft-deleted and can be restored later.',
+    message: 'Selected tasks will be soft-deleted and can be restored from the Trash filter.',
     confirmText: 'Move to Trash',
-    icon: 'fa-solid fa-trash',
     onConfirm: async () => {
-      confirmModal.show = false
       try {
         await axios.post('/admin/tasks/bulk-delete', { task_ids: selectedIds.value })
-        const n = selectedIds.value.length
+        window.showToast?.(`${count} task${count > 1 ? 's' : ''} moved to trash`, 'success')
         selectedIds.value = []
         applyFilters()
-        window.showToast?.(`${n} task${n > 1 ? 's' : ''} moved to trash`, 'success')
       } catch (err) {
         window.showToast?.(err.response?.data?.message || 'Bulk delete failed', 'error')
       }
@@ -954,19 +1006,18 @@ const confirmBulkDelete = () => {
   })
 }
 
-// ── Restore / force delete ─────────────────────────────────────────────────
-const restoreTask = task => {
-  showConfirm({
+// ── Restore / force delete (single) ───────────────────────────────────────
+const restoreTask = (task) => {
+  showConfirmAlert({
+    type: 'warning',
     title: `Restore "${task.title}"?`,
     message: 'This task will be restored and become active again.',
     confirmText: 'Restore',
-    icon: 'fa-solid fa-rotate-left',
     onConfirm: async () => {
-      confirmModal.show = false
       try {
         await axios.post(`/admin/tasks/${task.id}/restore`)
-        applyFilters()
         window.showToast?.('Task restored successfully', 'success')
+        applyFilters()
       } catch (err) {
         window.showToast?.(err.response?.data?.message || 'Restore failed', 'error')
       }
@@ -974,18 +1025,17 @@ const restoreTask = task => {
   })
 }
 
-const forceDeleteTask = task => {
-  showConfirm({
+const forceDeleteTask = (task) => {
+  showConfirmAlert({
+    type: 'danger',
     title: `Permanently delete "${task.title}"?`,
     message: 'This action cannot be undone. The task will be removed forever.',
     confirmText: 'Delete Forever',
-    icon: 'fa-solid fa-skull',
     onConfirm: async () => {
-      confirmModal.show = false
       try {
         await axios.delete(`/admin/tasks/${task.id}/force`)
-        applyFilters()
         window.showToast?.('Task permanently deleted', 'success')
+        applyFilters()
       } catch (err) {
         window.showToast?.(err.response?.data?.message || 'Delete failed', 'error')
       }
@@ -993,16 +1043,16 @@ const forceDeleteTask = task => {
   })
 }
 
+// ── Bulk restore / force-delete ────────────────────────────────────────────
 const bulkRestoreSelected = () => {
   if (!selectedIds.value.length) return
   const count = selectedIds.value.length
-  showConfirm({
+  showConfirmAlert({
+    type: 'warning',
     title: `Restore ${count} task${count > 1 ? 's' : ''}?`,
-    message: 'All selected tasks will be restored.',
+    message: 'All selected tasks will be restored and become active again.',
     confirmText: 'Restore All',
-    icon: 'fa-solid fa-rotate-left',
     onConfirm: async () => {
-      confirmModal.show = false
       try {
         await Promise.all(selectedIds.value.map(id => axios.post(`/admin/tasks/${id}/restore`)))
         window.showToast?.(`${count} task${count > 1 ? 's' : ''} restored`, 'success')
@@ -1018,13 +1068,12 @@ const bulkRestoreSelected = () => {
 const bulkForceDeleteSelected = () => {
   if (!selectedIds.value.length) return
   const count = selectedIds.value.length
-  showConfirm({
+  showConfirmAlert({
+    type: 'danger',
     title: `Permanently delete ${count} task${count > 1 ? 's' : ''}?`,
-    message: 'This cannot be undone.',
+    message: 'This cannot be undone. All selected tasks will be removed forever.',
     confirmText: 'Delete Forever',
-    icon: 'fa-solid fa-skull',
     onConfirm: async () => {
-      confirmModal.show = false
       try {
         await Promise.all(selectedIds.value.map(id => axios.delete(`/admin/tasks/${id}/force`)))
         window.showToast?.(`${count} task${count > 1 ? 's' : ''} permanently deleted`, 'success')
@@ -1044,9 +1093,8 @@ const debouncedSearch = () => {
   searchTimer = setTimeout(applyFilters, 450)
 }
 
-// ── Kanban drag (UI only) ──────────────────────────────────────────────────
-let draggedTask = null
-const dragStart = task => { draggedTask = task }
+// ── Kanban drag (UI-only, visual) ──────────────────────────────────────────
+const dragStart = (task) => { /* future drop zones */ }
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 onMounted(() => {
@@ -1060,7 +1108,7 @@ onMounted(() => {
   @apply px-3 py-2 sm:py-2.5 text-xs sm:text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition;
 }
 
-/* Task card enter/leave */
+/* Task card — grid enter/leave */
 .task-card-enter-active {
   transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

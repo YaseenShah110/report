@@ -82,7 +82,7 @@
                 :class="`text-2xl sm:text-3xl font-black text-${card.color}-600 dark:text-${card.color}-400 tabular-nums transition-all duration-300`">
                 {{ card.value }}</p>
               <p v-if="card.subtext" class="text-[9px] sm:text-[10px] text-slate-400 mt-1 leading-tight">{{ card.subtext
-                }}
+              }}
               </p>
             </div>
             <div
@@ -294,7 +294,7 @@
                         </span>
                       </div>
                       <div v-else-if="task.deleted_at" class="text-[11px] text-slate-400">{{ formatDate(task.deleted_at)
-                        }}
+                      }}
                       </div>
                       <div v-else class="text-[11px] text-slate-400">—</div>
                     </td>
@@ -389,8 +389,6 @@ const isNavigating = ref(false)
 const isExporting = ref(false)
 
 // ── localStats — mirrors props.stats but updated optimistically ────────────
-// Stat cards update INSTANTLY on delete/restore/status-change without
-// waiting for the server round-trip, giving a snappy feel.
 const localStats = reactive({
   total: props.stats?.total ?? 0,
   pending: props.stats?.pending ?? 0,
@@ -462,30 +460,12 @@ const statusBadge = s => ({
   overdue: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
 }[s] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300')
 
-/**
- * taskIsOverdue — uses server-sent `is_overdue` flag as primary source of truth.
- * The server computes this with the correct DB timezone.
- * Falls back to client-side calculation only after optimistic status mutations.
- *
- * Rule (identical in controller and here):
- *   overdue = NOT trashed AND NOT completed AND due_date NOT NULL AND due_date < now
- *   pending / in_progress MUST EXCLUDE overdue tasks (no double-counting).
- */
 const taskIsOverdue = task => {
   if (task.status === 'completed' || task.deleted_at) return false
-  // After optimistic status change, is_overdue may be stale — trust status first
-  if (task.status === 'completed') return false
-  // Prefer authoritative server flag
   if (typeof task.is_overdue === 'boolean') return task.is_overdue
-  // Fallback for optimistic-updated tasks (is_overdue not yet refreshed)
   return !!task.due_date && new Date(task.due_date) < new Date()
 }
 
-/**
- * resolvedStatusBadge / resolvedStatusLabel
- * Overdue pending/in-progress tasks show orange "Overdue" badge — never amber/blue.
- * This visually enforces the rule: a task is in ONE category only.
- */
 const resolvedStatusBadge = task => taskIsOverdue(task) ? statusBadge('overdue') : statusBadge(task.status)
 const resolvedStatusLabel = task => taskIsOverdue(task) ? 'Overdue' : task.status.replace('_', ' ')
 
@@ -493,8 +473,6 @@ const formatDate = d => d ? new Date(d).toLocaleDateString('en-GB', { day: 'nume
 const formatDateTime = d => d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
 // ── Filter navigation ──────────────────────────────────────────────────────
-// Uses Inertia partial reload — only fetches tasks/stats/filters, not full page.
-// This is the key to instant filtering without full page reloads.
 const applyFilters = () => {
   router.get(route('admin.tasks.index'), filters, {
     preserveState: true,
@@ -528,18 +506,7 @@ const jumpToOverdue = () => {
 }
 
 // ── Optimistic stat card updater ───────────────────────────────────────────
-/**
- * adjustStats — immediately mutates localStats so cards refresh without
- * waiting for the server.  The watch() on props.stats reconciles any
- * discrepancy once the server responds.
- *
- * Overdue logic (mirrors TaskController::index stats):
- *   pending     counts task only when status='pending'     AND NOT overdue
- *   in_progress counts task only when status='in_progress' AND NOT overdue
- *   overdue     counts task when status!='completed'       AND due_date < now
- */
 const adjustStats = (task, action) => {
-  // Use server flag if available, else client-side calc
   const wasOver = taskIsOverdue(task)
   const wasSt = task.status
   const wasTrashed = !!task.deleted_at
@@ -582,19 +549,16 @@ const adjustStats = (task, action) => {
     return
   }
 
-  // action = { type: 'statusChange', newStatus }
   if (action?.type === 'statusChange') {
     const newSt = action.newStatus
     const dueDate = task.due_date ? new Date(task.due_date) : null
     const willOver = newSt !== 'completed' && dueDate && dueDate < new Date()
 
-    // Decrement old bucket
     if (wasOver) localStats.overdue--
     else if (wasSt === 'pending') localStats.pending--
     else if (wasSt === 'in_progress') localStats.in_progress--
     else if (wasSt === 'completed') localStats.completed--
 
-    // Increment new bucket
     if (willOver) localStats.overdue++
     else if (newSt === 'pending') localStats.pending++
     else if (newSt === 'in_progress') localStats.in_progress++
@@ -602,7 +566,7 @@ const adjustStats = (task, action) => {
   }
 }
 
-// ── Inline edit handlers using global window.showAlert ────────────────────
+// ── Inline edit handlers ───────────────────────────────────────────────────
 const onPriorityChange = (task, newPriority) => {
   window.showAlert({
     type: 'warning',
@@ -618,13 +582,16 @@ const onPriorityChange = (task, newPriority) => {
       }, {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => { task.priority = newPriority; window.showToast('success', 'Priority updated successfully.') },
-        onError: () => window.showToast('error', 'Failed to update priority.'),
+        onSuccess: () => { task.priority = newPriority; window.showToast('Priority updated successfully.', 'success') },
+        onError: () => window.showToast('Failed to update priority.', 'error'),
       })
     },
   })
 }
 
+// ── Status change — uses dedicated PATCH /status endpoint ──────────────────
+// This bypasses the after_or_equal:now due_date validation in the full
+// update() method, allowing status changes on overdue tasks.
 const onStatusChange = (task, newStatus) => {
   window.showAlert({
     type: 'info',
@@ -633,21 +600,19 @@ const onStatusChange = (task, newStatus) => {
     confirmText: 'Update Status',
     cancelText: 'Cancel',
     onConfirm: () => {
-      // Optimistic stat card update — instant feedback
       adjustStats(task, { type: 'statusChange', newStatus })
 
-      router.put(route('admin.tasks.update', task.id), {
-        title: task.title, description: task.description,
-        assigned_to: task.assigned_to?.id, priority: task.priority,
-        status: newStatus, due_date: task.due_date, report_id: task.report?.id || null,
-      }, {
+      router.patch(route('admin.tasks.status', task.id), { status: newStatus }, {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => { task.status = newStatus; window.showToast('success', 'Status updated successfully.') },
+        onSuccess: () => {
+          task.status = newStatus
+          task.is_overdue = newStatus !== 'completed' && !!task.due_date && new Date(task.due_date) < new Date()
+          window.showToast('Status updated successfully.', 'success')
+        },
         onError: () => {
-          // Rollback optimistic update
           adjustStats({ ...task, status: newStatus }, { type: 'statusChange', newStatus: task.status })
-          window.showToast('error', 'Failed to update status.')
+          window.showToast('Failed to update status.', 'error')
         },
       })
     },
@@ -671,8 +636,8 @@ const onDueDateChange = (task, newDueDate) => {
       }, {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => { task.due_date = newDueDate || null; window.showToast('success', 'Due date updated successfully.') },
-        onError: () => window.showToast('error', 'Failed to update due date.'),
+        onSuccess: () => { task.due_date = newDueDate || null; window.showToast('Due date updated successfully.', 'success') },
+        onError: () => window.showToast('Failed to update due date.', 'error'),
       })
     },
   })
@@ -687,12 +652,12 @@ const askDelete = task => {
     confirmText: 'Move to Trash',
     cancelText: 'Cancel',
     onConfirm: () => {
-      adjustStats(task, 'delete')   // optimistic
+      adjustStats(task, 'delete')
       router.delete(route('admin.tasks.destroy', task.id), {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => window.showToast('success', 'Task moved to trash.'),
-        onError: () => { adjustStats(task, 'restore'); window.showToast('error', 'Failed to delete task.') },
+        onSuccess: () => window.showToast('Task moved to trash.', 'success'),
+        onError: () => { adjustStats(task, 'restore'); window.showToast('Failed to delete task.', 'error') },
       })
     },
   })
@@ -706,12 +671,12 @@ const doRestoreTask = task => {
     confirmText: 'Restore',
     cancelText: 'Cancel',
     onConfirm: () => {
-      adjustStats(task, 'restore')   // optimistic
+      adjustStats(task, 'restore')
       router.post(route('admin.tasks.restore', task.id), {}, {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => window.showToast('success', 'Task restored successfully.'),
-        onError: () => { adjustStats(task, 'delete'); window.showToast('error', 'Failed to restore task.') },
+        onSuccess: () => window.showToast('Task restored successfully.', 'success'),
+        onError: () => { adjustStats(task, 'delete'); window.showToast('Failed to restore task.', 'error') },
       })
     },
   })
@@ -725,18 +690,18 @@ const askForceDelete = task => {
     confirmText: 'Delete Forever',
     cancelText: 'Cancel',
     onConfirm: () => {
-      adjustStats(task, 'forceDelete')   // optimistic
+      adjustStats(task, 'forceDelete')
       router.delete(route('admin.tasks.force-delete', task.id), {
         preserveState: true, preserveScroll: true,
         only: ['tasks', 'stats', 'filters'],
-        onSuccess: () => window.showToast('success', 'Task permanently deleted.'),
-        onError: () => { adjustStats({ ...task, deleted_at: true }, 'restore'); window.showToast('error', 'Failed to permanently delete task.') },
+        onSuccess: () => window.showToast('Task permanently deleted.', 'success'),
+        onError: () => { adjustStats({ ...task, deleted_at: true }, 'restore'); window.showToast('Failed to permanently delete task.', 'error') },
       })
     },
   })
 }
 
-// ── Export — pure browser navigation, no axios/fetch ──────────────────────
+// ── Export — pure browser navigation + auto-dismissing toast ───────────────
 const exportTasks = () => {
   if (isExporting.value) return
   isExporting.value = true
@@ -754,10 +719,14 @@ const exportTasks = () => {
     route('admin.tasks.export') + (params.toString() ? '?' + params.toString() : ''),
     '_blank', 'noopener,noreferrer'
   )
+
+  // ✅ Auto-dismissing toast shown immediately after export triggers
+  window.showToast('CSV export started — check your downloads.', 'success')
+
   exportTimer = setTimeout(() => { isExporting.value = false }, 1500)
 }
 
-// ── Debounced search (memory-leak safe) ───────────────────────────────────
+// ── Debounced search ───────────────────────────────────────────────────────
 let searchTimer = null
 let exportTimer = null
 
@@ -766,11 +735,11 @@ const debouncedSearch = () => {
   searchTimer = setTimeout(applyFilters, 400)
 }
 
-// ── Cleanup ────────────────────────────────────────────────────────────────
+// ── Cleanup — prevent memory leaks ────────────────────────────────────────
 onUnmounted(() => {
   clearTimeout(searchTimer)
   clearTimeout(exportTimer)
-  removeStart()    // de-register Inertia router event listeners
+  removeStart()
   removeFinish()
 })
 </script>

@@ -41,15 +41,15 @@
         :rubber-band="rubberBand" :drop-target-page="dropTargetPage" :measure-mode="measureMode" :is-dark="isDark"
         :page-count="report.content.length" :style-painter-active="stylePainterActive"
         @select-element="selectElementByIdx" @deselect-all="deselectAll" @add-element="addElementAtPosition"
-        @select-page="goToPage" @add-page="addPage" @start-editing="startEditing" @stop-editing="editingElIdx = null"
-        @update-text-content="updateTextContent" @element-mouse-down="onElementMouseDown" @resize-start="startResize"
-        @rotate-start="startRotate" @canvas-drop="onCanvasDrop" @canvas-drag-end="isDraggingEl = false"
-        @rubber-band-start="startRubberBand" @rubber-band-move="handleRubberBandMove" @rubber-band-end="endRubberBand"
-        @zoom-wheel="handleZoomWheel" @page-dblclick="onPageDblClick" @context-menu="showElContextMenu"
-        @image-upload="triggerImageUpload" @image-replace="triggerImageReplace" @go-to-page="goToPage"
-        @mark-dirty="markDirty" @zoom-reset="zoom = 100" @element-cross-page="moveElementToPage"
-        @scroll-to-page="scrollToPage" @style-painter-apply="applyStylePainter" @duplicate-page="duplicatePage"
-        @delete-page="deletePage" />
+        @select-page="goToPage" @add-page="addPage" @add-page-after="addPageAfter" @start-editing="startEditing"
+        @stop-editing="editingElIdx = null" @update-text-content="updateTextContent"
+        @element-mouse-down="onElementMouseDown" @resize-start="startResize" @rotate-start="startRotate"
+        @canvas-drop="onCanvasDrop" @canvas-drag-end="isDraggingEl = false" @rubber-band-start="startRubberBand"
+        @rubber-band-move="handleRubberBandMove" @rubber-band-end="endRubberBand" @zoom-wheel="handleZoomWheel"
+        @page-dblclick="onPageDblClick" @context-menu="showElContextMenu" @image-upload="triggerImageUpload"
+        @image-replace="triggerImageReplace" @go-to-page="goToPage" @mark-dirty="markDirty" @zoom-reset="zoom = 100"
+        @element-cross-page="moveElementToPage" @scroll-to-page="scrollToPage" @style-painter-apply="applyStylePainter"
+        @duplicate-page="duplicatePage" @delete-page="deletePage" />
 
       <!-- RIGHT SIDEBAR -->
       <RightSidebar :selected-el="selectedEl" :selected-els-count="selectedEls.length" :settings="settings"
@@ -67,7 +67,7 @@
         @reset-styles="resetElementStyles" @style-painter-copy="stylePainterCopy"
         @style-painter-paste="stylePainterPaste" @style-painter-activate="stylePainterActive = !stylePainterActive"
         @mark-dirty="markDirty" @image-replace="triggerImageReplace" @refresh-toc="refreshTOC"
-        @update:is-collapsed="rightCollapsed = $event" @update-el-prop="updateElProp" @update-position="updatePosition"
+        @update:is-collapsed="rightCollapsed = $event" @update:el-prop="updateElProp" @update-position="updatePosition"
         @move-element-to-page="moveElementToPage" />
     </div>
 
@@ -692,7 +692,7 @@ function updateTextContent({ pageIndex, elementIndex, content }) {
   if (el) { el.content = content; markDirty() }
 }
 
-function updateElProp({ prop, value }) {
+function updateElProp(prop, value) {
   if (selectedEl.value) { selectedEl.value[prop] = value; markDirty() }
 }
 
@@ -885,6 +885,20 @@ function addPage() {
   goToPage(report.content.length - 1)
   markDirty()
   showToast('Page added', 'success')
+}
+
+function addPageAfter(pi) {
+  pushUndo()
+  const newPage = {
+    id: uid(),
+    label: 'Page ' + (report.content.length + 1),
+    elements: [],
+    background: settings.background_color,
+  }
+  report.content.splice(pi + 1, 0, newPage)
+  goToPage(pi + 1)
+  markDirty()
+  showToast('Page inserted', 'success')
 }
 
 function duplicatePage(idx) {

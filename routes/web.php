@@ -134,11 +134,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // ── Listing & Reading ───────────────────────────────────────
         Route::get('/', [ReportController::class, 'index'])
-            
             ->name('index');
-            Route::get('/all', [ReportController::class, 'allReports'])
-    ->name('reports.all')
-    ->middleware('can:view-reports');
+        Route::get('/all', [ReportController::class, 'allReports'])
+            ->name('reports.all')
+            ->middleware('can:view-reports');
 
         Route::get('/{report:slug}/preview', [ReportController::class, 'preview'])
             ->middleware('can:view-reports')
@@ -427,52 +426,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
             */
             Route::prefix('tasks')->name('tasks.')->group(function () {
 
-                // ── Listing & Reading ───────────────────────────────────
+                // ── Static / non-parameterized routes MUST come first ───────
+                // CRITICAL: Define all static routes before /{task} to prevent
+                // Laravel from matching 'export', 'create', 'trashed', etc. as task IDs.
+
+                // ── Listing ─────────────────────────────────────────────
                 Route::get('/', [TaskController::class, 'index'])
                     ->middleware('can:view-tasks')
                     ->name('index');
+
+                // ── Export (MUST be before /{task}) ─────────────────────
+                Route::get('/export', [TaskController::class, 'export'])
+                    ->middleware('can:view-tasks')
+                    ->name('export');
+
+                // ── Create (MUST be before /{task}) ─────────────────────
                 Route::get('/create', [TaskController::class, 'create'])
                     ->middleware('can:create-tasks')
                     ->name('create');
-                Route::get('/{task}', [TaskController::class, 'show'])
-                    ->middleware('can:view-tasks')
-                    ->name('show');
+
+                // ── Trashed (MUST be before /{task}) ────────────────────
                 Route::get('/trashed', [TaskController::class, 'trashed'])
                     ->middleware('can:delete-tasks')
                     ->name('trashed');
 
-                // ── Create ──────────────────────────────────────────────
-                Route::post('/', [TaskController::class, 'store'])
-                    ->middleware('can:create-tasks')
-                    ->name('store');
-
-                // ── Edit & Update ───────────────────────────────────────
-                Route::get('/{task}/edit', [TaskController::class, 'edit'])
-                    ->middleware('can:edit-tasks')
-                    ->name('edit');
-                Route::put('/{task}', [TaskController::class, 'update'])
-                    ->middleware('can:edit-tasks')
-                    ->name('update');
-
-                // ── Delete ──────────────────────────────────────────────
-                Route::delete('/{task}', [TaskController::class, 'destroy'])
-                    ->middleware('can:delete-tasks')
-                    ->name('destroy');
-                Route::post('/{task}/restore', [TaskController::class, 'restore'])
-                    ->middleware('can:delete-tasks')
-                    ->withTrashed()
-                    ->name('restore');
-                Route::delete('/{task}/force', [TaskController::class, 'forceDelete'])
-                    ->middleware('can:delete-tasks')
-                    ->withTrashed()
-                    ->name('force-delete');
-
-                // ── Status Management ───────────────────────────────────
-                Route::patch('/{task}/status', [TaskController::class, 'updateStatus'])
-                    ->middleware('can:edit-tasks')
-                    ->name('status');
-
-                // ── Bulk Operations ────────────────────────────────────
+                // ── Bulk Operations (MUST be before /{task}) ────────────
                 Route::post('/bulk-delete', [TaskController::class, 'bulkDelete'])
                     ->middleware('can:delete-tasks')
                     ->name('bulk-delete');
@@ -483,10 +461,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->middleware('can:edit-tasks')
                     ->name('bulk-status');
 
-                // ── Export (Admin — all tasks with filters) ────────────
-                Route::get('/export', [TaskController::class, 'export'])
+                // ── Store ────────────────────────────────────────────────
+                Route::post('/', [TaskController::class, 'store'])
+                    ->middleware('can:create-tasks')
+                    ->name('store');
+
+                // ── Parameterized routes (/{task}) MUST come after statics ─
+                Route::get('/{task}', [TaskController::class, 'show'])
                     ->middleware('can:view-tasks')
-                    ->name('export');
+                    ->name('show');
+
+                Route::get('/{task}/edit', [TaskController::class, 'edit'])
+                    ->middleware('can:edit-tasks')
+                    ->name('edit');
+
+                Route::put('/{task}', [TaskController::class, 'update'])
+                    ->middleware('can:edit-tasks')
+                    ->name('update');
+
+                Route::delete('/{task}', [TaskController::class, 'destroy'])
+                    ->middleware('can:delete-tasks')
+                    ->name('destroy');
+
+                Route::post('/{task}/restore', [TaskController::class, 'restore'])
+                    ->middleware('can:delete-tasks')
+                    ->withTrashed()
+                    ->name('restore');
+
+                Route::delete('/{task}/force', [TaskController::class, 'forceDelete'])
+                    ->middleware('can:delete-tasks')
+                    ->withTrashed()
+                    ->name('force-delete');
+
+                // ── Status Management ────────────────────────────────────
+                Route::patch('/{task}/status', [TaskController::class, 'updateStatus'])
+                    ->middleware('can:edit-tasks')
+                    ->name('status');
             });
 
             /*
