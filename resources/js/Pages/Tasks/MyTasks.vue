@@ -450,7 +450,7 @@
 
       <!-- ═══════════════════ KANBAN VIEW ═══════════════════ -->
       <template v-else>
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5">
           <div v-for="col in kanbanColumns" :key="col.key" :class="`rounded-2xl border p-3 sm:p-4 ${col.bg}`">
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center gap-2">
@@ -464,13 +464,20 @@
             <div class="space-y-2.5">
               <TransitionGroup name="kanban-card" appear>
                 <div v-for="task in tasksByStatus(col.key)" :key="task.id" :class="[
-                  'bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-white/60 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all duration-200 hover:-translate-y-0.5',
-                  col.key === 'overdue' ? 'border-l-4 border-l-red-500' : ''
+                  'bg-white dark:bg-slate-800 rounded-xl p-3 shadow-sm border border-white/60 dark:border-slate-700 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5',
+                  col.key === 'overdue' ? 'border-l-4 border-l-red-500' : '',
+                  col.key === 'trashed' ? 'border-l-4 border-l-slate-400 opacity-70' : '',
                 ]" draggable="true" @dragstart="dragStart(task)">
-                  <p class="font-semibold text-xs text-slate-900 dark:text-white leading-snug"
-                    :class="col.key === 'completed' ? 'line-through opacity-60' : ''">
+
+                  <!-- Title -->
+                  <p class="font-semibold text-xs text-slate-900 dark:text-white leading-snug" :class="[
+                    col.key === 'completed' ? 'line-through opacity-60' : '',
+                    col.key === 'trashed' ? 'line-through opacity-50' : '',
+                  ]">
                     {{ task.title }}
                   </p>
+
+                  <!-- Row 1: priority badge + status indicator -->
                   <div class="flex items-center justify-between mt-2.5 gap-1 flex-wrap">
                     <span
                       :class="`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase ${priorityBadge(task.priority)}`">
@@ -482,20 +489,49 @@
                     <span v-else-if="col.key === 'completed'" class="text-[10px] text-emerald-500 font-medium">
                       Done ✓
                     </span>
-                    <!-- FIX: Kanban in-progress cards also use resolveSelectStatus -->
-                    <select v-else-if="col.key === 'in_progress'" :value="resolveSelectStatus(task.status)"
-                      @change="e => handleStatusChange(task, e.target.value)" :disabled="updatingTaskId === task.id"
+                    <span v-else-if="col.key === 'trashed'" class="text-[10px] text-slate-400 font-medium">
+                      <i class="fa-solid fa-trash-can mr-0.5"></i>Trashed
+                    </span>
+                    <!-- Status select for in_progress & pending columns -->
+                    <select v-else-if="col.key === 'in_progress' || col.key === 'pending'"
+                      :value="resolveSelectStatus(task.status)" @change="e => handleStatusChange(task, e.target.value)"
+                      :disabled="updatingTaskId === task.id"
                       class="text-[10px] border border-slate-200 dark:border-slate-600 rounded px-1.5 py-0.5 bg-white dark:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50"
                       @click.stop>
                       <option value="pending">Pending</option>
                       <option value="in_progress">In Progress</option>
                       <option value="completed">Completed</option>
                     </select>
-                    <button @click="openTaskDetails(task)"
-                      class="text-[10px] text-violet-500 hover:text-violet-700 font-medium transition-colors ml-auto">
-                      Details →
-                    </button>
                   </div>
+
+                  <!-- Row 2: action buttons -->
+                  <div
+                    class="flex items-center justify-end gap-1 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <!-- TRASHED: restore + force-delete -->
+                    <template v-if="col.key === 'trashed'">
+                      <button @click.stop="restoreTask(task)" title="Restore"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold transition-colors">
+                        <i class="fa-solid fa-rotate-left text-[10px]"></i> Restore
+                      </button>
+                      <button @click.stop="forceDeleteTask(task)" title="Delete Forever"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 text-[10px] font-semibold transition-colors">
+                        <i class="fa-solid fa-trash-can text-[10px]"></i> Delete
+                      </button>
+                    </template>
+
+                    <!-- ACTIVE: details + soft-delete -->
+                    <template v-else>
+                      <button @click.stop="openTaskDetails(task)" title="View Details"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/30 text-violet-500 hover:text-violet-700 text-[10px] font-semibold transition-colors">
+                        <i class="fa-regular fa-eye text-[10px]"></i> Details
+                      </button>
+                      <button @click.stop="softDeleteTask(task)" title="Move to Trash"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 dark:hover:text-red-400 text-[10px] font-semibold transition-colors">
+                        <i class="fa-solid fa-trash text-[10px]"></i>
+                      </button>
+                    </template>
+                  </div>
+
                 </div>
               </TransitionGroup>
               <div v-if="!tasksByStatus(col.key).length" class="text-center py-6">
@@ -728,6 +764,7 @@ const kanbanColumns = [
   { key: 'in_progress', label: 'In Progress', icon: 'fa-solid fa-spinner', dot: 'bg-blue-400', text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-50/70 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' },
   { key: 'completed', label: 'Completed', icon: 'fa-solid fa-check-circle', dot: 'bg-emerald-400', text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50/70 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400' },
   { key: 'overdue', label: 'Overdue', icon: 'fa-solid fa-circle-exclamation', dot: 'bg-red-400', text: 'text-red-700 dark:text-red-400', bg: 'bg-red-50/70 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30', badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' },
+  { key: 'trashed', label: 'Trash', icon: 'fa-solid fa-trash-can', dot: 'bg-slate-400', text: 'text-slate-500 dark:text-slate-400', bg: 'bg-slate-50/70 dark:bg-slate-900/10 border border-slate-200 dark:border-slate-700', badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
 ]
 
 // ── Computed helpers ───────────────────────────────────────────────────────
@@ -793,11 +830,16 @@ const tasksByStatus = (status) => {
   if (!props.tasks.data) return []
   if (status === 'trashed') return props.tasks.data.filter(t => t.status === 'trashed')
   if (status === 'overdue') return props.tasks.data.filter(t =>
-    t.status === 'overdue' || (t.status !== 'completed' && t.due_date && new Date(t.due_date) < new Date()))
+    t.status !== 'trashed' &&
+    (t.status === 'overdue' || (t.status !== 'completed' && t.due_date && new Date(t.due_date) < new Date())))
   if (status === 'pending') return props.tasks.data.filter(t =>
-    t.status === 'pending' && !(t.due_date && new Date(t.due_date) < new Date()))
+    t.status === 'pending' && t.status !== 'trashed' &&
+    !(t.due_date && new Date(t.due_date) < new Date()))
   if (status === 'in_progress') return props.tasks.data.filter(t =>
-    t.status === 'in_progress' && !(t.due_date && new Date(t.due_date) < new Date()))
+    t.status === 'in_progress' && t.status !== 'trashed' &&
+    !(t.due_date && new Date(t.due_date) < new Date()))
+  if (status === 'completed') return props.tasks.data.filter(t =>
+    t.status === 'completed' && t.status !== 'trashed')
   return props.tasks.data.filter(t => t.status === status)
 }
 
@@ -1035,6 +1077,25 @@ const forceDeleteTask = (task) => {
       try {
         await axios.delete(`/admin/tasks/${task.id}/force`)
         window.showToast?.('Task permanently deleted', 'success')
+        applyFilters()
+      } catch (err) {
+        window.showToast?.(err.response?.data?.message || 'Delete failed', 'error')
+      }
+    },
+  })
+}
+
+// ── Soft delete single task (move to trash) — used in Kanban active cards ─
+const softDeleteTask = (task) => {
+  showConfirmAlert({
+    type: 'danger',
+    title: `Move "${task.title}" to Trash?`,
+    message: 'The task will be soft-deleted and can be restored from the Trash column.',
+    confirmText: 'Move to Trash',
+    onConfirm: async () => {
+      try {
+        await axios.delete(`/admin/tasks/${task.id}`)
+        window.showToast?.('Task moved to trash', 'success')
         applyFilters()
       } catch (err) {
         window.showToast?.(err.response?.data?.message || 'Delete failed', 'error')

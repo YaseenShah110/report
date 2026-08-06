@@ -3,37 +3,67 @@
  * -----------------------------------------------------------
  * Initializes the Vue 3 + Inertia.js application.
  * Registers plugins, global components, and mounts the app.
+ *
+ * Stack: Vue 3 + Inertia.js + Vite + Ziggy routes
+ *
+ * Bootstrap order:
+ *  1. Import CSS (Tailwind + custom)
+ *  2. Import Vue, Inertia, Ziggy
+ *  3. Configure axios (CSRF token header)
+ *  4. Register Ziggy route() helper globally
+ *  5. Create Inertia app with progress indicator
+ *  6. Mount to #app
  */
 
-// Bootstrap Axios and other libraries
+// ── Bootstrap Axios and other libraries ──────────────────────────────
 import "./bootstrap";
 
-// Import Tailwind CSS
+// ── CSS ───────────────────────────────────────────────────────────────
 import "../css/app.css";
 
-// Vue 3 core
+// ── Core libraries ────────────────────────────────────────────────────
 import { createApp, h } from "vue";
-
-// Inertia.js for server-side rendering bridge
 import { createInertiaApp } from "@inertiajs/vue3";
-
-// Laravel Vite plugin for page resolution
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
+import { ZiggyVue } from "../../vendor/tightenco/ziggy/dist/vue.m"; // ✅ Fixed import path
 
-// Ziggy for route() helper in Vue
-import { ZiggyVue } from "../../vendor/tightenco/ziggy/dist/index.js";
+// ── Progress bar ──────────────────────────────────────────────────────
+import { InertiaProgress } from "@inertiajs/progress";
 
-// Font Awesome icons
+// ── Font Awesome ──────────────────────────────────────────────────────
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./showAlert.js";
-// App name from environment
-const appName = import.meta.env.VITE_APP_NAME || "Laravel";
+
+// ── SweetAlert2 ──────────────────────────────────────────────────────
 import Swal from "sweetalert2";
-/**
- * Global Toast Function
- * Shows a toast notification in the bottom-right corner
- * Usage: window.showToast('Message', 'success')
- */
+
+// ── Axios CSRF setup ─────────────────────────────────────────────────
+import axios from "axios";
+
+// ✅ Ensure axios is globally available
+window.axios = axios;
+window.axios.defaults.headers.common["X-Requested-With"] = "XMLHttpRequest";
+
+// Read CSRF token from the meta tag injected by Blade
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+if (csrfToken) {
+    window.axios.defaults.headers.common["X-CSRF-TOKEN"] = csrfToken;
+}
+
+// ── App name (from Vite env or default) ──────────────────────────────
+const appName = import.meta.env.VITE_APP_NAME || "ReportCraft";
+
+// ── Inertia progress bar ──────────────────────────────────────────────
+InertiaProgress.init({
+    delay: 100, // ms before showing bar (prevents flash on fast loads)
+    color: "#6366f1", // indigo to match the editor accent colour
+    includeCSS: true,
+    showSpinner: false,
+});
+
+// ── Global Toast Function ─────────────────────────────────────────────
+// Shows a toast notification in the bottom-right corner
+// Usage: window.showToast('Message', 'success')
 window.showToast = function (message, type) {
     type = ["success", "error", "warning", "info"].includes(type)
         ? type
@@ -272,102 +302,7 @@ window.showToast = function (message, type) {
     });
 };
 
-// window.showToast = function (message, type = "success") {
-//     // Remove existing toast if any
-//     const existingToast = document.querySelector(".global-toast");
-//     if (existingToast) existingToast.remove();
-
-//     // Create toast element
-//     const toast = document.createElement("div");
-//     toast.className = `global-toast fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-[9999] flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-2xl animate-slide-in-right`;
-
-//     // Set colors based on type
-//     const colors = {
-//         success: "bg-emerald-500 text-white",
-//         error: "bg-red-500 text-white",
-//         warning: "bg-amber-500 text-white",
-//         info: "bg-blue-500 text-white",
-//     };
-//     toast.className += ` ${colors[type] || colors.success}`;
-
-//     // Set icon based on type
-//     const icons = {
-//         success:
-//             '<i class="fa-solid fa-circle-check text-base sm:text-lg"></i>',
-//         error: '<i class="fa-solid fa-circle-exclamation text-base sm:text-lg"></i>',
-//         warning:
-//             '<i class="fa-solid fa-triangle-exclamation text-base sm:text-lg"></i>',
-//         info: '<i class="fa-solid fa-circle-info text-base sm:text-lg"></i>',
-//     };
-
-//     toast.innerHTML = `
-//         ${icons[type] || icons.success}
-//         <span class="text-xs sm:text-sm font-medium">${message}</span>
-//         <button class="ml-1 sm:ml-2 hover:opacity-70 transition-opacity">
-//             <i class="fa-solid fa-xmark text-xs sm:text-sm"></i>
-//         </button>
-//     `;
-
-//     document.body.appendChild(toast);
-
-//     // Add click handler to close button
-//     const closeBtn = toast.querySelector("button");
-//     closeBtn.addEventListener("click", () => toast.remove());
-
-//     // Auto remove after 4 seconds
-//     setTimeout(() => {
-//         if (toast && toast.parentNode) {
-//             toast.classList.add("animate-fade-out");
-//             setTimeout(() => {
-//                 if (toast && toast.parentNode) toast.remove();
-//             }, 300);
-//         }
-//     }, 4000);
-// };
-
-// window.showToast = (message, type = 'success') => {
-//     const icons = {
-//         success: '✅',
-//         error:   '❌',
-//         warning: '⚠️',
-//         info:    'ℹ️',
-//     };
- 
-//     const colors = {
-//         success: { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', icon: '#22c55e' },
-//         error:   { bg: '#fef2f2', border: '#fecaca', text: '#dc2626', icon: '#ef4444' },
-//         warning: { bg: '#fffbeb', border: '#fde68a', text: '#d97706', icon: '#f59e0b' },
-//         info:    { bg: '#eff6ff', border: '#bfdbfe', text: '#2563eb', icon: '#3b82f6' },
-//     };
- 
-//     const c = colors[type] || colors.info;
- 
-//     Swal.fire({
-//         toast:             true,
-//         position:          'top-end',
-//         icon:              type,
-//         title:             message,
-//         showConfirmButton: false,
-//         timer:             1000,
-//         timerProgressBar:  true,
-//         showClass:  { popup: 'animate__animated animate__slideInRight animate__faster' },
-//         hideClass:  { popup: 'animate__animated animate__slideOutRight animate__faster' },
-//         customClass: {
-//             popup:        'rounded-2xl border shadow-xl text-sm font-semibold',
-//             timerProgressBar: 'rounded-full',
-//         },
-//         background:  c.bg,
-//         color:       c.text,
-//         didOpen: toast => {
-//             toast.style.border        = `1px solid ${c.border}`;
-//             toast.style.boxShadow     = `0 10px 40px ${c.icon}25`;
-//             toast.style.fontFamily    = 'inherit';
-//             const bar = toast.querySelector('.swal2-timer-progress-bar');
-//             if (bar) bar.style.background = c.icon;
-//         },
-//     });
-// };
-
+// ── Global Confirm Dialog ─────────────────────────────────────────────
 window.showConfirm = ({
     title = "Are you sure?",
     text = "",
@@ -398,7 +333,7 @@ window.showConfirm = ({
     }).then((result) => result.isConfirmed);
 };
 
-// Add global styles for toast animations
+// ── Global styles for toast animations ───────────────────────────────
 const style = document.createElement("style");
 style.textContent = `
     @keyframes slide-in-right {
@@ -427,13 +362,10 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-/**
- * Create Inertia App
- * Resolves Vue pages from the Pages directory
- */
+// ── Create Inertia App ────────────────────────────────────────────────
 createInertiaApp({
     // Dynamic page title
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (title ? `${title} — ${appName}` : appName),
 
     // Resolve page components from Pages directory
     resolve: (name) =>
@@ -444,9 +376,28 @@ createInertiaApp({
 
     // Setup Vue app with plugins
     setup({ el, App, props, plugin }) {
-        return createApp({ render: () => h(App, props) })
-            .use(plugin) // Inertia plugin
-            .use(ZiggyVue) // Ziggy for route() helper
-            .mount(el); // Mount to DOM
+        const app = createApp({ render: () => h(App, props) });
+
+        // ── Plugins ───────────────────────────────────────────────────
+        app.use(plugin); // Inertia Vue plugin
+        app.use(ZiggyVue, Ziggy); // Ziggy — enables route() helper everywhere
+
+        // ── Global error handler ──────────────────────────────────────
+        app.config.errorHandler = (err, instance, info) => {
+            // Surface errors clearly in dev; silence non-critical ones in prod
+            if (import.meta.env.DEV) {
+                console.error(
+                    "[Vue Error]",
+                    err,
+                    "\nComponent:",
+                    instance,
+                    "\nInfo:",
+                    info,
+                );
+            }
+        };
+
+        // ── Mount ─────────────────────────────────────────────────────
+        app.mount(el);
     },
 });

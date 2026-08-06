@@ -1,1406 +1,2220 @@
 <!--
-  LeftSidebar.vue — Production-Ready 7-Tab Panel
-  Tabs: Elements | Pages | Layers | Media | Themes | Settings | History
-  • 50+ element catalog with search, categories, drag-to-canvas
-  • Page thumbnails with mini-previews, inline rename, reorder
-  • Layers panel with visibility/lock toggles
-  • Media upload (FileReader), stock photos (picsum fallback)
-  • 8 theme presets
-  • Full report settings (all emit update:settings — never touch html/body)
-  • Version history with restore
-  • Memory-safe: no leaked listeners
+  LeftSidebar.vue — 7-tab report editor sidebar (Part 3 complete)
+  ═══════════════════════════════════════════════════════════════════
+  Tabs:
+  1. Elements  — Canva-style catalog; 50+ types in searchable groups;
+                 draggable to canvas; double-click to quick-insert
+  2. Pages     — thumbnail strip; drag-to-reorder (HTML5 DnD);
+                 per-page action buttons; add/dup/del
+  3. Layers    — element list for current page; click → locate on canvas;
+                 drag to reorder z-index; eye + lock toggles
+  4. Media     — image upload + free keyword image search
+                 (Pixabay/Unsplash/Picsum proxy)
+  5. Themes    — select pre-built colour + font themes; apply report-wide
+  6. Settings  — ALL report-wide settings (header/footer, page numbers,
+                 watermark, margin/padding, background, font, RTL, etc.)
+  7. History   — snapshot list; click to jump; current position indicator
+  ═══════════════════════════════════════════════════════════════════
 -->
 <template>
-  <aside
-    class="left-panel"
-    :class="{ collapsed: isCollapsed, 'is-dark': isDark }"
-    role="complementary"
-    aria-label="Elements and pages panel"
-  >
-    <!-- ── Collapse toggle ─────────────────────────────────────────── -->
-    <button
-      class="panel-toggle"
-      @click="$emit('update:is-collapsed', !isCollapsed)"
-      :title="isCollapsed ? 'Expand panel' : 'Collapse panel'"
-      :aria-expanded="!isCollapsed"
-    >
-      <i :class="isCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left'" />
-    </button>
+  <aside class="ls-root" :class="{ 'ls-dark': isDark }" aria-label="Editor sidebar">
 
-    <div class="panel-inner" v-show="!isCollapsed">
+    <!-- ══ TAB RAIL ══════════════════════════════════════════════════ -->
+    <nav class="ls-rail" role="tablist" aria-label="Sidebar tabs">
+      <button v-for="t in TABS" :key="t.id" class="ls-rail-btn" :class="{ active: activeTab === t.id }"
+        @click="activeTab = t.id" role="tab" :aria-selected="activeTab === t.id" :aria-controls="`ls-panel-${t.id}`"
+        :title="t.label">
+        <i :class="t.icon" />
+        <span class="ls-rail-label">{{ t.label }}</span>
+      </button>
+    </nav>
 
-      <!-- ── Tab navigation ──────────────────────────────────────────── -->
-      <nav class="panel-tabs" aria-label="Sidebar tabs">
-        <button
-          v-for="tab in TABS"
-          :key="tab.id"
-          class="panel-tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="$emit('update:active-tab', tab.id)"
-          :title="tab.label"
-          :aria-selected="activeTab === tab.id"
-          role="tab"
-        >
-          <i :class="tab.icon" />
-          <span>{{ tab.label }}</span>
-        </button>
-      </nav>
+    <!-- ══ TAB PANELS ════════════════════════════════════════════════ -->
+    <div class="ls-content">
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: ELEMENTS
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'elements'" class="tab-panel" role="tabpanel">
-        <!-- Search -->
-        <div class="search-wrap">
-          <i class="fa-solid fa-magnifying-glass search-icon" />
-          <input
-            v-model="elSearch"
-            class="search-input"
-            placeholder="Search 50+ elements…"
-            :aria-label="'Search elements'"
-            type="search"
-            autocomplete="off"
-          />
-          <button v-if="elSearch" class="search-clear" @click="elSearch=''" aria-label="Clear search">
-            <i class="fa-solid fa-xmark" />
-          </button>
-        </div>
-
-        <!-- Quick-add chips -->
-        <div class="quick-chips" aria-label="Quick add elements">
-          <button
-            v-for="chip in QUICK_CHIPS"
-            :key="chip.type"
-            class="quick-chip"
-            @click="addToCanvas(chip)"
-            :title="`Add ${chip.label}`"
-          >
-            <i :class="chip.icon" />
-            {{ chip.label }}
-          </button>
-        </div>
-
-        <!-- Element categories -->
-        <div class="el-catalog" aria-label="Element catalog">
-          <template v-for="cat in filteredCats" :key="cat.name">
-            <button
-              class="cat-header"
-              @click="toggleCat(cat.name)"
-              :aria-expanded="!collapsedCats.includes(cat.name)"
-            >
-              <span class="cat-name">{{ cat.name }}</span>
-              <span class="cat-count">{{ cat.items.length }}</span>
-              <i :class="collapsedCats.includes(cat.name) ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down'" class="cat-chevron" />
+      <!-- ─── 1. ELEMENTS ──────────────────────────────────────────── -->
+      <div v-show="activeTab === 'elements'" id="ls-panel-elements" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Elements</span>
+          <div class="ls-search-wrap">
+            <i class="fa-solid fa-magnifying-glass ls-search-icon" />
+            <input v-model="elSearch" placeholder="Search elements…" class="ls-search-input"
+              aria-label="Search elements" />
+            <button v-if="elSearch" class="ls-search-clear" @click="elSearch = ''" aria-label="Clear search">
+              <i class="fa-solid fa-xmark" />
             </button>
+          </div>
+        </div>
 
-            <div v-show="!collapsedCats.includes(cat.name)" class="el-grid" role="list">
-              <div
-                v-for="el in cat.items"
-                :key="el.type"
-                class="el-card"
-                :class="{ 'el-card--new': el.isNew }"
-                draggable="true"
-                role="listitem"
-                :aria-label="`${el.label} element — drag to canvas or double-click to add`"
-                :title="`${el.label}\n${el.desc || 'Double-click or drag to canvas'}`"
-                @dragstart="onDragStart($event, el)"
-                @dblclick="addToCanvas(el)"
-                @keydown.enter="addToCanvas(el)"
-                tabindex="0"
-              >
-                <div class="el-card-icon"><i :class="el.icon" /></div>
-                <span class="el-card-name">{{ el.label }}</span>
-                <span v-if="el.isNew" class="el-new-badge">NEW</span>
+        <div class="ls-el-catalog">
+          <template v-for="group in filteredCatalog" :key="group.id">
+            <div class="ls-el-group">
+              <button class="ls-el-group-head" @click="toggleGroup(group.id)"
+                :aria-expanded="!collapsedGroups.includes(group.id)">
+                <i :class="group.icon" />
+                <span>{{ group.label }}</span>
+                <i :class="collapsedGroups.includes(group.id) ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down'"
+                  class="ls-group-arrow" />
+              </button>
+
+              <div v-show="!collapsedGroups.includes(group.id)" class="ls-el-grid">
+                <div v-for="el in group.items" :key="el.type" class="ls-el-card" draggable="true"
+                  @dragstart="onElDragStart($event, el)" @dblclick="quickInsert(el)"
+                  :title="`${el.label} — drag to canvas or double-click`" role="button"
+                  :aria-label="`Add ${el.label} element`" tabindex="0" @keydown.enter="quickInsert(el)">
+                  <div class="ls-el-icon" :style="{ color: group.color }">
+                    <i :class="el.icon" />
+                  </div>
+                  <span class="ls-el-label">{{ el.label }}</span>
+                </div>
               </div>
             </div>
           </template>
 
-          <div v-if="!filteredCats.length" class="empty-state" aria-live="polite">
-            <i class="fa-solid fa-magnifying-glass" />
-            <p>No elements found for "{{ elSearch }}"</p>
+          <div v-if="filteredCatalog.length === 0" class="ls-empty">
+            <i class="fa-solid fa-face-meh" />
+            <span>No elements match "{{ elSearch }}"</span>
           </div>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: PAGES
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'pages'" class="tab-panel" role="tabpanel">
-        <button class="add-page-btn" @click="$emit('add-page')" aria-label="Add new page">
-          <i class="fa-solid fa-plus" /> Add Page
-        </button>
+      <!-- ─── 2. PAGES ─────────────────────────────────────────────── -->
+      <div v-show="activeTab === 'pages'" id="ls-panel-pages" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Pages ({{ report.content.length }})</span>
+          <button class="ls-head-btn" @click="$emit('add-page')" title="Add page" aria-label="Add page">
+            <i class="fa-solid fa-plus" />
+          </button>
+        </div>
 
-        <div class="pages-list" aria-label="Pages list" role="list">
-          <div
-            v-for="(page, pi) in report.content"
-            :key="page.id"
-            class="page-card"
-            :class="{ 'page-card--active': currentPage === pi }"
-            role="listitem"
-            :aria-current="currentPage === pi ? 'page' : undefined"
-            @click="$emit('select-page', pi)"
-            @dblclick="startPageRename(pi)"
-          >
-            <!-- Mini preview -->
-            <div class="page-mini-preview" :style="{ background: settings.background_color || '#fff' }">
-              <div
-                v-for="el in (page.elements || []).slice(0, 12)"
-                :key="el.id"
-                class="page-mini-el"
-                :style="getMiniElStyle(el)"
-              />
-              <div v-if="!(page.elements||[]).length" class="page-mini-empty">
-                <i class="fa-solid fa-plus" />
+        <div class="ls-pages-list" ref="pagesListRef">
+          <div v-for="(page, pi) in report.content" :key="page.id" class="ls-page-item" :class="{
+            'ls-page-active': currentPage === pi,
+            'ls-page-drag-over': pageDragOver === pi,
+          }" draggable="true" @dragstart="onPageDragStart($event, pi)" @dragend="onPageDragEnd"
+            @dragover.prevent="onPageDragOver($event, pi)" @dragleave="pageDragOver = null"
+            @drop.prevent="onPageDrop($event, pi)" @click="$emit('select-page', pi)"
+            :aria-label="`Page ${pi + 1}${currentPage === pi ? ', current' : ''}`" role="button"
+            :aria-pressed="currentPage === pi">
+            <!-- Thumbnail -->
+            <div class="ls-page-thumb" :style="getPageThumbStyle(page)">
+              <span v-if="!(page.elements || []).length" class="ls-page-thumb-empty">
+                <i class="fa-regular fa-file" />
+              </span>
+              <!-- Mini element previews -->
+              <div v-for="el in (page.elements || []).slice(0, 8)" :key="el.id" class="ls-page-mini-el"
+                :style="getMiniElStyle(el)" />
+              <div class="ls-page-drag-handle" title="Drag to reorder">
+                <i class="fa-solid fa-grip-vertical" />
               </div>
             </div>
 
             <!-- Page info -->
-            <div class="page-info">
-              <div class="page-name-wrap">
-                <span v-if="renamingPage !== pi" class="page-name">{{ page.label || `Page ${pi+1}` }}</span>
-                <input
-                  v-else
-                  ref="renameInputRef"
-                  :value="page.label || `Page ${pi+1}`"
-                  class="page-rename-input"
-                  @blur="finishRename(pi, $event.target.value)"
-                  @keydown.enter="finishRename(pi, $event.target.value)"
-                  @keydown.escape="renamingPage = null"
-                  @click.stop
-                  aria-label="Rename page"
-                />
-              </div>
-              <span class="page-el-count">{{ (page.elements||[]).length }} el</span>
+            <div class="ls-page-info">
+              <span class="ls-page-num">{{ pi + 1 }}</span>
+              <span class="ls-page-elcount">{{ (page.elements || []).length }} el{{ (page.elements || []).length !== 1 ?
+                's' :
+                '' }}</span>
             </div>
 
-            <!-- Page actions -->
-            <div class="page-actions">
-              <button @click.stop="startPageRename(pi)" title="Rename page" aria-label="Rename page">
-                <i class="fa-solid fa-pen" />
-              </button>
-              <button @click.stop="$emit('duplicate-page', pi)" title="Duplicate page" aria-label="Duplicate page">
-                <i class="fa-solid fa-copy" />
-              </button>
-              <button
-                @click.stop="$emit('delete-page', pi)"
-                :disabled="report.content.length <= 1"
-                class="danger"
-                title="Delete page"
-                aria-label="Delete page"
-              >
-                <i class="fa-solid fa-trash" />
-              </button>
+            <!-- Per-page actions -->
+            <div class="ls-page-actions">
+              <button @click.stop="$emit('add-page-before', pi)" title="Insert page before" class="lpa-btn"><i
+                  class="fa-solid fa-arrow-up-to-line" /></button>
+              <button @click.stop="$emit('add-page-after', pi)" title="Insert page after" class="lpa-btn"><i
+                  class="fa-solid fa-arrow-down-to-line" /></button>
+              <button @click.stop="$emit('duplicate-page', pi)" title="Duplicate" class="lpa-btn"><i
+                  class="fa-solid fa-copy" /></button>
+              <button @click.stop="$emit('move-page-up', pi)" title="Move up" class="lpa-btn" :disabled="pi === 0"><i
+                  class="fa-solid fa-chevron-up" /></button>
+              <button @click.stop="$emit('move-page-down', pi)" title="Move down" class="lpa-btn"
+                :disabled="pi === report.content.length - 1"><i class="fa-solid fa-chevron-down" /></button>
+              <button @click.stop="$emit('delete-page', pi)" title="Delete page" class="lpa-btn lpa-btn--danger"
+                :disabled="report.content.length <= 1"><i class="fa-solid fa-trash" /></button>
             </div>
-
-            <!-- Active glow ring -->
-            <div v-if="currentPage === pi" class="page-active-ring" aria-hidden="true" />
           </div>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: LAYERS
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'layers'" class="tab-panel" role="tabpanel">
-        <div class="layers-header">
-          <span>Layers</span>
-          <div class="layers-actions">
-            <button class="micro-btn" @click="$emit('deselect-all')" title="Deselect all">
+      <!-- ─── 3. LAYERS ────────────────────────────────────────────── -->
+      <div v-show="activeTab === 'layers'" id="ls-panel-layers" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Layers — Page {{ currentPage + 1 }}</span>
+          <span class="ls-el-count-badge">{{ currentPageElements.length }}</span>
+        </div>
+
+        <div v-if="currentPageElements.length" class="ls-layers-list">
+          <div v-for="(el, ei) in [...currentPageElements].reverse()" :key="el.id" class="ls-layer-item" :class="{
+            'ls-layer-selected': isElSelected(currentPageElements.length - 1 - ei),
+            'ls-layer-locked': el.locked,
+            'ls-layer-hidden': el.visible === false,
+            'ls-layer-drag-over': layerDragOver === ei,
+          }" draggable="true" @dragstart="onLayerDragStart($event, ei)" @dragend="layerDragOver = null"
+            @dragover.prevent="onLayerDragOver($event, ei)" @dragleave="layerDragOver = null"
+            @drop.prevent="onLayerDrop($event, ei)" @click="locateElement(currentPageElements.length - 1 - ei)"
+            role="button"
+            :aria-label="`${el.type} element${el.locked ? ', locked' : ''}${el.visible === false ? ', hidden' : ''}`">
+            <div class="ls-layer-drag" title="Drag to reorder">
+              <i class="fa-solid fa-grip-vertical" />
+            </div>
+
+            <div class="ls-layer-icon" :title="el.type">
+              <i :class="getElIcon(el.type)" />
+            </div>
+
+            <div class="ls-layer-name">
+              <span class="ls-layer-type">{{ el.type }}</span>
+              <span class="ls-layer-preview">{{ getElPreview(el) }}</span>
+            </div>
+
+            <div class="ls-layer-controls">
+              <button class="ls-layer-btn" @click.stop="toggleVisibility(currentPageElements.length - 1 - ei)"
+                :title="el.visible === false ? 'Show' : 'Hide'"
+                :aria-label="el.visible === false ? 'Show element' : 'Hide element'"><i
+                  :class="el.visible === false ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye'" /></button>
+              <button class="ls-layer-btn" @click.stop="toggleLock(currentPageElements.length - 1 - ei)"
+                :title="el.locked ? 'Unlock' : 'Lock'" :aria-label="el.locked ? 'Unlock element' : 'Lock element'"><i
+                  :class="el.locked ? 'fa-solid fa-lock' : 'fa-regular fa-lock-open'" /></button>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="ls-empty">
+          <i class="fa-solid fa-layer-group" />
+          <span>No elements on this page yet. Drag elements from the Elements tab.</span>
+        </div>
+      </div>
+
+      <!-- ─── 4. MEDIA ─────────────────────────────────────────────── -->
+      <div v-show="activeTab === 'media'" id="ls-panel-media" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Media</span>
+        </div>
+
+        <!-- Upload -->
+        <div class="ls-media-upload-zone" @click="triggerUpload" @dragover.prevent="uploadDragOver = true"
+          @dragleave="uploadDragOver = false" @drop.prevent="onUploadDrop" :class="{ 'is-over': uploadDragOver }"
+          role="button" aria-label="Upload image — click or drag and drop">
+          <i class="fa-solid fa-cloud-arrow-up" />
+          <span>Click or drop images to upload</span>
+          <small>PNG, JPG, GIF, WEBP — max 10 MB</small>
+          <input ref="uploadInputRef" type="file" accept="image/*" multiple class="sr-only" @change="onUploadChange" />
+        </div>
+
+        <!-- Search -->
+        <div class="ls-media-search-bar">
+          <div class="ls-search-wrap">
+            <i class="fa-solid fa-magnifying-glass ls-search-icon" />
+            <input v-model="imgQuery" placeholder="Search free images…" class="ls-search-input"
+              @keydown.enter="searchImages" aria-label="Search free images" />
+            <button v-if="imgQuery" class="ls-search-clear" @click="imgQuery = ''" aria-label="Clear">
               <i class="fa-solid fa-xmark" />
             </button>
-            <span class="layer-count-badge">{{ currentPageEls.length }}</span>
+          </div>
+          <button class="ls-search-btn" @click="searchImages" :disabled="imgSearching" aria-label="Search">
+            <i v-if="imgSearching" class="fa-solid fa-spinner fa-spin" />
+            <i v-else class="fa-solid fa-search" />
+          </button>
+        </div>
+
+        <div v-if="imgSource" class="ls-media-source-badge">
+          <i class="fa-solid fa-circle-info" /> Images from {{ imgSource }}
+        </div>
+
+        <!-- Results grid -->
+        <div v-if="imgResults.length" class="ls-media-grid">
+          <div v-for="img in imgResults" :key="img.id" class="ls-media-card" @click="insertImage(img)"
+            :title="`Insert: ${img.alt}`" role="button" :aria-label="`Insert image: ${img.alt}`">
+            <img :src="img.thumb" :alt="img.alt" loading="lazy" />
+            <div class="ls-media-card-overlay">
+              <i class="fa-solid fa-plus" />
+              <span>Insert</span>
+            </div>
           </div>
         </div>
 
-        <div class="layers-list" role="list" aria-label="Element layers">
-          <div
-            v-for="(el, ei) in reversedEls"
-            :key="el.id"
-            class="layer-item"
-            :class="{
-              'layer-item--selected': isSelected(ei),
-              'layer-item--locked':   el.locked,
-              'layer-item--hidden':   el.visible === false,
-            }"
-            role="listitem"
-            :aria-selected="isSelected(ei)"
-            @click="selectLayer(ei)"
-          >
-            <span class="layer-drag-icon"><i class="fa-solid fa-grip-vertical" /></span>
-            <span class="layer-type-icon" :style="{ color: getTypeColor(el.type) }">
-              <i :class="getElIcon(el.type)" />
-            </span>
-            <div class="layer-info">
-              <span class="layer-name">{{ getLayerName(el) }}</span>
-              <span class="layer-type-tag">{{ el.type }}</span>
-            </div>
-            <div class="layer-controls">
-              <button
-                class="layer-ctrl-btn"
-                @click.stop="$emit('toggle-visibility', realIdx(ei))"
-                :title="el.visible === false ? 'Show element' : 'Hide element'"
-                :aria-label="el.visible === false ? 'Show' : 'Hide'"
-              >
-                <i :class="el.visible === false ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye'" />
-              </button>
-              <button
-                class="layer-ctrl-btn"
-                @click.stop="$emit('toggle-lock', realIdx(ei))"
-                :title="el.locked ? 'Unlock element' : 'Lock element'"
-                :aria-label="el.locked ? 'Unlock' : 'Lock'"
-              >
-                <i :class="el.locked ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open'" />
-              </button>
-            </div>
-          </div>
+        <!-- Pagination -->
+        <div v-if="imgResults.length" class="ls-media-pagination">
+          <button class="ls-pg-btn" @click="imgPage--; searchImages()" :disabled="imgPage <= 1">
+            <i class="fa-solid fa-chevron-left" /> Prev
+          </button>
+          <span>Page {{ imgPage }}</span>
+          <button class="ls-pg-btn" @click="imgPage++; searchImages()">
+            Next <i class="fa-solid fa-chevron-right" />
+          </button>
+        </div>
 
-          <div v-if="!currentPageEls.length" class="empty-state">
-            <i class="fa-solid fa-layer-group" />
-            <p>No elements on this page</p>
-            <small>Drag elements from the Elements tab</small>
-          </div>
+        <div v-if="!imgResults.length && !imgSearching && imgQuery" class="ls-empty">
+          <i class="fa-solid fa-image-slash" />
+          <span>No images found for "{{ imgQuery }}"</span>
+        </div>
+
+        <div v-if="!imgQuery && !imgResults.length" class="ls-empty">
+          <i class="fa-solid fa-images" />
+          <span>Search for free photos to insert into your report</span>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: MEDIA
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'media'" class="tab-panel" role="tabpanel">
-        <!-- Upload zone -->
-        <div
-          class="upload-zone"
-          :class="{ 'upload-zone--dragover': mediaDragover }"
-          @click="triggerFileInput"
-          @dragover.prevent="mediaDragover = true"
-          @dragleave="mediaDragover = false"
-          @drop.prevent="handleMediaDrop"
-          role="button"
-          aria-label="Upload images — click or drag and drop"
-        >
-          <i class="fa-solid fa-cloud-arrow-up" />
-          <span>Upload Images</span>
-          <small>Click or drag & drop • PNG, JPG, SVG, WebP</small>
-        </div>
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept="image/*"
-          multiple
-          class="hidden-input"
-          @change="handleFileInput"
-          aria-hidden="true"
-        />
-
-        <!-- Stock photos -->
-        <div class="media-section">
-          <div class="media-section-header">
-            <i class="fa-solid fa-images" /> Stock Photos
-          </div>
-          <div class="search-wrap">
-            <input
-              v-model="stockQuery"
-              class="search-input"
-              placeholder="Search free photos…"
-              @keydown.enter="searchStock"
-              aria-label="Search stock photos"
-            />
-            <button class="search-action-btn" @click="searchStock" :disabled="stockLoading" aria-label="Search">
-              <i :class="stockLoading ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-magnifying-glass'" />
-            </button>
-          </div>
-          <div v-if="stockImages.length" class="media-grid" aria-label="Stock photos">
-            <div
-              v-for="img in stockImages"
-              :key="img.id"
-              class="media-item"
-              @click="addStockImage(img)"
-              :title="`Add image by ${img.author}`"
-              role="button"
-              :aria-label="`Stock photo by ${img.author}`"
-            >
-              <img :src="img.thumb" :alt="`Stock photo by ${img.author}`" loading="lazy" />
-            </div>
-          </div>
+      <!-- ─── 5. THEMES ────────────────────────────────────────────── -->
+      <div v-show="activeTab === 'themes'" id="ls-panel-themes" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Themes</span>
         </div>
 
-        <!-- Uploaded images -->
-        <div v-if="uploadedImages.length" class="media-section">
-          <div class="media-section-header">
-            <i class="fa-solid fa-folder-open" /> Uploaded ({{ uploadedImages.length }})
-          </div>
-          <div class="media-grid" aria-label="Uploaded images">
-            <div
-              v-for="img in uploadedImages"
-              :key="img.url"
-              class="media-item media-item--uploaded"
-              draggable="true"
-              @dragstart="onMediaDrag($event, img)"
-              @click="addUploadedImage(img)"
-              :title="img.name"
-              role="button"
-              :aria-label="`Uploaded image: ${img.name}`"
-            >
-              <img :src="img.url" :alt="img.name" loading="lazy" />
-              <button
-                class="media-remove-btn"
-                @click.stop="removeUploadedImage(img)"
-                :title="`Remove ${img.name}`"
-                :aria-label="`Remove ${img.name}`"
-              >
-                <i class="fa-solid fa-xmark" />
-              </button>
+        <div class="ls-themes-grid">
+          <button v-for="theme in THEMES" :key="theme.id" class="ls-theme-card"
+            :class="{ active: isThemeActive(theme) }" @click="applyTheme(theme)"
+            :aria-label="`Apply ${theme.name} theme`" :aria-pressed="isThemeActive(theme)">
+            <div class="ls-theme-swatch-row">
+              <div class="ls-theme-swatch" :style="{ background: theme.primary }" />
+              <div class="ls-theme-swatch" :style="{ background: theme.accent }" />
+              <div class="ls-theme-swatch" :style="{ background: theme.bg }" />
+              <div class="ls-theme-swatch" :style="{ background: theme.text }" />
             </div>
-          </div>
+            <div class="ls-theme-preview"
+              :style="{ background: theme.bg, color: theme.text, fontFamily: theme.fontFamily }">
+              <div class="ls-tp-heading" :style="{ color: theme.primary }">Report Title</div>
+              <div class="ls-tp-body">Body text preview</div>
+              <div class="ls-tp-accent" :style="{ background: theme.accent }" />
+            </div>
+            <div class="ls-theme-name">{{ theme.name }}</div>
+            <div class="ls-theme-check" v-if="isThemeActive(theme)"><i class="fa-solid fa-circle-check" /></div>
+          </button>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: THEMES
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'themes'" class="tab-panel" role="tabpanel">
-        <p class="tab-description">Click a theme to apply colors to the whole report.</p>
+      <!-- ─── 6. SETTINGS ──────────────────────────────────────────── -->
+      <div v-show="activeTab === 'settings'" id="ls-panel-settings" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">Report Settings</span>
+          <button class="ls-head-btn ls-head-btn--primary" @click="resetSettings" title="Reset to defaults"
+            aria-label="Reset settings">
+            <i class="fa-solid fa-rotate-left" />
+          </button>
+        </div>
 
-        <div class="themes-grid" aria-label="Theme presets">
-          <div
-            v-for="theme in THEMES"
-            :key="theme.name"
-            class="theme-card"
-            @click="applyTheme(theme)"
-            role="button"
-            :aria-label="`Apply ${theme.name} theme`"
-            :title="theme.name"
-          >
-            <div class="theme-preview" :style="{ background: theme.gradient }">
-              <div class="theme-hover-overlay">
-                <i class="fa-solid fa-check" />
-                <span>Apply</span>
+        <div class="ls-settings-body">
+
+          <!-- Page setup -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title">
+              <i class="fa-solid fa-file" /> Page Setup
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Page Size</label>
+              <select class="ls-select" v-model="localSettings.page_size" @change="emitSettings">
+                <option>A4</option>
+                <option>A3</option>
+                <option>A5</option>
+                <option value="Letter">Letter</option>
+                <option value="Legal">Legal</option>
+              </select>
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Orientation</label>
+              <div class="ls-btn-group">
+                <button :class="{ active: localSettings.orientation === 'portrait' }"
+                  @click="setSetting('orientation', 'portrait')">
+                  <i class="fa-solid fa-rectangle-portrait" /> Portrait
+                </button>
+                <button :class="{ active: localSettings.orientation === 'landscape' }"
+                  @click="setSetting('orientation', 'landscape')">
+                  <i class="fa-solid fa-rectangle-landscape" /> Landscape
+                </button>
               </div>
             </div>
-            <span class="theme-name">{{ theme.name }}</span>
+            <div class="ls-field-row">
+              <label class="ls-label">Margin <span class="ls-val">{{ localSettings.margin }}px</span></label>
+              <input type="range" min="0" max="120" step="4" v-model.number="localSettings.margin" @input="emitSettings"
+                class="ls-range" />
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Padding <span class="ls-val">{{ localSettings.padding }}px</span></label>
+              <input type="range" min="0" max="80" step="4" v-model.number="localSettings.padding" @input="emitSettings"
+                class="ls-range" />
+            </div>
           </div>
-        </div>
 
-        <!-- Color palette quick-set -->
-        <div class="quick-palette-section">
-          <div class="media-section-header"><i class="fa-solid fa-palette" /> Quick Colors</div>
-          <div class="color-palette-grid">
-            <button
-              v-for="c in PALETTE_COLORS"
-              :key="c"
-              class="palette-color-btn"
-              :style="{ background: c }"
-              @click="applyPrimaryColor(c)"
-              :title="`Set primary color to ${c}`"
-              :aria-label="`Primary color ${c}`"
-            />
+          <!-- Background -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-fill" /> Background</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Background Color</label>
+              <input type="color" v-model="localSettings.background_color" @input="emitSettings" class="ls-color" />
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Text Color</label>
+              <input type="color" v-model="localSettings.text_color" @input="emitSettings" class="ls-color" />
+            </div>
           </div>
-        </div>
+
+          <!-- Brand colors -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-palette" /> Brand Colors</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Primary</label>
+              <div class="ls-color-with-input">
+                <input type="color" v-model="localSettings.primary_color" @input="emitSettings" class="ls-color" />
+                <input type="text" v-model="localSettings.primary_color" @input="emitSettings" class="ls-text-sm"
+                  maxlength="7" />
+              </div>
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Accent</label>
+              <div class="ls-color-with-input">
+                <input type="color" v-model="localSettings.accent_color" @input="emitSettings" class="ls-color" />
+                <input type="text" v-model="localSettings.accent_color" @input="emitSettings" class="ls-text-sm"
+                  maxlength="7" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Typography -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-font" /> Typography</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Font Family</label>
+              <select class="ls-select" v-model="localSettings.font_family" @change="emitSettings">
+                <option v-for="f in FONTS" :key="f" :value="f" :style="{ fontFamily: f }">{{ f }}</option>
+              </select>
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Base Font Size <span class="ls-val">{{ localSettings.font_size }}px</span></label>
+              <input type="range" min="10" max="24" step="1" v-model.number="localSettings.font_size"
+                @input="emitSettings" class="ls-range" />
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Line Height <span class="ls-val">{{ localSettings.line_height }}</span></label>
+              <input type="range" min="1" max="3" step="0.05" v-model.number="localSettings.line_height"
+                @input="emitSettings" class="ls-range" />
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">RTL Direction</label>
+              <label class="ls-toggle">
+                <input type="checkbox" v-model="localSettings.rtl" @change="emitSettings" />
+                <span class="ls-toggle-track" /><span class="ls-toggle-label">{{ localSettings.rtl ? 'On' : 'Off'
+                  }}</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Header -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-rectangle-ad" /> Header</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Show Header</label>
+              <label class="ls-toggle">
+                <input type="checkbox" v-model="localSettings.show_header" @change="emitSettings" />
+                <span class="ls-toggle-track" /><span class="ls-toggle-label">{{ localSettings.show_header ? 'On' :
+                  'Off'
+                  }}</span>
+              </label>
+            </div>
+            <template v-if="localSettings.show_header">
+              <div class="ls-field-row">
+                <label class="ls-label">Header Text</label>
+                <input class="ls-input" v-model="localSettings.header_text" @input="emitSettings"
+                  placeholder="e.g. Annual Report 2025" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Height <span class="ls-val">{{ localSettings.header_height }}px</span></label>
+                <input type="range" min="24" max="120" step="4" v-model.number="localSettings.header_height"
+                  @input="emitSettings" class="ls-range" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Background</label>
+                <input type="color" v-model="localSettings.header_color" @input="emitSettings" class="ls-color" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Text Color</label>
+                <input type="color" v-model="localSettings.header_text_color" @input="emitSettings" class="ls-color" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Position</label>
+                <select class="ls-select" v-model="localSettings.header_position" @change="emitSettings">
+                  <option value="top">Top of page</option>
+                  <option value="inside-top">Inside page (top)</option>
+                </select>
+              </div>
+            </template>
+          </div>
+
+          <!-- Footer -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-rectangle-ad fa-rotate-180" /> Footer</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Show Footer</label>
+              <label class="ls-toggle">
+                <input type="checkbox" v-model="localSettings.show_footer" @change="emitSettings" />
+                <span class="ls-toggle-track" /><span class="ls-toggle-label">{{ localSettings.show_footer ? 'On' :
+                  'Off'
+                  }}</span>
+              </label>
+            </div>
+            <template v-if="localSettings.show_footer">
+              <div class="ls-field-row">
+                <label class="ls-label">Left Text</label>
+                <input class="ls-input" v-model="localSettings.footer_left" @input="emitSettings"
+                  placeholder="Company Name" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Right Text</label>
+                <input class="ls-input" v-model="localSettings.footer_right" @input="emitSettings"
+                  placeholder="Page {n} of {total}" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Footer Color</label>
+                <input type="color" v-model="localSettings.footer_color" @input="emitSettings" class="ls-color" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Footer Height <span class="ls-val">{{ localSettings.footer_height || 36
+                    }}px</span></label>
+                <input type="range" min="24" max="80" step="4" v-model.number="localSettings.footer_height"
+                  @input="emitSettings" class="ls-range" />
+              </div>
+            </template>
+          </div>
+
+          <!-- Page Numbers -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-list-ol" /> Page Numbers</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Show Page Numbers</label>
+              <label class="ls-toggle">
+                <input type="checkbox" v-model="localSettings.show_page_numbers" @change="emitSettings" />
+                <span class="ls-toggle-track" /><span class="ls-toggle-label">{{ localSettings.show_page_numbers ? 'On'
+                  :
+                  'Off' }}</span>
+              </label>
+            </div>
+            <template v-if="localSettings.show_page_numbers">
+              <div class="ls-field-row">
+                <label class="ls-label">Style</label>
+                <select class="ls-select" v-model="localSettings.page_number_style" @change="emitSettings">
+                  <option value="decimal">1, 2, 3 …</option>
+                  <option value="of">Page 1 of N</option>
+                  <option value="roman">i, ii, iii …</option>
+                  <option value="alpha">A, B, C …</option>
+                </select>
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Position</label>
+                <select class="ls-select" v-model="localSettings.page_number_position" @change="emitSettings">
+                  <option value="footer-left">Footer Left</option>
+                  <option value="footer-center">Footer Center</option>
+                  <option value="footer-right">Footer Right</option>
+                  <option value="header-left">Header Left</option>
+                  <option value="header-center">Header Center</option>
+                  <option value="header-right">Header Right</option>
+                </select>
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Start From</label>
+                <input type="number" min="1" max="999" class="ls-input ls-input--sm"
+                  v-model.number="localSettings.page_number_start" @input="emitSettings" />
+              </div>
+            </template>
+          </div>
+
+          <!-- Watermark -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-droplet" /> Watermark</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Watermark Text</label>
+              <input class="ls-input" v-model="localSettings.watermark" @input="emitSettings"
+                placeholder="e.g. CONFIDENTIAL, DRAFT" />
+            </div>
+            <template v-if="localSettings.watermark">
+              <div class="ls-field-row">
+                <label class="ls-label">Color</label>
+                <input type="color" v-model="localSettings.watermark_color" @input="emitSettings" class="ls-color" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Opacity <span class="ls-val">{{ localSettings.watermark_opacity
+                    }}%</span></label>
+                <input type="range" min="1" max="60" step="1" v-model.number="localSettings.watermark_opacity"
+                  @input="emitSettings" class="ls-range" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Rotation <span class="ls-val">{{ localSettings.watermark_rotate
+                    }}°</span></label>
+                <input type="range" min="-90" max="90" step="5" v-model.number="localSettings.watermark_rotate"
+                  @input="emitSettings" class="ls-range" />
+              </div>
+              <div class="ls-field-row">
+                <label class="ls-label">Font Size <span class="ls-val">{{ localSettings.watermark_size || 72
+                    }}px</span></label>
+                <input type="range" min="24" max="200" step="4" v-model.number="localSettings.watermark_size"
+                  @input="emitSettings" class="ls-range" />
+              </div>
+            </template>
+          </div>
+
+          <!-- Advanced -->
+          <div class="ls-settings-section">
+            <div class="ls-settings-section-title"><i class="fa-solid fa-sliders" /> Advanced</div>
+            <div class="ls-field-row">
+              <label class="ls-label">Page Border Radius <span class="ls-val">{{ localSettings.page_radius || 0
+                  }}px</span></label>
+              <input type="range" min="0" max="24" step="2" v-model.number="localSettings.page_radius"
+                @input="emitSettings" class="ls-range" />
+            </div>
+            <div class="ls-field-row">
+              <label class="ls-label">Page Shadow</label>
+              <label class="ls-toggle">
+                <input type="checkbox" v-model="localSettings.page_shadow" @change="emitSettings" />
+                <span class="ls-toggle-track" /><span class="ls-toggle-label">{{ localSettings.page_shadow ? 'On' :
+                  'Off'
+                  }}</span>
+              </label>
+            </div>
+          </div>
+
+        </div><!-- /ls-settings-body -->
       </div>
 
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: SETTINGS
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'settings'" class="tab-panel settings-tab" role="tabpanel">
+      <!-- ─── 7. HISTORY ────────────────────────────────────────────── -->
+      <div v-show="activeTab === 'history'" id="ls-panel-history" role="tabpanel" class="ls-panel">
+        <div class="ls-panel-head">
+          <span class="ls-panel-title">History</span>
+          <span class="ls-el-count-badge">{{ history.length }}</span>
+        </div>
 
-        <!-- Page Setup -->
-        <SettingsSection title="Page Setup" icon="fa-solid fa-file">
-          <SettingRow label="Size">
-            <select v-model="ls.page_size" @change="emit_settings" class="s-select">
-              <option value="A4">A4 (210×297mm)</option>
-              <option value="A3">A3 (297×420mm)</option>
-              <option value="A5">A5 (148×210mm)</option>
-              <option value="Letter">Letter (8.5×11in)</option>
-              <option value="Legal">Legal (8.5×14in)</option>
-            </select>
-          </SettingRow>
-
-          <SettingRow label="Orientation">
-            <div class="s-toggle-group">
-              <button :class="{ active: ls.orientation === 'portrait' }"  @click="ls.orientation='portrait';  emit_settings()">
-                <i class="fa-solid fa-mobile-screen" /> Portrait
-              </button>
-              <button :class="{ active: ls.orientation === 'landscape' }" @click="ls.orientation='landscape'; emit_settings()">
-                <i class="fa-solid fa-tablet-screen-button fa-rotate-90" /> Landscape
-              </button>
+        <div v-if="history.length" class="ls-history-list">
+          <div v-for="(snap, idx) in [...history].reverse()" :key="idx" class="ls-history-item" :class="{
+            'ls-history-current': history.length - 1 - idx === historyIndex,
+            'ls-history-future': history.length - 1 - idx > historyIndex,
+          }" @click="$emit('history-jump', history.length - 1 - idx)" role="button"
+            :aria-label="`Restore snapshot ${idx + 1}`">
+            <div class="ls-hist-icon">
+              <i v-if="history.length - 1 - idx === historyIndex" class="fa-solid fa-circle-dot" />
+              <i v-else-if="history.length - 1 - idx > historyIndex" class="fa-regular fa-circle" style="opacity:.35" />
+              <i v-else class="fa-solid fa-circle-arrow-left" />
             </div>
-          </SettingRow>
-
-          <SettingRow :label="`Margin: ${ls.margin||40}px`">
-            <input type="range" v-model.number="ls.margin" min="0" max="120" @input="emit_settings" class="s-range" />
-          </SettingRow>
-
-          <SettingRow :label="`Corner Radius: ${ls.page_radius||0}px`">
-            <input type="range" v-model.number="ls.page_radius" min="0" max="40" @input="emit_settings" class="s-range" />
-          </SettingRow>
-        </SettingsSection>
-
-        <!-- Colors -->
-        <SettingsSection title="Colors" icon="fa-solid fa-palette">
-          <SettingRow label="Primary">
-            <div class="s-color-row">
-              <input type="color" v-model="ls.primary_color" @input="emit_settings" class="s-color-input" />
-              <input type="text"  v-model="ls.primary_color" @input="emit_settings" class="s-text-input mono" />
+            <div class="ls-hist-info">
+              <span class="ls-hist-label">Snapshot {{ history.length - idx }}</span>
+              <span class="ls-hist-sub">{{ getSnapSummary(snap) }}</span>
             </div>
-          </SettingRow>
-          <SettingRow label="Accent">
-            <div class="s-color-row">
-              <input type="color" v-model="ls.accent_color" @input="emit_settings" class="s-color-input" />
-              <input type="text"  v-model="ls.accent_color" @input="emit_settings" class="s-text-input mono" />
-            </div>
-          </SettingRow>
-          <SettingRow label="Background">
-            <div class="s-color-row">
-              <input type="color" v-model="ls.background_color" @input="emit_settings" class="s-color-input" />
-              <input type="text"  v-model="ls.background_color" @input="emit_settings" class="s-text-input mono" />
-            </div>
-          </SettingRow>
-          <SettingRow label="Text">
-            <div class="s-color-row">
-              <input type="color" v-model="ls.text_color" @input="emit_settings" class="s-color-input" />
-              <input type="text"  v-model="ls.text_color" @input="emit_settings" class="s-text-input mono" />
-            </div>
-          </SettingRow>
-          <SettingRow label="BG Image">
-            <input type="text" v-model="ls.bg_image" @input="emit_settings" class="s-text-input" placeholder="https://…" />
-          </SettingRow>
-        </SettingsSection>
-
-        <!-- Typography -->
-        <SettingsSection title="Typography" icon="fa-solid fa-font">
-          <SettingRow label="Font">
-            <select v-model="ls.font_family" @change="emit_settings" class="s-select">
-              <option v-for="f in FONT_LIST" :key="f" :value="f">{{ f }}</option>
-            </select>
-          </SettingRow>
-          <SettingRow :label="`Base Size: ${ls.font_size||14}px`">
-            <input type="range" v-model.number="ls.font_size" min="10" max="24" @input="emit_settings" class="s-range" />
-          </SettingRow>
-          <SettingRow label="Direction">
-            <div class="s-toggle-group">
-              <button :class="{ active: !ls.rtl }" @click="ls.rtl=false; emit_settings()">LTR</button>
-              <button :class="{ active: ls.rtl  }" @click="ls.rtl=true;  emit_settings()">RTL</button>
-            </div>
-          </SettingRow>
-        </SettingsSection>
-
-        <!-- Header -->
-        <SettingsSection title="Header" icon="fa-solid fa-heading">
-          <SettingRow label="Show Header">
-            <ToggleSw :value="ls.show_header" @update="ls.show_header=$event; emit_settings()" />
-          </SettingRow>
-          <template v-if="ls.show_header">
-            <SettingRow label="Text">
-              <input type="text" v-model="ls.header_text" @input="emit_settings" class="s-text-input" />
-            </SettingRow>
-            <SettingRow label="Color">
-              <div class="s-color-row">
-                <input type="color" v-model="ls.header_color" @input="emit_settings" class="s-color-input" />
-                <input type="text"  v-model="ls.header_color" @input="emit_settings" class="s-text-input mono" />
-              </div>
-            </SettingRow>
-            <SettingRow :label="`Height: ${ls.header_height||50}px`">
-              <input type="range" v-model.number="ls.header_height" min="30" max="120" @input="emit_settings" class="s-range" />
-            </SettingRow>
-          </template>
-        </SettingsSection>
-
-        <!-- Footer -->
-        <SettingsSection title="Footer" icon="fa-solid fa-align-justify">
-          <SettingRow label="Show Footer">
-            <ToggleSw :value="ls.show_footer" @update="ls.show_footer=$event; emit_settings()" />
-          </SettingRow>
-          <template v-if="ls.show_footer">
-            <SettingRow label="Left">
-              <input type="text" v-model="ls.footer_left" @input="emit_settings" class="s-text-input" placeholder="Company" />
-            </SettingRow>
-            <SettingRow label="Right">
-              <input type="text" v-model="ls.footer_right" @input="emit_settings" class="s-text-input" placeholder="{n}/{total}" />
-            </SettingRow>
-          </template>
-          <SettingRow label="Page Numbers">
-            <ToggleSw :value="ls.show_page_numbers !== false" @update="ls.show_page_numbers=$event; emit_settings()" />
-          </SettingRow>
-        </SettingsSection>
-
-        <!-- Watermark -->
-        <SettingsSection title="Watermark" icon="fa-solid fa-water">
-          <SettingRow label="Text">
-            <input type="text" v-model="ls.watermark" @input="emit_settings" class="s-text-input" placeholder="DRAFT" />
-          </SettingRow>
-          <template v-if="ls.watermark">
-            <SettingRow :label="`Opacity: ${ls.watermark_opacity||8}%`">
-              <input type="range" v-model.number="ls.watermark_opacity" min="1" max="25" @input="emit_settings" class="s-range" />
-            </SettingRow>
-            <SettingRow label="Color">
-              <div class="s-color-row">
-                <input type="color" v-model="ls.watermark_color" @input="emit_settings" class="s-color-input" />
-                <input type="text"  v-model="ls.watermark_color" @input="emit_settings" class="s-text-input mono" />
-              </div>
-            </SettingRow>
-            <SettingRow :label="`Rotation: ${ls.watermark_rotate||-30}°`">
-              <input type="range" v-model.number="ls.watermark_rotate" min="-90" max="90" @input="emit_settings" class="s-range" />
-            </SettingRow>
-          </template>
-        </SettingsSection>
-      </div>
-
-      <!-- ══════════════════════════════════════════════════════════════
-           TAB: HISTORY
-      ══════════════════════════════════════════════════════════════ -->
-      <div v-show="activeTab === 'history'" class="tab-panel" role="tabpanel">
-        <button class="refresh-history-btn" @click="loadHistory" :disabled="historyLoading">
-          <i :class="historyLoading ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate'" />
-          {{ historyLoading ? 'Loading…' : 'Refresh History' }}
-        </button>
-
-        <div v-if="versionList.length" class="history-timeline" aria-label="Version history">
-          <div
-            v-for="(ver, vi) in versionList"
-            :key="ver.id"
-            class="history-item"
-            :class="{ 'history-item--current': vi === 0 }"
-          >
-            <div class="history-dot" />
-            <div v-if="vi < versionList.length-1" class="history-line" />
-            <div class="history-content">
-              <div class="history-header">
-                <strong>v{{ ver.version_number }}</strong>
-                <span v-if="vi===0" class="history-current-badge">Current</span>
-              </div>
-              <p class="history-label">{{ ver.label || 'Auto-saved' }}</p>
-              <span class="history-date">{{ formatDate(ver.created_at) }}</span>
-            </div>
-            <button
-              class="history-restore-btn"
-              @click="restoreVersion(ver.id)"
-              :disabled="vi === 0"
-              :title="vi === 0 ? 'Already current' : `Restore version ${ver.version_number}`"
-            >
-              Restore
-            </button>
+            <div v-if="history.length - 1 - idx === historyIndex" class="ls-hist-current-badge">current</div>
           </div>
         </div>
 
-        <div v-else-if="!historyLoading" class="empty-state">
+        <div v-else class="ls-empty">
           <i class="fa-solid fa-clock-rotate-left" />
-          <p>No version history yet</p>
-          <small>Versions are saved automatically every 5 minutes</small>
+          <span>No history yet — start editing to build a timeline</span>
         </div>
       </div>
 
-    </div><!-- /panel-inner -->
+    </div><!-- /ls-content -->
   </aside>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 
-// ── Inline sub-components ──────────────────────────────────────────────
-const SettingsSection = {
-  name: 'SettingsSection',
-  props: { title: String, icon: String },
-  setup(props) {
-    const open = ref(true)
-    return { open }
-  },
-  template: `
-    <div class="s-section">
-      <button class="s-section-header" @click="open=!open">
-        <i :class="icon" class="s-section-icon" />
-        <span>{{ title }}</span>
-        <i :class="open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'" class="s-chevron" />
-      </button>
-      <div v-if="open" class="s-section-body"><slot /></div>
-    </div>
-  `,
-}
-
-const SettingRow = {
-  name: 'SettingRow',
-  props: { label: String },
-  template: `
-    <div class="s-row">
-      <label class="s-label">{{ label }}</label>
-      <div class="s-control"><slot /></div>
-    </div>
-  `,
-}
-
-const ToggleSw = {
-  name: 'ToggleSw',
-  props: { value: Boolean },
-  emits: ['update'],
-  template: `
-    <label class="toggle-sw">
-      <input type="checkbox" :checked="value" @change="$emit('update', $event.target.checked)" class="toggle-sw-input" />
-      <span class="toggle-sw-track"><span class="toggle-sw-thumb" /></span>
-    </label>
-  `,
-}
-
-// ── Props ──────────────────────────────────────────────────────────────
+// ── Props ───────────────────────────────────────────────────────────
 const props = defineProps({
-  report:      { type: Object,  required: true },
-  settings:    { type: Object,  required: true },
-  currentPage: { type: Number,  default: 0 },
-  selectedElIdx: { type: Number, default: null },
-  selectedEls: { type: Array,   default: () => [] },
-  activeTab:   { type: String,  default: 'elements' },
-  isCollapsed: { type: Boolean, default: false },
-  isDark:      { type: Boolean, default: false },
+  report: { type: Object, required: true },
+  settings: { type: Object, required: true },
+  currentPage: { type: Number, default: 0 },
+  isDark: { type: Boolean, default: false },
+  history: { type: Array, default: () => [] },
+  historyIndex: { type: Number, default: -1 },
 })
 
+// ── Emits ───────────────────────────────────────────────────────────
 const emit = defineEmits([
-  'add-element-center','select-page','add-page','add-page-after',
-  'duplicate-page','delete-page','rename-page',
-  'select-element','deselect-all','toggle-visibility','toggle-lock',
-  'canvas-drag-start','update:settings',
-  'update:active-tab','update:is-collapsed','mark-dirty',
+  'add-element', 'select-page', 'add-page',
+  'add-page-before', 'add-page-after',
+  'duplicate-page', 'delete-page',
+  'move-page-up', 'move-page-down',
+  'reorder-pages',
+  'update-settings',
+  'select-layer-element',
+  'history-jump',
+  'image-upload', 'image-search',
+  'mark-dirty',
 ])
 
-// ── Reactive local state ───────────────────────────────────────────────
-const elSearch      = ref('')
-const collapsedCats = ref([])
-const renamingPage  = ref(null)
-const renameInputRef= ref(null)
-const mediaDragover = ref(false)
-const fileInputRef  = ref(null)
-const stockQuery    = ref('business')
-const stockLoading  = ref(false)
-const stockImages   = ref([])
-const uploadedImages= ref([])
-const versionList   = ref([])
-const historyLoading= ref(false)
-
-// Local copy of settings (never mutate props directly)
-const ls = reactive({ ...props.settings })
-watch(() => props.settings, v => Object.assign(ls, v), { deep: true })
-
-// ── Constants ──────────────────────────────────────────────────────────
+// ── Tab state ───────────────────────────────────────────────────────
 const TABS = [
   { id: 'elements', label: 'Elements', icon: 'fa-solid fa-shapes' },
-  { id: 'pages',    label: 'Pages',    icon: 'fa-solid fa-copy' },
-  { id: 'layers',   label: 'Layers',   icon: 'fa-solid fa-layer-group' },
-  { id: 'media',    label: 'Media',    icon: 'fa-solid fa-image' },
-  { id: 'themes',   label: 'Themes',   icon: 'fa-solid fa-paint-roller' },
-  { id: 'settings', label: 'Settings', icon: 'fa-solid fa-sliders' },
-  { id: 'history',  label: 'History',  icon: 'fa-solid fa-clock-rotate-left' },
+  { id: 'pages', label: 'Pages', icon: 'fa-solid fa-book-open' },
+  { id: 'layers', label: 'Layers', icon: 'fa-solid fa-layer-group' },
+  { id: 'media', label: 'Media', icon: 'fa-solid fa-photo-film' },
+  { id: 'themes', label: 'Themes', icon: 'fa-solid fa-wand-sparkles' },
+  { id: 'settings', label: 'Settings', icon: 'fa-solid fa-gear' },
+  { id: 'history', label: 'History', icon: 'fa-solid fa-clock-rotate-left' },
 ]
+const activeTab = ref('elements')
 
-const QUICK_CHIPS = [
-  { type:'heading', label:'Heading', icon:'fa-solid fa-heading', w:350, h:60 },
-  { type:'text',    label:'Text',    icon:'fa-solid fa-align-left', w:300, h:80 },
-  { type:'image',   label:'Image',   icon:'fa-solid fa-image', w:300, h:200 },
-  { type:'table',   label:'Table',   icon:'fa-solid fa-table', w:460, h:220 },
-  { type:'bar-chart', label:'Chart', icon:'fa-solid fa-chart-bar', w:400, h:280 },
-  { type:'metric',  label:'KPI',     icon:'fa-solid fa-gauge-high', w:200, h:120 },
-  { type:'richtext',label:'Rich Text',icon:'fa-solid fa-file-word',w:400, h:200 },
-]
+// ── Element Catalog ─────────────────────────────────────────────────
+const elSearch = ref('')
+const collapsedGroups = ref([])
 
-const ELEMENT_CATALOG = [
+const CATALOG = [
   {
-    name: 'Typography',
+    id: 'text', label: 'Text', icon: 'fa-solid fa-font', color: '#6366f1',
     items: [
-      { type:'heading',    label:'Heading',     icon:'fa-solid fa-heading',        w:350, h:60,  desc:'Large, bold title text' },
-      { type:'subheading', label:'Subheading',  icon:'fa-solid fa-text-height',    w:280, h:45,  desc:'Section heading' },
-      { type:'text',       label:'Text',        icon:'fa-solid fa-align-left',     w:300, h:80,  desc:'Body paragraph text' },
-      { type:'richtext',   label:'Rich Text',   icon:'fa-solid fa-file-word',      w:400, h:200, desc:'Full WYSIWYG editor', isNew:true },
-      { type:'quote',      label:'Quote',       icon:'fa-solid fa-quote-right',    w:340, h:100, desc:'Stylized pull quote' },
-      { type:'blockquote', label:'Blockquote',  icon:'fa-solid fa-quote-left',     w:340, h:100, desc:'Block-styled quote' },
-      { type:'highlight',  label:'Highlight',   icon:'fa-solid fa-highlighter',    w:240, h:40,  desc:'Highlighted inline text' },
-      { type:'badge',      label:'Badge',       icon:'fa-solid fa-tag',            w:120, h:36,  desc:'Colored pill badge' },
-      { type:'code',       label:'Code Block',  icon:'fa-solid fa-code',           w:380, h:140, desc:'Monospaced code block' },
-      { type:'link',       label:'Link',        icon:'fa-solid fa-link',           w:200, h:36,  desc:'Clickable hyperlink' },
-      { type:'list',       label:'List',        icon:'fa-solid fa-list-ul',        w:280, h:140, desc:'Bullet or numbered list' },
-      { type:'callout',    label:'Callout',     icon:'fa-solid fa-lightbulb',      w:380, h:100, desc:'Emoji callout box' },
+      { type: 'heading', label: 'Heading', icon: 'fa-solid fa-heading', w: 500, h: 60, defaultContent: 'Report Heading', styles: { fontSize: 32, fontWeight: '700' } },
+      { type: 'subheading', label: 'Subheading', icon: 'fa-solid fa-text-height', w: 400, h: 44, defaultContent: 'Section Subheading', styles: { fontSize: 20, fontWeight: '600' } },
+      { type: 'text', label: 'Paragraph', icon: 'fa-solid fa-align-left', w: 400, h: 100, defaultContent: 'Start typing your paragraph text here. This is a body text block suitable for report content.' },
+      { type: 'quote', label: 'Quote', icon: 'fa-solid fa-quote-left', w: 380, h: 80, defaultContent: 'Inspiring quote goes here.' },
+      { type: 'blockquote', label: 'Blockquote', icon: 'fa-solid fa-block-quote', w: 380, h: 100, defaultContent: 'Extended blockquote with more content.' },
+      { type: 'list', label: 'List', icon: 'fa-solid fa-list', w: 280, h: 120 },
+      { type: 'highlight', label: 'Highlight', icon: 'fa-solid fa-highlighter', w: 200, h: 40, defaultContent: 'Highlighted text' },
+      { type: 'callout', label: 'Callout', icon: 'fa-solid fa-bullhorn', w: 380, h: 80, defaultContent: 'Important callout message' },
+      { type: 'badge', label: 'Badge', icon: 'fa-solid fa-certificate', w: 100, h: 34, defaultContent: 'Badge' },
+      { type: 'link', label: 'Link', icon: 'fa-solid fa-link', w: 200, h: 34, defaultContent: 'https://example.com' },
+      { type: 'code', label: 'Code Block', icon: 'fa-solid fa-code', w: 400, h: 160, defaultContent: '// Your code here\nconsole.log("Hello, World!");' },
+      { type: 'richtext', label: 'Rich Text', icon: 'fa-solid fa-file-pen', w: 400, h: 200 },
     ],
   },
   {
-    name: 'Data & Charts',
+    id: 'data', label: 'Data & Charts', icon: 'fa-solid fa-chart-bar', color: '#10b981',
     items: [
-      { type:'table',           label:'Table',           icon:'fa-solid fa-table',              w:460, h:220, desc:'Data table with editable cells' },
-      { type:'metric',          label:'KPI Card',        icon:'fa-solid fa-gauge-high',         w:200, h:120, desc:'Key performance indicator' },
-      { type:'stat-row',        label:'Stat Row',        icon:'fa-solid fa-bars-staggered',     w:460, h:90,  desc:'Horizontal statistics row' },
-      { type:'progress',        label:'Progress Bar',    icon:'fa-solid fa-bars-progress',      w:360, h:60,  desc:'Percentage progress bar' },
-      { type:'circular-progress',label:'Circle Progress',icon:'fa-solid fa-circle-half-stroke', w:160, h:160, desc:'Circular progress indicator', isNew:true },
-      { type:'sparkline',       label:'Sparkline',       icon:'fa-solid fa-wave-square',        w:200, h:50,  desc:'Mini trend line chart', isNew:true },
-      { type:'checklist',       label:'Checklist',       icon:'fa-solid fa-list-check',         w:300, h:180, desc:'Interactive checklist' },
-      { type:'bar-chart',       label:'Bar Chart',       icon:'fa-solid fa-chart-bar',          w:420, h:280, desc:'Vertical bar chart' },
-      { type:'line-chart',      label:'Line Chart',      icon:'fa-solid fa-chart-line',         w:420, h:280, desc:'Trend line chart' },
-      { type:'area-chart',      label:'Area Chart',      icon:'fa-solid fa-chart-area',         w:420, h:280, desc:'Filled area chart' },
-      { type:'pie-chart',       label:'Pie Chart',       icon:'fa-solid fa-chart-pie',          w:280, h:280, desc:'Pie distribution chart' },
-      { type:'doughnut-chart',  label:'Doughnut',        icon:'fa-solid fa-circle-dot',         w:280, h:280, desc:'Doughnut chart' },
-      { type:'radar-chart',     label:'Radar',           icon:'fa-solid fa-compass',            w:280, h:280, desc:'Spider/radar chart', isNew:true },
-      { type:'scatter-chart',   label:'Scatter',         icon:'fa-solid fa-braille',            w:280, h:280, desc:'Scatter plot', isNew:true },
-      { type:'polar-chart',     label:'Polar Area',      icon:'fa-solid fa-circle-half-stroke', w:280, h:280, desc:'Polar area chart', isNew:true },
+      { type: 'metric', label: 'KPI Metric', icon: 'fa-solid fa-arrow-trend-up', w: 180, h: 120 },
+      { type: 'progress', label: 'Progress Bar', icon: 'fa-solid fa-bars-progress', w: 300, h: 60 },
+      { type: 'circular-progress', label: 'Ring Progress', icon: 'fa-solid fa-circle-notch', w: 160, h: 180 },
+      { type: 'sparkline', label: 'Sparkline', icon: 'fa-solid fa-wave-square', w: 200, h: 60 },
+      { type: 'stat-row', label: 'Stats Row', icon: 'fa-solid fa-table-columns', w: 500, h: 100 },
+      { type: 'bar-chart', label: 'Bar Chart', icon: 'fa-solid fa-chart-column', w: 400, h: 260 },
+      { type: 'line-chart', label: 'Line Chart', icon: 'fa-solid fa-chart-line', w: 400, h: 260 },
+      { type: 'area-chart', label: 'Area Chart', icon: 'fa-solid fa-chart-area', w: 400, h: 260 },
+      { type: 'pie-chart', label: 'Pie Chart', icon: 'fa-solid fa-chart-pie', w: 320, h: 280 },
+      { type: 'doughnut-chart', label: 'Doughnut', icon: 'fa-solid fa-circle-half-stroke', w: 320, h: 280 },
+      { type: 'radar-chart', label: 'Radar Chart', icon: 'fa-solid fa-circle-dot', w: 320, h: 280 },
     ],
   },
   {
-    name: 'Media',
+    id: 'table', label: 'Tables', icon: 'fa-solid fa-table', color: '#f59e0b',
     items: [
-      { type:'image',    label:'Image',    icon:'fa-solid fa-image',             w:320, h:220, desc:'Upload or link an image' },
-      { type:'video',    label:'Video',    icon:'fa-solid fa-video',             w:400, h:250, desc:'YouTube embed', isNew:true },
-      { type:'map',      label:'Map',      icon:'fa-solid fa-map-location-dot',  w:400, h:260, desc:'Google Maps embed', isNew:true },
-      { type:'qr-code',  label:'QR Code',  icon:'fa-solid fa-qrcode',            w:160, h:160, desc:'Auto-generated QR code', isNew:true },
-      { type:'icon',     label:'Emoji Icon',icon:'fa-solid fa-face-smile',        w:60,  h:60,  desc:'Single emoji or icon' },
-      { type:'rating',   label:'Rating',   icon:'fa-solid fa-star',              w:160, h:40,  desc:'Star rating' },
-      { type:'avatar',   label:'Avatar',   icon:'fa-solid fa-circle-user',       w:80,  h:80,  desc:'Emoji or user avatar', isNew:true },
+      {
+        type: 'table', label: 'Data Table', icon: 'fa-solid fa-table', w: 500, h: 200,
+        defaults: {
+          columns: ['Name', 'Value', 'Change', 'Status'],
+          data: [
+            { Name: 'Revenue', Value: '$1.2M', Change: '+12%', Status: 'Up' },
+            { Name: 'Users', Value: '4,500', Change: '+5%', Status: 'Up' },
+            { Name: 'Costs', Value: '$300K', Change: '-3%', Status: 'Down' },
+          ],
+        },
+      },
     ],
   },
   {
-    name: 'Layout & Shapes',
+    id: 'media', label: 'Media', icon: 'fa-solid fa-photo-film', color: '#8b5cf6',
     items: [
-      { type:'rectangle',  label:'Rectangle',  icon:'fa-solid fa-square',         w:200, h:120, desc:'Colored rectangle' },
-      { type:'circle',     label:'Circle',     icon:'fa-solid fa-circle',         w:120, h:120, desc:'Colored circle' },
-      { type:'triangle',   label:'Triangle',   icon:'fa-solid fa-play',           w:140, h:120, desc:'Triangle shape' },
-      { type:'divider',    label:'Divider',    icon:'fa-solid fa-minus',          w:500, h:4,   desc:'Horizontal rule' },
-      { type:'arrow',      label:'Arrow',      icon:'fa-solid fa-arrow-right',    w:200, h:40,  desc:'SVG arrow' },
-      { type:'spacer',     label:'Spacer',     icon:'fa-solid fa-expand',         w:100, h:40,  desc:'Invisible spacing element' },
+      { type: 'image', label: 'Image', icon: 'fa-solid fa-image', w: 300, h: 220 },
+      { type: 'video', label: 'Video', icon: 'fa-solid fa-circle-play', w: 400, h: 240 },
+      { type: 'map', label: 'Map', icon: 'fa-solid fa-map-location-dot', w: 400, h: 260 },
+      { type: 'icon', label: 'Icon', icon: 'fa-solid fa-icons', w: 60, h: 60 },
+      { type: 'avatar', label: 'Avatar', icon: 'fa-solid fa-user-circle', w: 80, h: 80 },
+      { type: 'qr-code', label: 'QR Code', icon: 'fa-solid fa-qrcode', w: 160, h: 160 },
     ],
   },
   {
-    name: 'Content Blocks',
+    id: 'shapes', label: 'Shapes', icon: 'fa-solid fa-vector-square', color: '#ef4444',
     items: [
-      { type:'timeline',     label:'Timeline',     icon:'fa-solid fa-timeline',         w:440, h:280, desc:'Vertical event timeline' },
-      { type:'testimonial',  label:'Testimonial',  icon:'fa-solid fa-comment-dots',     w:360, h:180, desc:'Quote + author block' },
-      { type:'social-card',  label:'Social Card',  icon:'fa-solid fa-id-card',          w:200, h:180, desc:'Contact/profile card', isNew:true },
-      { type:'price-card',   label:'Pricing Card', icon:'fa-solid fa-credit-card',      w:220, h:320, desc:'Pricing plan card', isNew:true },
-      { type:'kanban',       label:'Kanban Card',  icon:'fa-solid fa-square-kanban',    w:240, h:130, desc:'Task card', isNew:true },
-      { type:'toc',          label:'Table of Contents', icon:'fa-solid fa-list-ol',     w:380, h:260, desc:'Auto TOC from headings', isNew:true },
-      { type:'steps',        label:'Steps',        icon:'fa-solid fa-list-check',       w:500, h:80,  desc:'Numbered step flow', isNew:true },
-      { type:'callout',      label:'Callout',      icon:'fa-solid fa-lightbulb',        w:380, h:100, desc:'Info/warning callout box' },
+      { type: 'rectangle', label: 'Rectangle', icon: 'fa-regular fa-square', w: 200, h: 120 },
+      { type: 'circle', label: 'Circle', icon: 'fa-regular fa-circle', w: 120, h: 120 },
+      { type: 'triangle', label: 'Triangle', icon: 'fa-solid fa-play fa-rotate-270', w: 120, h: 100 },
+      { type: 'divider', label: 'Divider', icon: 'fa-solid fa-minus', w: 400, h: 10 },
+      { type: 'arrow', label: 'Arrow', icon: 'fa-solid fa-arrow-right', w: 200, h: 40 },
+      { type: 'spacer', label: 'Spacer', icon: 'fa-solid fa-arrows-up-down', w: 400, h: 40 },
     ],
   },
   {
-    name: 'Utilities',
+    id: 'layout', label: 'Layout & Lists', icon: 'fa-solid fa-border-all', color: '#06b6d4',
     items: [
-      { type:'pagenum',    label:'Page Number',  icon:'fa-solid fa-hashtag',         w:60,  h:30,  desc:'Auto page number' },
-      { type:'date-el',    label:'Date',         icon:'fa-solid fa-calendar',        w:200, h:30,  desc:'Today\'s date' },
-      { type:'signature',  label:'Signature',    icon:'fa-solid fa-signature',       w:240, h:100, desc:'Signature line' },
-      { type:'watermark',  label:'Watermark',    icon:'fa-solid fa-droplet',         w:300, h:100, desc:'Watermark text element' },
+      { type: 'checklist', label: 'Checklist', icon: 'fa-solid fa-square-check', w: 300, h: 180, defaults: { items: [{ text: 'Task 1', checked: true }, { text: 'Task 2', checked: false }] } },
+      { type: 'timeline', label: 'Timeline', icon: 'fa-solid fa-timeline', w: 380, h: 280, defaults: { items: [{ date: '2024 Q1', label: 'Milestone 1', desc: 'Project kicked off' }, { date: '2024 Q2', label: 'Milestone 2', desc: 'Phase 1 complete' }] } },
+      { type: 'steps', label: 'Steps', icon: 'fa-solid fa-stairs', w: 500, h: 80, defaults: { items: [{ label: 'Plan' }, { label: 'Build' }, { label: 'Launch' }] } },
+      { type: 'price-card', label: 'Pricing Card', icon: 'fa-solid fa-tag', w: 240, h: 340 },
+      { type: 'social-card', label: 'Social Card', icon: 'fa-solid fa-id-card', w: 220, h: 180 },
+      { type: 'kanban', label: 'Kanban Card', icon: 'fa-solid fa-columns', w: 200, h: 130 },
+      { type: 'testimonial', label: 'Testimonial', icon: 'fa-solid fa-comment-quote', w: 320, h: 200 },
+      { type: 'rating', label: 'Star Rating', icon: 'fa-solid fa-star', w: 160, h: 40, defaults: { value: 4 } },
+    ],
+  },
+  {
+    id: 'document', label: 'Document', icon: 'fa-solid fa-file-lines', color: '#64748b',
+    items: [
+      { type: 'toc', label: 'Table of Contents', icon: 'fa-solid fa-list-ol', w: 400, h: 260 },
+      { type: 'pagenum', label: 'Page Number', icon: 'fa-solid fa-hashtag', w: 60, h: 34 },
+      { type: 'date-el', label: 'Current Date', icon: 'fa-regular fa-calendar', w: 180, h: 34 },
+      { type: 'signature', label: 'Signature Line', icon: 'fa-solid fa-signature', w: 260, h: 100 },
+      { type: 'watermark', label: 'Watermark Text', icon: 'fa-solid fa-droplet', w: 300, h: 120, defaultContent: 'DRAFT' },
     ],
   },
 ]
 
-const THEMES = [
-  { name:'Indigo Pro',      gradient:'linear-gradient(135deg, #6366f1, #4f46e5)',  primary:'#6366f1', accent:'#8b5cf6', bg:'#ffffff', text:'#0f172a' },
-  { name:'Executive Dark',  gradient:'linear-gradient(135deg, #0f172a, #1e293b)',  primary:'#6366f1', accent:'#8b5cf6', bg:'#0f172a', text:'#f8fafc' },
-  { name:'Emerald Fresh',   gradient:'linear-gradient(135deg, #065f46, #10b981)',  primary:'#10b981', accent:'#059669', bg:'#ffffff', text:'#0f172a' },
-  { name:'Amber Bold',      gradient:'linear-gradient(135deg, #92400e, #f59e0b)',  primary:'#f59e0b', accent:'#f97316', bg:'#1e293b', text:'#f8fafc' },
-  { name:'Rose Elegant',    gradient:'linear-gradient(135deg, #9f1239, #f43f5e)',  primary:'#f43f5e', accent:'#ec4899', bg:'#ffffff', text:'#0f172a' },
-  { name:'Sky Modern',      gradient:'linear-gradient(135deg, #0c4a6e, #0ea5e9)',  primary:'#0ea5e9', accent:'#06b6d4', bg:'#ffffff', text:'#0f172a' },
-  { name:'Violet Dark',     gradient:'linear-gradient(135deg, #4c1d95, #7c3aed)',  primary:'#7c3aed', accent:'#a78bfa', bg:'#1a0a2e', text:'#f8fafc' },
-  { name:'Slate Minimal',   gradient:'linear-gradient(135deg, #1e293b, #475569)',  primary:'#64748b', accent:'#94a3b8', bg:'#f8fafc', text:'#1e293b' },
-]
-
-const PALETTE_COLORS = [
-  '#6366f1','#8b5cf6','#ec4899','#ef4444','#f97316','#f59e0b',
-  '#10b981','#06b6d4','#0ea5e9','#3b82f6','#84cc16','#64748b',
-  '#1e293b','#0f172a','#ffffff',
-]
-
-const FONT_LIST = [
-  'DM Sans','Inter','Plus Jakarta Sans','Space Grotesk','Sora','Nunito',
-  'Outfit','Poppins','Figtree','Geist','Georgia','Playfair Display',
-  'Merriweather','Lora','Fira Code','Courier New',
-]
-
-// ── Computed ───────────────────────────────────────────────────────────
-const filteredCats = computed(() => {
-  if (!elSearch.value.trim()) return ELEMENT_CATALOG
+const filteredCatalog = computed(() => {
+  if (!elSearch.value.trim()) return CATALOG
   const q = elSearch.value.toLowerCase()
-  return ELEMENT_CATALOG
-    .map(c => ({ ...c, items: c.items.filter(i => i.label.toLowerCase().includes(q) || i.type.includes(q) || (i.desc||'').toLowerCase().includes(q)) }))
-    .filter(c => c.items.length > 0)
+  return CATALOG.map(g => ({
+    ...g,
+    items: g.items.filter(el => el.label.toLowerCase().includes(q) || el.type.includes(q)),
+  })).filter(g => g.items.length)
 })
 
-const currentPageEls = computed(() => props.report.content[props.currentPage]?.elements || [])
-const reversedEls    = computed(() => [...currentPageEls.value].reverse())
-
-// ── Helpers ────────────────────────────────────────────────────────────
-function isSelected(reversedIdx) {
-  const realI = currentPageEls.value.length - 1 - reversedIdx
-  return props.selectedElIdx === realI || props.selectedEls.includes(realI)
+function toggleGroup(id) {
+  const i = collapsedGroups.value.indexOf(id)
+  i >= 0 ? collapsedGroups.value.splice(i, 1) : collapsedGroups.value.push(id)
 }
 
-function realIdx(reversedIdx) {
-  return currentPageEls.value.length - 1 - reversedIdx
+function onElDragStart(e, elDef) {
+  e.dataTransfer.setData('el-def', JSON.stringify(elDef))
+  e.dataTransfer.effectAllowed = 'copy'
 }
 
-function selectLayer(reversedIdx) {
-  emit('select-element', [realIdx(reversedIdx)])
+function quickInsert(elDef) {
+  emit('add-element', { def: elDef, pageIndex: props.currentPage })
 }
 
-function getLayerName(el) {
-  const text = (el.content || el.label || el.value || '')
-    .toString()
-    .replace(/<[^>]*>/g, '')
-    .trim()
-  return text.substring(0, 28) || el.type
+// ── Pages drag-and-drop ─────────────────────────────────────────────
+const pagesListRef = ref(null)
+let pageDragSrc = null
+const pageDragOver = ref(null)
+
+function onPageDragStart(e, pi) {
+  pageDragSrc = pi
+  e.dataTransfer.effectAllowed = 'move'
 }
 
-function getElIcon(type) {
-  for (const cat of ELEMENT_CATALOG) {
-    const found = cat.items.find(i => i.type === type)
-    if (found) return found.icon
+function onPageDragEnd() { pageDragOver.value = null }
+
+function onPageDragOver(e, pi) {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  pageDragOver.value = pi
+}
+
+function onPageDrop(e, pi) {
+  e.preventDefault()
+  pageDragOver.value = null
+  if (pageDragSrc === null || pageDragSrc === pi) { pageDragSrc = null; return }
+  const order = Array.from({ length: props.report.content.length }, (_, i) => i)
+  order.splice(pi, 0, ...order.splice(pageDragSrc, 1))
+  emit('reorder-pages', order)
+  pageDragSrc = null
+}
+
+function getPageThumbStyle(page) {
+  return {
+    background: props.settings.background_color || '#fff',
+    border: `1px solid ${props.settings.primary_color || '#6366f1'}22`,
   }
-  return 'fa-solid fa-cube'
-}
-
-function getTypeColor(type) {
-  if (type?.endsWith('-chart') || type === 'table') return '#06b6d4'
-  if (['text','heading','subheading','quote','richtext'].includes(type)) return '#6366f1'
-  if (['image','video','map'].includes(type)) return '#ec4899'
-  if (['metric','stat-row','progress'].includes(type)) return '#f59e0b'
-  if (['rectangle','circle','triangle'].includes(type)) return '#10b981'
-  return '#94a3b8'
 }
 
 function getMiniElStyle(el) {
-  const scale = 0.12
+  const s = el.styles || {}
+  const scale = 100 / 794  // A4 width scale factor for thumbnail
   return {
     position: 'absolute',
-    left:    ((el.position?.x || 0) * scale) + 'px',
-    top:     ((el.position?.y || 0) * scale) + 'px',
-    width:   ((el.styles?.width  || 80) * scale) + 'px',
-    height:  ((el.styles?.height || 40) * scale) + 'px',
-    background: el.styles?.backgroundColor || (props.settings.primary_color || '#6366f1'),
-    opacity: .55,
+    left: ((el.position?.x || 0) * scale) + '%',
+    top: ((el.position?.y || 0) * scale * 0.6) + '%',
+    width: Math.min(90, (s.width || 100) * scale) + '%',
+    height: '3px',
+    background: s.backgroundColor !== 'transparent' && s.backgroundColor
+      ? s.backgroundColor
+      : (props.settings.primary_color || '#6366f1') + '50',
     borderRadius: '1px',
   }
 }
 
-function formatDate(d) {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+// ── Layers ──────────────────────────────────────────────────────────
+let layerDragSrc = null
+const layerDragOver = ref(null)
+
+const currentPageElements = computed(
+  () => props.report.content[props.currentPage]?.elements || []
+)
+
+function isElSelected(idx) {
+  return false // parent handles selection — we just emit
 }
 
-// ── Elements ───────────────────────────────────────────────────────────
-function toggleCat(name) {
-  const i = collapsedCats.value.indexOf(name)
-  if (i >= 0) collapsedCats.value.splice(i, 1)
-  else collapsedCats.value.push(name)
+function locateElement(idx) {
+  emit('select-layer-element', props.currentPage, idx)
 }
 
-function addToCanvas(def) {
-  emit('add-element-center', def)
+function toggleVisibility(idx) {
+  const el = currentPageElements.value[idx]
+  if (el) { el.visible = el.visible === false ? true : false; emit('mark-dirty') }
 }
 
-function onDragStart(e, def) {
-  e.dataTransfer.setData('el-def', JSON.stringify(def))
-  e.dataTransfer.effectAllowed = 'copy'
-  emit('canvas-drag-start', e, def)
+function toggleLock(idx) {
+  const el = currentPageElements.value[idx]
+  if (el) { el.locked = !el.locked; emit('mark-dirty') }
 }
 
-// ── Pages ──────────────────────────────────────────────────────────────
-function startPageRename(pi) {
-  renamingPage.value = pi
-  nextTick(() => {
-    const inputs = document.querySelectorAll('.page-rename-input')
-    inputs[inputs.length - 1]?.focus()
-    inputs[inputs.length - 1]?.select()
-  })
+function onLayerDragStart(e, idx) {
+  layerDragSrc = idx
+  e.dataTransfer.effectAllowed = 'move'
 }
 
-function finishRename(pi, val) {
-  renamingPage.value = null
-  emit('rename-page', pi, val || `Page ${pi+1}`)
+function onLayerDragOver(e, idx) {
+  e.preventDefault()
+  layerDragOver.value = idx
 }
 
-// ── Themes ─────────────────────────────────────────────────────────────
-function applyTheme(theme) {
-  Object.assign(ls, {
-    primary_color:    theme.primary,
-    accent_color:     theme.accent,
-    background_color: theme.bg,
-    text_color:       theme.text,
-  })
-  emit_settings()
+function onLayerDrop(e, toIdx) {
+  e.preventDefault()
+  layerDragOver.value = null
+  if (layerDragSrc === null || layerDragSrc === toIdx) { layerDragSrc = null; return }
+  const els = props.report.content[props.currentPage].elements
+  const total = els.length
+  // Reverse idx because we display reversed
+  const fromReal = total - 1 - layerDragSrc
+  const toReal = total - 1 - toIdx
+  const [item] = els.splice(fromReal, 1)
+  els.splice(toReal, 0, item)
+  emit('mark-dirty')
+  layerDragSrc = null
 }
 
-function applyPrimaryColor(c) {
-  ls.primary_color = c
-  emit_settings()
+function getElIcon(type) {
+  const map = {
+    heading: 'fa-solid fa-heading', subheading: 'fa-solid fa-text-height', text: 'fa-solid fa-align-left',
+    richtext: 'fa-solid fa-file-pen', quote: 'fa-solid fa-quote-left', blockquote: 'fa-solid fa-block-quote',
+    image: 'fa-solid fa-image', video: 'fa-solid fa-video', table: 'fa-solid fa-table',
+    'bar-chart': 'fa-solid fa-chart-column', 'line-chart': 'fa-solid fa-chart-line',
+    'pie-chart': 'fa-solid fa-chart-pie', 'doughnut-chart': 'fa-solid fa-circle-half-stroke',
+    'area-chart': 'fa-solid fa-chart-area', 'radar-chart': 'fa-solid fa-circle-dot',
+    metric: 'fa-solid fa-arrow-trend-up', progress: 'fa-solid fa-bars-progress',
+    'circular-progress': 'fa-solid fa-circle-notch', sparkline: 'fa-solid fa-wave-square',
+    checklist: 'fa-solid fa-square-check', timeline: 'fa-solid fa-timeline',
+    rectangle: 'fa-regular fa-square', circle: 'fa-regular fa-circle',
+    divider: 'fa-solid fa-minus', arrow: 'fa-solid fa-arrow-right',
+    signature: 'fa-solid fa-signature', toc: 'fa-solid fa-list-ol',
+    pagenum: 'fa-solid fa-hashtag', watermark: 'fa-solid fa-droplet',
+    callout: 'fa-solid fa-bullhorn', testimonial: 'fa-solid fa-comment-quote',
+    'stat-row': 'fa-solid fa-table-columns', badge: 'fa-solid fa-certificate',
+    code: 'fa-solid fa-code', list: 'fa-solid fa-list',
+    'price-card': 'fa-solid fa-tag', 'social-card': 'fa-solid fa-id-card',
+    rating: 'fa-solid fa-star', 'qr-code': 'fa-solid fa-qrcode',
+    map: 'fa-solid fa-map-location-dot', icon: 'fa-solid fa-icons',
+    avatar: 'fa-solid fa-user-circle', spacer: 'fa-solid fa-arrows-up-down',
+    steps: 'fa-solid fa-stairs', kanban: 'fa-solid fa-columns',
+  }
+  return map[type] || 'fa-solid fa-cube'
 }
 
-// ── Settings emit ──────────────────────────────────────────────────────
-function emit_settings() {
-  emit('update:settings', { ...ls })
+function getElPreview(el) {
+  if (el.content) return String(el.content).replace(/<[^>]+>/g, '').slice(0, 30)
+  if (el.label) return el.label.slice(0, 30)
+  return el.type
 }
 
-// ── Media ──────────────────────────────────────────────────────────────
-function triggerFileInput() {
-  fileInputRef.value?.click()
-}
+// ── Media ───────────────────────────────────────────────────────────
+const uploadInputRef = ref(null)
+const uploadDragOver = ref(false)
+const imgQuery = ref('')
+const imgResults = ref([])
+const imgSearching = ref(false)
+const imgSource = ref('')
+const imgPage = ref(1)
 
-function handleFileInput(e) {
+function triggerUpload() { uploadInputRef.value?.click() }
+
+function onUploadChange(e) {
   const files = Array.from(e.target.files || [])
-  files.forEach(readFile)
+  files.forEach(f => emit('image-upload', { file: f, pageIndex: props.currentPage }))
   e.target.value = ''
 }
 
-function handleMediaDrop(e) {
-  mediaDragover.value = false
+function onUploadDrop(e) {
+  uploadDragOver.value = false
   const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'))
-  files.forEach(readFile)
+  files.forEach(f => emit('image-upload', { file: f, pageIndex: props.currentPage }))
 }
 
-function readFile(file) {
-  const reader = new FileReader()
-  reader.onload = (ev) => {
-    uploadedImages.value.push({ url: ev.target.result, name: file.name })
-  }
-  reader.readAsDataURL(file)
-}
-
-function addUploadedImage(img) {
-  emit('add-element-center', { type: 'image', w: 320, h: 220, src: img.url })
-}
-
-function removeUploadedImage(img) {
-  uploadedImages.value = uploadedImages.value.filter(i => i.url !== img.url)
-}
-
-function onMediaDrag(e, img) {
-  e.dataTransfer.setData('el-def', JSON.stringify({ type:'image', w:320, h:220, src:img.url }))
-  e.dataTransfer.effectAllowed = 'copy'
-}
-
-async function searchStock() {
-  stockLoading.value = true
+async function searchImages() {
+  if (!imgQuery.value.trim()) return
+  imgSearching.value = true
+  imgResults.value = []
   try {
-    const res = await fetch(`/api/unsplash/search?q=${encodeURIComponent(stockQuery.value || 'business')}`)
-    if (res.ok) {
-      const data = await res.json()
-      stockImages.value = data.images || []
-    } else {
-      throw new Error('API unavailable')
-    }
+    const res = await window.axios.get(route('media.search'), {
+      params: { q: imgQuery.value, per_page: 20, page: imgPage.value },
+    })
+    imgResults.value = res.data.images || []
+    imgSource.value = res.data.source || ''
   } catch {
-    // Fallback to picsum
-    stockImages.value = Array.from({ length: 12 }, (_, i) => ({
-      id: i,
-      thumb: `https://picsum.photos/200/150?random=${i * 7 + Date.now() % 100}`,
-      url:   `https://picsum.photos/800/600?random=${i * 7 + Date.now() % 100}`,
-      author: 'Free Stock',
-    }))
+    // Fallback: use Lorem Picsum with keyword seed
+    const seed = Math.abs([...imgQuery.value].reduce((a, c) => a + c.charCodeAt(0), 0))
+    imgResults.value = Array.from({ length: 20 }, (_, i) => {
+      const id = ((seed + i + (imgPage.value - 1) * 20) % 1000) + 1
+      return { id, url: `https://picsum.photos/id/${id}/800/600`, thumb: `https://picsum.photos/id/${id}/200/150`, alt: imgQuery.value, source: 'picsum' }
+    })
+    imgSource.value = 'Lorem Picsum (offline fallback)'
+  } finally {
+    imgSearching.value = false
   }
-  stockLoading.value = false
 }
 
-function addStockImage(img) {
-  emit('add-element-center', { type: 'image', w: 320, h: 220, src: img.url })
+function insertImage(img) {
+  emit('image-search', { url: img.url, alt: img.alt, pi: props.currentPage })
 }
 
-// ── History ────────────────────────────────────────────────────────────
-async function loadHistory() {
-  historyLoading.value = true
+// ── Themes ──────────────────────────────────────────────────────────
+const THEMES = [
+  { id: 'indigo', name: 'Indigo Pro', primary: '#6366f1', accent: '#818cf8', bg: '#ffffff', text: '#0f172a', fontFamily: 'DM Sans' },
+  { id: 'obsidian', name: 'Obsidian', primary: '#c9a84c', accent: '#e0c070', bg: '#0d1117', text: '#e6edf3', fontFamily: 'Plus Jakarta Sans' },
+  { id: 'emerald', name: 'Emerald', primary: '#10b981', accent: '#34d399', bg: '#ffffff', text: '#064e3b', fontFamily: 'Inter' },
+  { id: 'rose', name: 'Rose', primary: '#f43f5e', accent: '#fb7185', bg: '#fff1f2', text: '#0f172a', fontFamily: 'Poppins' },
+  { id: 'ocean', name: 'Ocean Blue', primary: '#0ea5e9', accent: '#38bdf8', bg: '#f0f9ff', text: '#0c4a6e', fontFamily: 'Figtree' },
+  { id: 'slate', name: 'Corporate', primary: '#334155', accent: '#64748b', bg: '#f8fafc', text: '#0f172a', fontFamily: 'Space Grotesk' },
+  { id: 'amber', name: 'Warm Amber', primary: '#d97706', accent: '#f59e0b', bg: '#fffbeb', text: '#451a03', fontFamily: 'Nunito' },
+  { id: 'violet', name: 'Violet', primary: '#7c3aed', accent: '#a78bfa', bg: '#fdf4ff', text: '#2e1065', fontFamily: 'Outfit' },
+  { id: 'teal', name: 'Teal Minimal', primary: '#0d9488', accent: '#14b8a6', bg: '#f0fdfa', text: '#134e4a', fontFamily: 'Sora' },
+  { id: 'charcoal', name: 'Charcoal', primary: '#6366f1', accent: '#c9a84c', bg: '#1a1a2e', text: '#e2e8f0', fontFamily: 'Merriweather' },
+]
+
+function isThemeActive(theme) {
+  return props.settings.primary_color === theme.primary &&
+    props.settings.background_color === theme.bg
+}
+
+function applyTheme(theme) {
+  emitSettings({
+    primary_color: theme.primary,
+    accent_color: theme.accent,
+    background_color: theme.bg,
+    text_color: theme.text,
+    font_family: theme.fontFamily,
+  })
+}
+
+// ── Settings ─────────────────────────────────────────────────────────
+const FONTS = [
+  'DM Sans', 'Inter', 'Plus Jakarta Sans', 'Space Grotesk', 'Sora', 'Nunito',
+  'Outfit', 'Poppins', 'Figtree', 'Georgia', 'Playfair Display', 'Merriweather',
+  'Lora', 'Fira Code', 'Courier New', 'Times New Roman',
+]
+
+// Local reactive copy so inputs feel instant (no round-trip lag)
+const localSettings = reactive({ ...props.settings })
+
+// Keep in sync when parent pushes updates
+watch(() => props.settings, (v) => Object.assign(localSettings, v), { deep: true })
+
+function setSetting(key, value) {
+  localSettings[key] = value
+  emitSettings()
+}
+
+function emitSettings(patch) {
+  if (patch) Object.assign(localSettings, patch)
+  emit('update-settings', { ...localSettings })
+}
+
+function resetSettings() {
+  const defaults = {
+    page_size: 'A4', orientation: 'portrait', margin: 40, padding: 20,
+    background_color: '#ffffff', text_color: '#1e293b',
+    primary_color: '#6366f1', accent_color: '#c9a84c',
+    font_family: 'DM Sans', font_size: 14, line_height: 1.5,
+    show_header: false, show_footer: true,
+    header_text: '', header_height: 50,
+    header_color: '#1e293b', header_text_color: '#ffffff',
+    footer_left: '', footer_right: 'Page {n} of {total}', footer_color: '#94a3b8',
+    show_page_numbers: true, page_number_style: 'decimal',
+    page_number_position: 'footer-center', page_number_start: 1,
+    watermark: '', watermark_opacity: 8, watermark_rotate: -30,
+    watermark_color: '#94a3b8', watermark_size: 72, rtl: false,
+    page_radius: 0, page_shadow: true,
+  }
+  Object.assign(localSettings, defaults)
+  emitSettings()
+}
+
+// ── History helpers ──────────────────────────────────────────────────
+function getSnapSummary(snap) {
   try {
-    const slug = props.report?.slug
-    if (!slug) throw new Error('No slug')
-    const res  = await fetch(`/reports/${slug}/versions`, {
-      headers: { Accept: 'application/json' },
-    })
-    if (res.ok) {
-      const data   = await res.json()
-      versionList.value = data.versions || []
-    }
-  } catch {}
-  historyLoading.value = false
+    const s = JSON.parse(snap)
+    const totalEls = s.content.reduce((a, p) => a + (p.elements?.length || 0), 0)
+    return `${s.content.length} page${s.content.length !== 1 ? 's' : ''} · ${totalEls} element${totalEls !== 1 ? 's' : ''}`
+  } catch { return '' }
 }
-
-async function restoreVersion(id) {
-  if (!confirm('Restore this version? Unsaved changes will be lost.')) return
-  const slug = props.report?.slug
-  if (!slug) return
-  try {
-    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-    const res  = await fetch(`/reports/${slug}/versions/${id}/restore`, {
-      method: 'POST',
-      headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' },
-    })
-    if (res.ok) window.location.reload()
-  } catch {}
-}
-
-// ── Init ───────────────────────────────────────────────────────────────
-onMounted(() => {
-  searchStock()
-  loadHistory()
-})
 </script>
 
 <style scoped>
-/* ═══ LEFT PANEL ════════════════════════════════════════════════════════ */
-.left-panel {
-  --lp-bg:      #ffffff;
-  --lp-bg2:     #f8fafc;
-  --lp-bg3:     #f1f5f9;
-  --lp-border:  #e2e8f0;
-  --lp-text:    #0f172a;
-  --lp-text2:   #475569;
-  --lp-text3:   #94a3b8;
-  --lp-accent:  #6366f1;
-  --lp-accent-l:rgba(99,102,241,.08);
+/* ═══ ROOT ═══════════════════════════════════════════════════════════ */
+.ls-root {
+  --ls-bg: #ffffff;
+  --ls-bg2: #f8fafc;
+  --ls-bg3: #f1f5f9;
+  --ls-border: #e2e8f0;
+  --ls-text: #0f172a;
+  --ls-text2: #475569;
+  --ls-text3: #94a3b8;
+  --ls-accent: #6366f1;
+  --ls-accent-l: rgba(99, 102, 241, .08);
 
-  width: 262px;
+  display: flex;
+  width: 300px;
+  min-width: 260px;
+  max-width: 320px;
+  height: 100%;
+  background: var(--ls-bg);
+  border-right: 1px solid var(--ls-border);
   flex-shrink: 0;
-  background: var(--lp-bg);
-  border-right: 1px solid var(--lp-border);
+  overflow: hidden;
+}
+
+.ls-root.ls-dark {
+  --ls-bg: #111827;
+  --ls-bg2: #1a2236;
+  --ls-bg3: #0f172a;
+  --ls-border: #1e2d45;
+  --ls-text: #e2e8f0;
+  --ls-text2: #94a3b8;
+  --ls-text3: #475569;
+}
+
+/* ═══ RAIL ═══════════════════════════════════════════════════════════ */
+.ls-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 56px;
+  min-width: 56px;
+  padding: 10px 6px;
+  background: var(--ls-bg2);
+  border-right: 1px solid var(--ls-border);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ls-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.ls-rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 44px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--ls-text3);
+  font-size: 14px;
+  transition: all .14s;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.ls-rail-btn:hover {
+  background: var(--ls-bg3);
+  color: var(--ls-text);
+}
+
+.ls-rail-btn.active {
+  background: var(--ls-accent-l);
+  color: var(--ls-accent);
+}
+
+.ls-rail-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ═══ CONTENT ════════════════════════════════════════════════════════ */
+.ls-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ls-panel {
+  flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width .25s ease;
+}
+
+/* ═══ PANEL HEADER ═══════════════════════════════════════════════════ */
+.ls-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ls-border);
+}
+
+.ls-panel-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ls-text);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  flex: 1;
+}
+
+.ls-head-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--ls-border);
+  background: var(--ls-bg);
+  cursor: pointer;
+  color: var(--ls-text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all .14s;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.ls-head-btn:hover {
+  border-color: var(--ls-accent);
+  color: var(--ls-accent);
+}
+
+.ls-head-btn--primary {
+  background: var(--ls-accent);
+  color: #fff;
+  border-color: var(--ls-accent);
+}
+
+.ls-head-btn--primary:hover {
+  background: #4f46e5;
+}
+
+.ls-el-count-badge {
+  background: var(--ls-accent-l);
+  color: var(--ls-accent);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+/* ═══ SEARCH ═════════════════════════════════════════════════════════ */
+.ls-search-wrap {
   position: relative;
-  z-index: 40;
+  flex: 1;
 }
 
-.left-panel.collapsed { width: 0; border-right: none; }
-
-.left-panel.is-dark {
-  --lp-bg:     #1a2236;
-  --lp-bg2:    #111827;
-  --lp-bg3:    #0d1424;
-  --lp-border: #263348;
-  --lp-text:   #e2e8f0;
-  --lp-text2:  #94a3b8;
-  --lp-text3:  #475569;
-  --lp-accent: #818cf8;
-  --lp-accent-l:rgba(129,140,248,.1);
+.ls-search-input {
+  width: 100%;
+  padding: 7px 30px 7px 30px;
+  border: 1px solid var(--ls-border);
+  border-radius: 8px;
+  background: var(--ls-bg2);
+  color: var(--ls-text);
+  font-size: 12px;
+  outline: none;
+  transition: border-color .14s;
+  font-family: inherit;
 }
 
-.panel-toggle {
-  position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
-  width: 28px; height: 28px; border-radius: 50%;
-  background: var(--lp-bg); border: 1px solid var(--lp-border);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; z-index: 10; color: var(--lp-text3); font-size: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.08); transition: all .15s;
-}
-.panel-toggle:hover { color: var(--lp-accent); border-color: var(--lp-accent); }
-
-.panel-inner { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
-
-/* ═══ TABS ═══════════════════════════════════════════════════════════════ */
-.panel-tabs {
-  display: flex; flex-wrap: wrap; gap: 1px; padding: 5px 5px 0;
-  border-bottom: 1px solid var(--lp-border); flex-shrink: 0;
-  background: var(--lp-bg2);
+.ls-search-input:focus {
+  border-color: var(--ls-accent);
 }
 
-.panel-tab {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 6px 4px 5px; border: none; background: transparent; cursor: pointer;
-  color: var(--lp-text3); font-size: 8.5px; font-weight: 700; letter-spacing: .04em;
-  text-transform: uppercase; flex: 1; min-width: 34px;
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: all .14s; font-family: inherit;
-}
-.panel-tab i { font-size: 13px; }
-.panel-tab:hover { color: var(--lp-text2); background: var(--lp-bg3); }
-.panel-tab.active { color: var(--lp-accent); border-bottom-color: var(--lp-accent); background: var(--lp-accent-l); }
-
-/* ═══ TAB PANELS ════════════════════════════════════════════════════════ */
-.tab-panel { flex: 1; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: thin; scrollbar-color: var(--lp-border) transparent; }
-.tab-panel::-webkit-scrollbar { width: 4px; }
-.tab-panel::-webkit-scrollbar-thumb { background: var(--lp-border); border-radius: 99px; }
-
-/* ═══ SEARCH ════════════════════════════════════════════════════════════ */
-.search-wrap {
-  display: flex; align-items: center; gap: 6px; padding: 8px;
-  background: var(--lp-bg); border-bottom: 1px solid var(--lp-border);
-  flex-shrink: 0; position: sticky; top: 0; z-index: 5;
-}
-.search-wrap:focus-within { background: var(--lp-accent-l); }
-.search-icon { color: var(--lp-text3); font-size: 12px; flex-shrink: 0; }
-.search-input { flex: 1; border: none; background: transparent; outline: none; font-size: 12px; color: var(--lp-text); font-family: inherit; }
-.search-input::placeholder { color: var(--lp-text3); }
-.search-clear { border: none; background: transparent; cursor: pointer; color: var(--lp-text3); font-size: 11px; transition: color .14s; }
-.search-clear:hover { color: #ef4444; }
-
-/* ═══ QUICK CHIPS ═══════════════════════════════════════════════════════ */
-.quick-chips {
-  display: flex; gap: 4px; padding: 8px; flex-wrap: wrap;
-  border-bottom: 1px solid var(--lp-border); flex-shrink: 0;
-}
-.quick-chip {
-  display: flex; align-items: center; gap: 4px; padding: 4px 9px;
-  border: 1px solid var(--lp-border); border-radius: 99px;
-  background: var(--lp-bg2); cursor: pointer; font-size: 10px; font-weight: 600;
-  color: var(--lp-text2); white-space: nowrap; transition: all .15s; font-family: inherit;
-}
-.quick-chip:hover { border-color: var(--lp-accent); color: var(--lp-accent); background: var(--lp-accent-l); transform: translateY(-1px); }
-
-/* ═══ ELEMENT CATALOG ═══════════════════════════════════════════════════ */
-.el-catalog { flex: 1; overflow-y: auto; padding: 4px 0 20px; }
-
-.cat-header {
-  display: flex; align-items: center; gap: 6px; width: 100%;
-  padding: 7px 10px; border: none; background: var(--lp-bg2); cursor: pointer;
-  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--lp-text3); transition: background .14s; font-family: inherit; position: sticky; top: 0; z-index: 2;
-}
-.cat-header:hover { background: var(--lp-bg3); color: var(--lp-text2); }
-.cat-name { flex: 1; text-align: left; }
-.cat-count { font-size: 9px; background: var(--lp-bg3); border: 1px solid var(--lp-border); padding: 1px 5px; border-radius: 99px; }
-.cat-chevron { font-size: 8px; opacity: .5; }
-
-.el-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 4px 6px;
+.ls-search-input::placeholder {
+  color: var(--ls-text3);
 }
 
-.el-card {
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: 10px 4px 8px; border-radius: 8px; cursor: grab;
-  border: 1.5px solid transparent; transition: all .15s; position: relative;
+.ls-search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ls-text3);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.ls-search-clear {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--ls-text3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px;
+  line-height: 1;
+}
+
+.ls-search-clear:hover {
+  color: var(--ls-text);
+}
+
+.ls-search-btn {
+  padding: 7px 10px;
+  border: 1px solid var(--ls-accent);
+  border-radius: 8px;
+  background: var(--ls-accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.ls-search-btn:hover {
+  background: #4f46e5;
+}
+
+.ls-search-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* ═══ ELEMENT CATALOG ════════════════════════════════════════════════ */
+.ls-el-catalog {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+}
+
+.ls-el-group {
+  margin-bottom: 6px;
+}
+
+.ls-el-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ls-text2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-radius: 8px;
+  transition: background .1s;
+  font-family: inherit;
+}
+
+.ls-el-group-head:hover {
+  background: var(--ls-bg2);
+}
+
+.ls-el-group-head i:first-child {
+  width: 14px;
+}
+
+.ls-group-arrow {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--ls-text3);
+}
+
+.ls-el-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 6px 4px 8px;
+}
+
+.ls-el-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border: 1px solid var(--ls-border);
+  border-radius: 10px;
+  background: var(--ls-bg);
+  cursor: grab;
+  transition: all .15s;
   user-select: none;
-}
-.el-card:hover {
-  background: var(--lp-accent-l); border-color: rgba(99,102,241,.2);
-  transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.06);
-}
-.el-card:active { cursor: grabbing; transform: scale(.94); }
-.el-card:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; }
-
-.el-card-icon {
-  width: 36px; height: 36px; border-radius: 8px; background: var(--lp-bg2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 15px; color: var(--lp-text2); transition: all .15s;
-}
-.el-card:hover .el-card-icon { background: var(--lp-accent-l); color: var(--lp-accent); }
-
-.el-card-name { font-size: 9px; font-weight: 700; color: var(--lp-text3); text-align: center; line-height: 1.2; }
-.el-card:hover .el-card-name { color: var(--lp-text); }
-
-.el-new-badge {
-  position: absolute; top: -3px; right: -2px;
-  font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  background: var(--lp-accent); color: #fff; padding: 1px 5px; border-radius: 99px;
-  animation: newPulse 2s ease-in-out infinite;
-}
-@keyframes newPulse { 0%,100%{opacity:1}50%{opacity:.6} }
-
-/* ═══ PAGES ══════════════════════════════════════════════════════════════ */
-.add-page-btn {
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  margin: 10px; padding: 9px; border: 1.5px dashed var(--lp-border);
-  border-radius: 8px; background: transparent; cursor: pointer;
-  color: var(--lp-text2); font-size: 12px; font-weight: 600; transition: all .2s; font-family: inherit;
-}
-.add-page-btn:hover { border-color: var(--lp-accent); color: var(--lp-accent); background: var(--lp-accent-l); }
-
-.pages-list { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 20px; }
-
-.page-card {
-  border: 2px solid var(--lp-border); border-radius: 10px; overflow: visible;
-  cursor: pointer; transition: all .2s; background: var(--lp-bg); position: relative;
-}
-.page-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,.06); }
-.page-card--active { border-color: var(--lp-accent); box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
-
-.page-mini-preview {
-  height: 80px; position: relative; overflow: hidden;
-  border-radius: 8px 8px 0 0; border-bottom: 1px solid var(--lp-border);
-}
-.page-mini-el { position: absolute; border-radius: 1px; }
-.page-mini-empty {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--lp-border); font-size: 20px;
+  text-align: center;
 }
 
-.page-info { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; }
-.page-name-wrap { flex: 1; min-width: 0; overflow: hidden; }
-.page-name { font-size: 11px; font-weight: 600; color: var(--lp-text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
-.page-rename-input {
-  width: 100%; font-size: 11px; font-weight: 600; border: 1px solid var(--lp-accent);
-  border-radius: 4px; padding: 2px 5px; background: var(--lp-bg); color: var(--lp-text); outline: none; font-family: inherit;
+.ls-el-card:hover {
+  border-color: var(--ls-accent);
+  background: var(--ls-accent-l);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, .15);
 }
-.page-el-count { font-size: 9px; color: var(--lp-text3); white-space: nowrap; background: var(--lp-bg2); padding: 2px 6px; border-radius: 99px; }
 
-.page-actions { display: flex; gap: 2px; padding: 0 6px 6px; }
-.page-actions button {
-  flex: 1; padding: 4px; border: 1px solid var(--lp-border); border-radius: 5px;
-  background: transparent; cursor: pointer; color: var(--lp-text3); font-size: 10px;
+.ls-el-card:active {
+  cursor: grabbing;
+  transform: scale(.95);
+}
+
+.ls-el-card:focus-visible {
+  outline: 2px solid var(--ls-accent);
+  outline-offset: 2px;
+}
+
+.ls-el-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.ls-el-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--ls-text2);
+  line-height: 1.2;
+}
+
+/* ═══ PAGES ══════════════════════════════════════════════════════════ */
+.ls-pages-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+}
+
+.ls-page-item {
+  border: 2px solid var(--ls-border);
+  border-radius: 10px;
+  background: var(--ls-bg);
+  cursor: pointer;
+  overflow: hidden;
+  transition: all .15s;
+  position: relative;
+}
+
+.ls-page-item:hover {
+  border-color: var(--ls-accent);
+}
+
+.ls-page-active {
+  border-color: var(--ls-accent) !important;
+  box-shadow: 0 0 0 3px var(--ls-accent-l);
+}
+
+.ls-page-drag-over {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .2);
+}
+
+.ls-page-thumb {
+  width: 100%;
+  aspect-ratio: 794/1123;
+  max-height: 140px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px 6px 0 0;
+}
+
+.ls-page-thumb-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ls-text3);
+  font-size: 24px;
+  opacity: .3;
+}
+
+.ls-page-drag-handle {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, .4);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 9px;
+  opacity: 0;
+  transition: opacity .15s;
+  cursor: grab;
+}
+
+.ls-page-item:hover .ls-page-drag-handle {
+  opacity: 1;
+}
+
+.ls-page-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+}
+
+.ls-page-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ls-text);
+}
+
+.ls-page-elcount {
+  font-size: 10px;
+  color: var(--ls-text3);
+}
+
+.ls-page-actions {
+  display: flex;
+  gap: 3px;
+  padding: 5px 6px 6px;
+  border-top: 1px solid var(--ls-border);
+  flex-wrap: wrap;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.ls-page-item:hover .ls-page-actions {
+  opacity: 1;
+}
+
+.lpa-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border: 1px solid var(--ls-border);
+  background: var(--ls-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--ls-text2);
+  font-size: 10px;
+  font-family: inherit;
+  transition: all .12s;
+  white-space: nowrap;
+}
+
+.lpa-btn:hover {
+  border-color: var(--ls-accent);
+  color: var(--ls-accent);
+  background: var(--ls-accent-l);
+}
+
+.lpa-btn:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.lpa-btn--danger:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: rgba(239, 68, 68, .06);
+}
+
+/* ═══ LAYERS ═════════════════════════════════════════════════════════ */
+.ls-layers-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+}
+
+.ls-layer-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .12s;
+}
+
+.ls-layer-item:hover {
+  background: var(--ls-bg2);
+  border-color: var(--ls-border);
+}
+
+.ls-layer-selected {
+  background: var(--ls-accent-l) !important;
+  border-color: var(--ls-accent) !important;
+}
+
+.ls-layer-hidden {
+  opacity: .4;
+}
+
+.ls-layer-locked {
+  background: rgba(245, 158, 11, .06);
+  border-color: rgba(245, 158, 11, .2) !important;
+}
+
+.ls-layer-drag-over {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, .1) !important;
+}
+
+.ls-layer-drag {
+  color: var(--ls-text3);
+  font-size: 10px;
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.ls-layer-item:hover .ls-layer-drag {
+  opacity: 1;
+}
+
+.ls-layer-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--ls-bg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--ls-accent);
+  flex-shrink: 0;
+}
+
+.ls-layer-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.ls-layer-type {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ls-text);
+  text-transform: capitalize;
+}
+
+.ls-layer-preview {
+  display: block;
+  font-size: 10px;
+  color: var(--ls-text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
+.ls-layer-controls {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.ls-layer-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--ls-text3);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+}
+
+.ls-layer-btn:hover {
+  background: var(--ls-bg3);
+  color: var(--ls-text);
+}
+
+/* ═══ MEDIA ══════════════════════════════════════════════════════════ */
+.ls-media-upload-zone {
+  margin: 8px;
+  padding: 20px 12px;
+  border: 2px dashed var(--ls-border);
+  border-radius: 10px;
+  text-align: center;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: var(--ls-text3);
+  font-size: 12px;
+  transition: all .2s;
+  flex-shrink: 0;
+}
+
+.ls-media-upload-zone i {
+  font-size: 26px;
+  color: var(--ls-accent);
+  opacity: .7;
+}
+
+.ls-media-upload-zone:hover,
+.ls-media-upload-zone.is-over {
+  border-color: var(--ls-accent);
+  background: var(--ls-accent-l);
+  color: var(--ls-accent);
+}
+
+.ls-media-upload-zone small {
+  font-size: 10px;
+}
+
+.ls-media-search-bar {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px 8px;
+  flex-shrink: 0;
+}
+
+.ls-media-source-badge {
+  margin: 0 8px 6px;
+  font-size: 10px;
+  color: var(--ls-text3);
+  flex-shrink: 0;
+}
+
+.ls-media-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 0 8px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+}
+
+.ls-media-card {
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  aspect-ratio: 4/3;
+  background: var(--ls-bg2);
+  border: 1px solid var(--ls-border);
+  transition: all .15s;
+}
+
+.ls-media-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ls-media-card:hover {
+  border-color: var(--ls-accent);
+  transform: scale(1.03);
+}
+
+.ls-media-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(99, 102, 241, .7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .15s;
+}
+
+.ls-media-card:hover .ls-media-card-overlay {
+  opacity: 1;
+}
+
+.ls-media-card-overlay span {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ls-media-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ls-text2);
+}
+
+.ls-pg-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--ls-border);
+  border-radius: 7px;
+  background: var(--ls-bg);
+  color: var(--ls-text);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
   transition: all .14s;
 }
-.page-actions button:hover { background: var(--lp-bg2); color: var(--lp-text); }
-.page-actions button.danger:hover { background: rgba(239,68,68,.07); color: #ef4444; border-color: rgba(239,68,68,.3); }
-.page-actions button:disabled { opacity: .3; cursor: not-allowed; }
 
-.page-active-ring {
-  position: absolute; inset: -3px; border-radius: 12px;
-  border: 2px solid var(--lp-accent); pointer-events: none;
-  animation: pageGlow 3s ease-in-out infinite;
+.ls-pg-btn:hover {
+  border-color: var(--ls-accent);
+  color: var(--ls-accent);
 }
-@keyframes pageGlow { 0%,100%{box-shadow:0 0 12px rgba(99,102,241,.2)}50%{box-shadow:0 0 24px rgba(99,102,241,.45)} }
 
-/* ═══ LAYERS ════════════════════════════════════════════════════════════ */
-.layers-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px 6px; font-size: 11px; font-weight: 700; color: var(--lp-text2);
-  border-bottom: 1px solid var(--lp-border); flex-shrink: 0;
+.ls-pg-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
 }
-.layers-actions { display: flex; align-items: center; gap: 6px; }
-.micro-btn { width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; color: var(--lp-text3); font-size: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all .12s; }
-.micro-btn:hover { background: var(--lp-bg2); color: var(--lp-text); }
-.layer-count-badge { font-size: 10px; color: var(--lp-text3); background: var(--lp-bg2); padding: 2px 7px; border-radius: 99px; border: 1px solid var(--lp-border); }
 
-.layers-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; padding: 4px; }
-
-.layer-item {
-  display: flex; align-items: center; gap: 6px; padding: 7px 8px;
-  border-radius: 6px; cursor: pointer; border: 1.5px solid transparent; transition: all .12s;
+/* ═══ THEMES ═════════════════════════════════════════════════════════ */
+.ls-themes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
 }
-.layer-item:hover { background: var(--lp-bg2); border-color: var(--lp-border); }
-.layer-item--selected { background: var(--lp-accent-l); border-color: var(--lp-accent); }
-.layer-item--locked { opacity: .55; }
-.layer-item--hidden { opacity: .3; }
 
-.layer-drag-icon { color: var(--lp-text3); font-size: 9px; cursor: grab; opacity: .5; flex-shrink: 0; }
-.layer-type-icon { font-size: 12px; width: 22px; text-align: center; flex-shrink: 0; }
-.layer-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.layer-name { font-size: 11px; font-weight: 500; color: var(--lp-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.layer-type-tag { font-size: 9px; color: var(--lp-text3); text-transform: capitalize; }
-
-.layer-controls { display: flex; gap: 1px; opacity: 0; transition: opacity .14s; }
-.layer-item:hover .layer-controls { opacity: 1; }
-.layer-item--selected .layer-controls { opacity: 1; }
-.layer-ctrl-btn { width: 20px; height: 20px; border: none; background: transparent; cursor: pointer; color: var(--lp-text3); font-size: 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center; transition: all .12s; }
-.layer-ctrl-btn:hover { background: var(--lp-bg3); color: var(--lp-text); }
-
-/* ═══ MEDIA ══════════════════════════════════════════════════════════════ */
-.upload-zone {
-  margin: 10px; padding: 24px 16px; border: 2px dashed var(--lp-border);
-  border-radius: 10px; cursor: pointer; text-align: center;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  color: var(--lp-text3); font-size: 12px; transition: all .2s;
+.ls-theme-card {
+  border: 2px solid var(--ls-border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--ls-bg);
+  padding: 0 0 8px;
+  transition: all .15s;
+  text-align: left;
+  font-family: inherit;
+  position: relative;
 }
-.upload-zone i { font-size: 28px; opacity: .5; }
-.upload-zone small { font-size: 10px; }
-.upload-zone:hover,
-.upload-zone--dragover { border-color: var(--lp-accent); color: var(--lp-accent); background: var(--lp-accent-l); }
 
-.hidden-input { display: none; }
-
-.media-section { padding: 0 10px 12px; }
-.media-section-header { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--lp-text3); margin-bottom: 8px; }
-
-.search-action-btn { width: 28px; height: 28px; border: 1px solid var(--lp-border); border-radius: 6px; background: var(--lp-bg2); cursor: pointer; color: var(--lp-text2); font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all .14s; }
-.search-action-btn:hover:not(:disabled) { border-color: var(--lp-accent); color: var(--lp-accent); }
-.search-action-btn:disabled { opacity: .4; cursor: not-allowed; }
-
-.media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.media-item { border-radius: 6px; overflow: hidden; cursor: pointer; aspect-ratio: 4/3; border: 1.5px solid var(--lp-border); transition: all .15s; position: relative; }
-.media-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.media-item:hover { border-color: var(--lp-accent); transform: scale(1.04); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
-
-.media-item--uploaded .media-remove-btn {
-  position: absolute; top: 3px; right: 3px; width: 18px; height: 18px;
-  border-radius: 50%; background: rgba(0,0,0,.55); border: none; color: #fff;
-  font-size: 9px; cursor: pointer; opacity: 0; transition: opacity .15s;
-  display: flex; align-items: center; justify-content: center;
+.ls-theme-card:hover {
+  border-color: var(--ls-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .1);
 }
-.media-item--uploaded:hover .media-remove-btn { opacity: 1; }
 
-/* ═══ THEMES ════════════════════════════════════════════════════════════ */
-.tab-description { font-size: 11px; color: var(--lp-text3); padding: 10px 10px 4px; line-height: 1.4; }
-
-.themes-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 8px; }
-.theme-card { border-radius: 8px; overflow: hidden; cursor: pointer; border: 1.5px solid var(--lp-border); transition: all .2s; }
-.theme-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.1); border-color: var(--lp-accent); }
-.theme-preview { height: 50px; position: relative; }
-.theme-hover-overlay {
-  position: absolute; inset: 0; background: rgba(0,0,0,.35); display: flex;
-  flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: #fff; font-size: 11px; font-weight: 700; opacity: 0; transition: opacity .2s;
+.ls-theme-card.active {
+  border-color: var(--ls-accent);
+  box-shadow: 0 0 0 3px var(--ls-accent-l);
 }
-.theme-card:hover .theme-hover-overlay { opacity: 1; }
-.theme-name { display: block; font-size: 10px; font-weight: 600; text-align: center; padding: 5px 4px; color: var(--lp-text2); background: var(--lp-bg); }
 
-.quick-palette-section { padding: 0 10px 16px; }
-.color-palette-grid { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
-.palette-color-btn { width: 24px; height: 24px; border-radius: 5px; border: 2px solid transparent; cursor: pointer; transition: all .15s; }
-.palette-color-btn:hover { transform: scale(1.2); border-color: var(--lp-text3); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-
-/* ═══ SETTINGS ══════════════════════════════════════════════════════════ */
-.settings-tab { padding-bottom: 20px; }
-
-:deep(.s-section) { border-bottom: 1px solid var(--lp-border); }
-:deep(.s-section-header) {
-  display: flex; align-items: center; gap: 7px; width: 100%; padding: 10px 12px;
-  background: var(--lp-bg2); border: none; cursor: pointer; color: var(--lp-text2);
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-  transition: background .14s; font-family: inherit;
+.ls-theme-swatch-row {
+  display: flex;
+  gap: 0;
+  height: 8px;
 }
-:deep(.s-section-header:hover) { background: var(--lp-bg3); }
-:deep(.s-section-icon) { color: var(--lp-accent); font-size: 12px; }
-:deep(.s-section-header span) { flex: 1; text-align: left; }
-:deep(.s-chevron) { font-size: 9px; opacity: .5; }
-:deep(.s-section-body) { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
-:deep(.s-row) { display: flex; flex-direction: column; gap: 4px; }
-:deep(.s-label) { font-size: 10px; font-weight: 600; color: var(--lp-text3); text-transform: uppercase; letter-spacing: .04em; }
-:deep(.s-control) { flex: 1; }
-:deep(.s-select) { width: 100%; padding: 5px 8px; border: 1px solid var(--lp-border); border-radius: 5px; background: var(--lp-bg2); color: var(--lp-text); font-size: 11px; cursor: pointer; outline: none; font-family: inherit; }
-:deep(.s-select:focus) { border-color: var(--lp-accent); }
-:deep(.s-text-input) { width: 100%; padding: 5px 8px; border: 1px solid var(--lp-border); border-radius: 5px; background: var(--lp-bg2); color: var(--lp-text); font-size: 11px; outline: none; font-family: inherit; box-sizing: border-box; }
-:deep(.s-text-input:focus) { border-color: var(--lp-accent); }
-:deep(.s-text-input.mono) { font-family: monospace; }
-:deep(.s-range) { width: 100%; accent-color: var(--lp-accent); cursor: pointer; }
-:deep(.s-color-row) { display: flex; gap: 5px; align-items: center; }
-:deep(.s-color-input) { width: 30px; height: 30px; border: 1px solid var(--lp-border); border-radius: 5px; cursor: pointer; padding: 1px; background: transparent; flex-shrink: 0; }
-:deep(.s-toggle-group) { display: flex; border: 1px solid var(--lp-border); border-radius: 6px; overflow: hidden; }
-:deep(.s-toggle-group button) { flex: 1; padding: 5px 6px; border: none; background: transparent; cursor: pointer; font-size: 10px; font-weight: 600; color: var(--lp-text2); transition: all .14s; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 4px; }
-:deep(.s-toggle-group button:hover) { background: var(--lp-bg2); }
-:deep(.s-toggle-group button.active) { background: var(--lp-accent); color: #fff; }
-:deep(.s-toggle-group button + button) { border-left: 1px solid var(--lp-border); }
 
-:deep(.toggle-sw) { display: inline-flex; align-items: center; cursor: pointer; }
-:deep(.toggle-sw-input) { display: none; }
-:deep(.toggle-sw-track) { width: 34px; height: 18px; background: var(--lp-border); border-radius: 99px; position: relative; transition: background .2s; }
-:deep(.toggle-sw input:checked + .toggle-sw-track) { background: var(--lp-accent); }
-:deep(.toggle-sw-thumb) { position: absolute; width: 12px; height: 12px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
-:deep(.toggle-sw input:checked + .toggle-sw-track .toggle-sw-thumb) { transform: translateX(16px); }
-
-/* ═══ HISTORY ═══════════════════════════════════════════════════════════ */
-.refresh-history-btn {
-  display: flex; align-items: center; gap: 6px; justify-content: center;
-  width: calc(100% - 20px); margin: 10px; padding: 8px; border: 1px solid var(--lp-border);
-  border-radius: 8px; background: var(--lp-bg2); cursor: pointer;
-  color: var(--lp-text2); font-size: 11px; font-weight: 600; transition: all .15s; font-family: inherit;
+.ls-theme-swatch {
+  flex: 1;
 }
-.refresh-history-btn:hover:not(:disabled) { border-color: var(--lp-accent); color: var(--lp-accent); }
-.refresh-history-btn:disabled { opacity: .5; cursor: not-allowed; }
 
-.history-timeline { display: flex; flex-direction: column; gap: 2px; padding: 4px 12px 20px; }
-.history-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: 6px; border: 1.5px solid transparent; transition: all .14s; position: relative; }
-.history-item:hover { background: var(--lp-bg2); border-color: var(--lp-border); }
-.history-item--current { background: var(--lp-accent-l); border-color: var(--lp-accent); }
-
-.history-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lp-accent); flex-shrink: 0; margin-top: 4px; }
-.history-line { position: absolute; left: 20px; top: 22px; bottom: -4px; width: 2px; background: var(--lp-border); }
-
-.history-content { flex: 1; min-width: 0; }
-.history-header { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.history-header strong { font-size: 11px; color: var(--lp-text); }
-.history-current-badge { font-size: 8px; font-weight: 800; background: var(--lp-accent); color: #fff; padding: 1px 6px; border-radius: 99px; text-transform: uppercase; letter-spacing: .04em; }
-.history-label { font-size: 11px; color: var(--lp-text2); margin: 0; }
-.history-date { font-size: 10px; color: var(--lp-text3); }
-.history-restore-btn { padding: 4px 10px; border: 1px solid var(--lp-border); border-radius: 6px; background: transparent; cursor: pointer; font-size: 10px; font-weight: 600; color: var(--lp-text2); transition: all .14s; flex-shrink: 0; font-family: inherit; }
-.history-restore-btn:hover:not(:disabled) { border-color: var(--lp-accent); color: var(--lp-accent); background: var(--lp-accent-l); }
-.history-restore-btn:disabled { opacity: .3; cursor: not-allowed; }
-
-/* ═══ EMPTY STATE ═══════════════════════════════════════════════════════ */
-.empty-state {
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
-  padding: 40px 20px; text-align: center; color: var(--lp-text3);
+.ls-theme-preview {
+  padding: 8px;
+  margin: 6px 6px 4px;
+  border-radius: 6px;
+  min-height: 60px;
 }
-.empty-state i { font-size: 32px; opacity: .3; }
-.empty-state p { font-size: 12px; font-weight: 500; color: var(--lp-text2); margin: 0; }
-.empty-state small { font-size: 10px; }
 
-/* ═══ RESPONSIVE ════════════════════════════════════════════════════════ */
-@media (max-width: 1024px) {
-  .left-panel { position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; z-index: 200; box-shadow: 4px 0 24px rgba(0,0,0,.15); }
-  .left-panel.collapsed { box-shadow: none; }
+.ls-tp-heading {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.ls-tp-body {
+  font-size: 9px;
+  opacity: .7;
+  margin-bottom: 5px;
+}
+
+.ls-tp-accent {
+  height: 3px;
+  border-radius: 2px;
+  width: 50%;
+}
+
+.ls-theme-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ls-text2);
+  padding: 0 8px;
+}
+
+.ls-theme-check {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  color: var(--ls-accent);
+  font-size: 14px;
+}
+
+/* ═══ SETTINGS ═══════════════════════════════════════════════════════ */
+.ls-settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ls-settings-section {
+  border: 1px solid var(--ls-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ls-bg);
+}
+
+.ls-settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  background: var(--ls-bg2);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--ls-text2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--ls-border);
+}
+
+.ls-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ls-border);
+}
+
+.ls-field-row:last-child {
+  border-bottom: none;
+}
+
+.ls-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ls-text2);
+  flex: 1;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+.ls-val {
+  font-size: 10px;
+  color: var(--ls-accent);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+.ls-input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: 6px;
+  background: var(--ls-bg2);
+  color: var(--ls-text);
+  font-size: 11px;
+  outline: none;
+  transition: border-color .14s;
+  font-family: inherit;
+}
+
+.ls-input:focus {
+  border-color: var(--ls-accent);
+}
+
+.ls-input--sm {
+  width: 70px;
+  flex: none;
+}
+
+.ls-select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: 6px;
+  background: var(--ls-bg2);
+  color: var(--ls-text);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .14s;
+}
+
+.ls-select:focus {
+  border-color: var(--ls-accent);
+}
+
+.ls-color {
+  width: 32px;
+  height: 28px;
+  border: 1px solid var(--ls-border);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+.ls-color-with-input {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+
+.ls-text-sm {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: 6px;
+  background: var(--ls-bg2);
+  color: var(--ls-text);
+  font-size: 11px;
+  outline: none;
+  font-family: monospace;
+}
+
+.ls-text-sm:focus {
+  border-color: var(--ls-accent);
+}
+
+.ls-range {
+  flex: 1;
+  accent-color: var(--ls-accent);
+}
+
+.ls-btn-group {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.ls-btn-group button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--ls-border);
+  border-radius: 6px;
+  background: var(--ls-bg2);
+  color: var(--ls-text2);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all .12s;
+  font-family: inherit;
+}
+
+.ls-btn-group button:hover {
+  border-color: var(--ls-accent);
+  color: var(--ls-accent);
+}
+
+.ls-btn-group button.active {
+  background: var(--ls-accent);
+  color: #fff;
+  border-color: var(--ls-accent);
+}
+
+/* Toggle */
+.ls-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.ls-toggle input {
+  display: none;
+}
+
+.ls-toggle-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--ls-border);
+  position: relative;
+  transition: background .2s;
+  flex-shrink: 0;
+}
+
+.ls-toggle input:checked~.ls-toggle-track {
+  background: var(--ls-accent);
+}
+
+.ls-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+.ls-toggle input:checked~.ls-toggle-track::after {
+  transform: translateX(16px);
+}
+
+.ls-toggle-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ls-text3);
+}
+
+/* ═══ HISTORY ════════════════════════════════════════════════════════ */
+.ls-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ls-border) transparent;
+}
+
+.ls-history-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all .12s;
+}
+
+.ls-history-item:hover {
+  background: var(--ls-bg2);
+  border-color: var(--ls-border);
+}
+
+.ls-history-current {
+  background: var(--ls-accent-l) !important;
+  border-color: var(--ls-accent) !important;
+}
+
+.ls-history-future {
+  opacity: .4;
+}
+
+.ls-hist-icon {
+  color: var(--ls-accent);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.ls-hist-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ls-hist-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ls-text);
+}
+
+.ls-hist-sub {
+  display: block;
+  font-size: 10px;
+  color: var(--ls-text3);
+}
+
+.ls-hist-current-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ls-accent);
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+/* ═══ EMPTY STATE ════════════════════════════════════════════════════ */
+.ls-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ls-text3);
+  text-align: center;
+  padding: 32px 20px;
+  font-size: 12px;
+}
+
+.ls-empty i {
+  font-size: 28px;
+  opacity: .3;
+}
+
+/* ═══ UTILITY ════════════════════════════════════════════════════════ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ═══ RESPONSIVE ═════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .ls-root {
+    width: 260px;
+    min-width: 220px;
+  }
+
+  .ls-rail {
+    width: 46px;
+    min-width: 46px;
+  }
+
+  .ls-rail-label {
+    display: none;
+  }
 }
 </style>

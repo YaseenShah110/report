@@ -125,5 +125,11 @@ class AppServiceProvider extends ServiceProvider
                 $view->with('assignedReportsCount', $assignedReports);
             }
         });
+
+        if (env('BROWSERSHOT_CHROME_PATH')) {
+            \Spatie\Browsershot\Browsershot::setChromePath(
+                env('BROWSERSHOT_CHROME_PATH')
+            );
+        }
     }
 }

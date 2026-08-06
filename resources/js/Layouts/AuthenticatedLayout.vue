@@ -1058,6 +1058,7 @@ const page              = usePage()
 const authUser          = computed(() => page.props.auth?.user)
 const pageNotifications = computed(() => page.props.notifications)
 const isAdmin           = computed(() => authUser.value?.roles?.includes('admin'))
+
 const isAdminOrManager  = computed(() => authUser.value?.roles?.some(r => ['admin','manager'].includes(r)))
 const isImpersonating   = computed(() => page.props.auth?.is_impersonating)
 const userInitial       = computed(() => authUser.value?.name?.charAt(0)?.toUpperCase() || 'U')

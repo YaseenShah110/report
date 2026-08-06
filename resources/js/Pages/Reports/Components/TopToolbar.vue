@@ -6,8 +6,8 @@
   • Zoom controls (isolated Ctrl+Alt prefix — no browser conflicts)
   • Grid, Snap, Rulers, Measure toggles
   • Find & Replace, Command Palette (Ctrl+K), AI Panel toggles
-  • Presentation mode button
-  • Export dropdown (PDF, PNG, Excel, CSV) + Share + Print + Email
+  • Export menu — PDF + Print ONLY (presentation mode & share removed)
+  • Live "who's editing" presence badge
   • Dark mode toggle, Fullscreen toggle
   • Left/Right panel collapse buttons
   • Formatting ribbon appears when element selected:
@@ -58,6 +58,9 @@
             </template>
           </div>
         </div>
+
+        <!-- Live "who's editing" badge -->
+        <PresenceBadge :editors="presenceEditors" :is-dark="isDark" />
       </div>
 
       <!-- Center: editing tools ──────────────────────────────────────── -->
@@ -112,8 +115,6 @@
           title="AI Assistant [Ctrl+Alt+A]" aria-label="AI assistant" :aria-pressed="showAI">
           <i class="fa-solid fa-wand-magic-sparkles" /> AI
         </button>
-        <button class="icon-btn" @click="$emit('presentation')" title="Presentation Mode [Ctrl+Alt+P]"
-          aria-label="Presentation mode"><i class="fa-solid fa-play" /></button>
       </div>
 
       <!-- Right: view + export ───────────────────────────────────────── -->
@@ -127,16 +128,13 @@
 
         <div class="tb-divider" aria-hidden="true" />
 
-        <!-- Preview & Print -->
+        <!-- Preview -->
         <button class="btn-secondary" @click="$emit('preview')" title="Preview [Ctrl+Alt+V]"
           aria-label="Preview report">
           <i class="fa-solid fa-eye" /><span class="btn-label">Preview</span>
         </button>
-        <button class="btn-secondary" @click="$emit('print-preview')" title="Print" aria-label="Print report">
-          <i class="fa-solid fa-print" /><span class="btn-label">Print</span>
-        </button>
 
-        <!-- Export dropdown -->
+        <!-- Export dropdown — PDF + Print ONLY -->
         <div class="dropdown-wrap" ref="exportDropRef">
           <button class="btn-primary" @click="showExport = !showExport" :aria-expanded="showExport" aria-haspopup="menu"
             aria-label="Export report">
@@ -147,46 +145,20 @@
 
           <Transition name="dropdown">
             <div v-if="showExport" class="dropdown-menu" role="menu" aria-label="Export options">
-              <div class="dropdown-header">Export As</div>
+              <div class="dropdown-header">Export</div>
 
               <button @click="doExport('pdf')" role="menuitem">
                 <span class="export-icon-wrap pdf"><i class="fa-solid fa-file-pdf" /></span>
-                <div><strong>PDF Document</strong><small>Best for printing & sharing</small></div>
+                <div><strong>PDF Document</strong><small>Saved exactly as it looks in Preview</small></div>
               </button>
 
-              <button @click="doExport('image')" role="menuitem">
-                <span class="export-icon-wrap img"><i class="fa-solid fa-file-image" /></span>
-                <div><strong>PNG Image</strong><small>High-resolution screenshot</small></div>
-              </button>
-
-              <button @click="doExport('excel')" role="menuitem">
-                <span class="export-icon-wrap xls"><i class="fa-solid fa-file-excel" /></span>
-                <div><strong>Excel Spreadsheet</strong><small>Tables & chart data</small></div>
-              </button>
-
-              <button @click="doExport('csv')" role="menuitem">
-                <span class="export-icon-wrap csv"><i class="fa-solid fa-file-csv" /></span>
-                <div><strong>CSV Data</strong><small>Raw data export</small></div>
-              </button>
-
-              <hr class="dropdown-sep" />
-
-              <button @click="$emit('share'); showExport = false" role="menuitem">
-                <i class="fa-solid fa-share-nodes export-inline-icon" />
-                Share Link
-              </button>
-              <button @click="$emit('email-report'); showExport = false" role="menuitem">
-                <i class="fa-solid fa-envelope export-inline-icon" />
-                Email Report
+              <button @click="doPrint" role="menuitem">
+                <span class="export-icon-wrap print"><i class="fa-solid fa-print" /></span>
+                <div><strong>Print</strong><small>Open the system print dialog</small></div>
               </button>
             </div>
           </Transition>
         </div>
-
-        <!-- Share -->
-        <button class="icon-btn" @click="$emit('share')" title="Copy Share Link" aria-label="Share report">
-          <i class="fa-solid fa-share-nodes" />
-        </button>
 
         <div class="tb-divider" aria-hidden="true" />
 
@@ -313,6 +285,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { router } from '@inertiajs/vue3'
+import PresenceBadge from './PresenceBadge.vue'
 
 // ── Props ──────────────────────────────────────────────────────────────
 const props = defineProps({
@@ -333,6 +306,8 @@ const props = defineProps({
   showAI: { type: Boolean, default: false },
   leftCollapsed: { type: Boolean, default: false },
   rightCollapsed: { type: Boolean, default: false },
+  // Live "who's editing" — array of { id, name, initials, color }, current user excluded
+  presenceEditors: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -341,13 +316,11 @@ const emit = defineEmits([
   'toggle-grid', 'toggle-snap', 'toggle-rulers', 'toggle-measure',
   'toggle-dark', 'toggle-fullscreen', 'toggle-ai',
   'toggle-command', 'toggle-find', 'preview', 'print-preview',
-  'export-pdf', 'export-image', 'export-excel', 'export-csv',
-  'share', 'change-status', 'email-report',
+  'export-pdf', 'change-status',
   'apply-style', 'toggle-fmt',
   'delete-el', 'duplicate-el', 'lock-el',
   'bring-front', 'send-back',
   'toggle-left-panel', 'toggle-right-panel',
-  'presentation',
 ])
 
 // ── State ──────────────────────────────────────────────────────────────
@@ -375,13 +348,12 @@ function goBack() {
 
 function doExport(type) {
   showExport.value = false
-  const eventMap = {
-    pdf: 'export-pdf',
-    image: 'export-image',
-    excel: 'export-excel',
-    csv: 'export-csv',
-  }
-  emit(eventMap[type])
+  if (type === 'pdf') emit('export-pdf')
+}
+
+function doPrint() {
+  showExport.value = false
+  emit('print-preview')
 }
 
 // Close export dropdown on outside click
@@ -445,6 +417,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.tb-left {
+  min-width: 0;
 }
 
 .tb-center {
@@ -766,7 +742,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, .15);
   padding: 6px;
-  min-width: 256px;
+  min-width: 240px;
   z-index: 400;
 }
 
@@ -832,28 +808,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
   background: #ef4444;
 }
 
-.img {
-  background: #8b5cf6;
-}
-
-.xls {
-  background: #10b981;
-}
-
-.csv {
-  background: #3b82f6;
-}
-
-.export-inline-icon {
-  width: 34px;
-  text-align: center;
-  color: var(--tb-text3);
-}
-
-.dropdown-sep {
-  border: none;
-  border-top: 1px solid var(--tb-border);
-  margin: 4px 8px;
+.print {
+  background: #6366f1;
 }
 
 /* Dropdown transition */

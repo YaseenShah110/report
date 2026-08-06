@@ -41,7 +41,9 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TaskController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MediaController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PresenceController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TemplateController;
@@ -191,6 +193,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{report:slug}/versions', [ReportController::class, 'versions'])
             ->middleware('can:view-reports')
             ->name('versions');
+        
+        // Store a manual version snapshot (editor calls this every 5 min)
+        Route::post('/{report:slug}/versions', [ReportController::class, 'storeVersion'])
+            ->middleware('can:edit-reports')
+            ->name('versions.store');
+        
         Route::post('/{report:slug}/versions/{version}/restore', [ReportController::class, 'restoreVersion'])
             ->middleware('can:edit-reports')
             ->name('versions.restore');
@@ -207,6 +215,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{report:slug}/download', [ReportController::class, 'download'])
             ->middleware('can:view-reports')
             ->name('download');
+        
+        // Generates PDF via Browsershot — streams bytes back as download
+        Route::post('/{report:slug}/export-pdf', [ReportController::class, 'exportPdf'])
+            ->middleware('can:view-reports')
+            ->name('export-pdf');
+        
         Route::get('/{report:slug}/export/pdf', [ReportController::class, 'download'])
             ->middleware('can:view-reports')
             ->name('export.pdf');
@@ -248,6 +262,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{report:slug}/email', [ReportController::class, 'emailReport'])
             ->middleware('can:manage-reports')
             ->name('email');
+
+        // ── PRESENCE — live "who's editing" badge ──────────────────
+        // Heartbeat: POSTed every ~8s by usePresence.js composable
+        Route::post('/{report:slug}/presence/heartbeat', [PresenceController::class, 'heartbeat'])
+            ->name('presence.heartbeat');
+
+        // Leave: fired via navigator.sendBeacon on tab-close / navigation
+        Route::post('/{report:slug}/presence/leave', [PresenceController::class, 'leave'])
+            ->name('presence.leave');
     });
 
     /*
@@ -264,6 +287,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/templates/{template:slug}/use', [TemplateController::class, 'use'])
         ->middleware('can:create-reports')
         ->name('templates.use');
+
+    /*
+    |======================================================================
+    | MEDIA — image upload + free keyword image search proxy
+    |======================================================================
+    */
+    Route::prefix('media')->name('media.')->group(function () {
+        // Upload a user image - stores in storage/public/report-media/{report_id}/
+        Route::post('/upload', [MediaController::class, 'upload'])
+            ->name('upload');
+
+        // Free image search proxy — API key stays server-side
+        Route::get('/search', [MediaController::class, 'search'])
+            ->name('search');
+    });
 
     /*
     |======================================================================
@@ -524,16 +562,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             /*
             |==================================================================
-            | TEMPLATE MANAGEMENT - Admin Only
+            | TEMPLATE MANAGEMENT - Admin Only (Full CRUD)
             |==================================================================
             */
             Route::prefix('templates')->name('templates.')
                 ->middleware('can:manage-templates')
                 ->group(function () {
+                    // ── Listing ─────────────────────────────────────────────
+                    Route::get('/', [TemplateController::class, 'adminIndex'])
+                        ->name('index');
+                    
+                    // ── Create ──────────────────────────────────────────────
+                    Route::get('/create', [TemplateController::class, 'create'])
+                        ->name('create');
                     Route::post('/', [TemplateController::class, 'store'])
                         ->name('store');
+                    
+                    // ── Edit & Update ───────────────────────────────────────
+                    Route::get('/{template}/edit', [TemplateController::class, 'edit'])
+                        ->name('edit');
                     Route::put('/{template}', [TemplateController::class, 'update'])
                         ->name('update');
+                    
+                    // ── Delete ──────────────────────────────────────────────
                     Route::delete('/{template}', [TemplateController::class, 'destroy'])
                         ->name('destroy');
                     Route::post('/{template}/restore', [TemplateController::class, 'restore'])

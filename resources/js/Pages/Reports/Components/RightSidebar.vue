@@ -1,2078 +1,1943 @@
 <!--
-  RightSidebar.vue — Production-Ready Properties Panel
-  5 Tabs: Style | Typography | Content | Effects | Arrange
-  • Every element type has dedicated content editor
-  • Position, size, rotation, z-index controls
-  • Complete border, shadow, opacity, blend mode
-  • Full typography controls with Google Fonts list
-  • CSS filter effects (blur, brightness, contrast, grayscale, sepia)
-  • Flip H/V, transform controls
-  • Align to page (6 directions), distribute
-  • Copy/paste style between elements
-  • Shadow presets
-  • Priority stripe toggle
-  • Memory safe — no leaked listeners
+  RightSidebar.vue — Element Properties Panel (Part 4)
+  ═══════════════════════════════════════════════════════════════════
+  5 tabs, fully wired to every element type:
+
+  1. Style    — background (solid/gradient), border (width/style/color/radius),
+                box-shadow presets + custom, opacity
+  2. Typography — font family/size/weight/style/decoration/align/color/
+                  line-height/letter-spacing/text-transform/columns/
+                  text-gradient (only shown for text-type elements)
+  3. Content  — element-specific editors:
+                • Metric: label, value, change, period, changeType
+                • Progress / Circular: label, value, track colour
+                • Chart: title, labels[], values[], colour, type toggle
+                • Image: URL, alt, object-fit, image filter
+                • Table: header colour, even/odd row colours, cell padding
+                • Checklist: add/remove/check items
+                • Timeline: add/remove items (date, label, desc)
+                • Steps: add/remove step labels
+                • Callout: emoji + body text
+                • Testimonial: quote, author, role
+                • Signature: name, title
+                • Rating: value (1-5)
+                • Stat-Row: add/remove stat cells
+                • QR Code: text to encode, size
+                • Video: YouTube URL
+                • Map: address
+                • Price Card: plan, price, period, features
+                • TOC: items editor
+                • All text elements: inline content textarea
+  4. Effects  — CSS filters (blur/brightness/contrast/grayscale/sepia/
+                saturate/hue-rotate/invert), mix-blend-mode, scaleX/Y flip
+  5. Arrange  — X, Y, W, H (number inputs), rotation, z-index,
+                lock, flip H/V, duplicate, delete,
+                align to page (left/center/right/top/middle/bottom),
+                distribute (horizontal/vertical)
+  ═══════════════════════════════════════════════════════════════════
 -->
 <template>
-  <aside class="right-panel" :class="{ collapsed: isCollapsed, 'is-dark': isDark }" role="complementary"
-    aria-label="Properties panel">
-    <!-- Collapse toggle -->
-    <button class="panel-toggle" @click="$emit('update:is-collapsed', !isCollapsed)"
-      :title="isCollapsed ? 'Expand properties' : 'Collapse properties'">
-      <i :class="isCollapsed ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right'" />
-    </button>
+  <aside class="rs-root" :class="{ 'rs-dark': isDark }" aria-label="Element properties">
 
-    <div class="panel-inner" v-show="!isCollapsed">
+    <!-- No element selected -->
+    <div v-if="!el" class="rs-empty">
+      <i class="fa-solid fa-arrow-pointer" />
+      <span>Select an element to edit its properties</span>
+    </div>
 
-      <!-- ══ NO SELECTION ═══════════════════════════════════════════════ -->
-      <div v-if="!selectedEl" class="no-selection">
-        <div class="no-sel-icon"><i class="fa-solid fa-hand-pointer" /></div>
-        <h3>No Element Selected</h3>
-        <p>Click any element on the canvas to edit its properties</p>
-        <div v-if="currentPageElements.length" class="page-stats">
-          <div class="stat-pill"><i class="fa-solid fa-cubes" /> {{ currentPageElements.length }} elements</div>
-          <div v-if="selectedEls.length > 1" class="stat-pill accent"><i class="fa-solid fa-check-square" /> {{
-            selectedEls.length }} selected</div>
+    <template v-else>
+      <!-- Element header -->
+      <div class="rs-el-header">
+        <div class="rs-el-type-icon">
+          <i :class="elIcon" />
         </div>
+        <div class="rs-el-info">
+          <span class="rs-el-type">{{ elTypeLabel }}</span>
+          <span class="rs-el-id">{{ el.id?.slice(-6) }}</span>
+        </div>
+        <button class="rs-icon-btn rs-danger-btn" @click="$emit('delete-el')" title="Delete element [Del]"
+          aria-label="Delete element">
+          <i class="fa-solid fa-trash-can" />
+        </button>
+        <button class="rs-icon-btn" @click="$emit('duplicate-el')" title="Duplicate [Ctrl+Alt+Q]"
+          aria-label="Duplicate element">
+          <i class="fa-solid fa-clone" />
+        </button>
+        <button class="rs-icon-btn" :class="{ active: el.locked }" @click="$emit('lock-el')"
+          :title="el.locked ? 'Unlock' : 'Lock'" :aria-pressed="el.locked">
+          <i :class="el.locked ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open'" />
+        </button>
       </div>
 
-      <!-- ══ MULTI-SELECTION ════════════════════════════════════════════ -->
-      <div v-else-if="selectedEls.length > 1" class="multi-select">
-        <div class="multi-header">
-          <i class="fa-solid fa-object-group" />
-          <span>{{ selectedEls.length }} elements selected</span>
-        </div>
-        <div class="multi-actions">
-          <button class="multi-btn" @click="$emit('group-elements')" title="Group elements">
-            <i class="fa-solid fa-object-group" /> Group
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'left')" title="Align left">
-            <i class="fa-solid fa-align-left" /> Align Left
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'center-h')" title="Center horizontally">
-            <i class="fa-solid fa-align-center" /> Center H
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'right')" title="Align right">
-            <i class="fa-solid fa-align-right" /> Align Right
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'top')" title="Align top">
-            <i class="fa-solid fa-arrow-up" /> Align Top
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'center-v')" title="Center vertically">
-            <i class="fa-solid fa-arrows-up-down" /> Center V
-          </button>
-          <button class="multi-btn" @click="$emit('align-elements', 'bottom')" title="Align bottom">
-            <i class="fa-solid fa-arrow-down" /> Align Bottom
-          </button>
-          <button class="multi-btn" @click="$emit('distribute-h')" title="Distribute horizontally">
-            <i class="fa-solid fa-distribute-spacing-horizontal" /> Distribute H
-          </button>
-          <button class="multi-btn" @click="$emit('distribute-v')" title="Distribute vertically">
-            <i class="fa-solid fa-distribute-spacing-vertical" /> Distribute V
-          </button>
-          <button class="multi-btn danger" @click="$emit('delete-el')">
-            <i class="fa-solid fa-trash" /> Delete All
-          </button>
-        </div>
-      </div>
+      <!-- Tabs -->
+      <nav class="rs-tabs" role="tablist">
+        <button v-for="t in TABS" :key="t.id" class="rs-tab" :class="{ active: activeTab === t.id }"
+          @click="activeTab = t.id" role="tab" :aria-selected="activeTab === t.id" :title="t.label">
+          <i :class="t.icon" />
+          <span>{{ t.label }}</span>
+        </button>
+      </nav>
 
-      <!-- ══ SINGLE ELEMENT PROPERTIES ═════════════════════════════════ -->
-      <template v-else-if="selectedEl">
-        <!-- Element type header -->
-        <div class="el-header">
-          <div class="el-type-badge" :style="{ color: getTypeColor(selectedEl.type) }">
-            <i :class="getElIcon(selectedEl.type)" />
-            <span>{{ selectedEl.type }}</span>
-          </div>
-          <div class="el-header-actions">
-            <button @click="$emit('duplicate-el')" title="Duplicate [Ctrl+Alt+D]" class="h-btn">
-              <i class="fa-solid fa-clone" />
-            </button>
-            <button @click="$emit('lock-el')" :class="['h-btn', { 'h-btn--active': selectedEl.locked }]"
-              :title="selectedEl.locked ? 'Unlock element' : 'Lock element'">
-              <i :class="selectedEl.locked ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open'" />
-            </button>
-            <button @click="$emit('delete-el')" title="Delete [Del]" class="h-btn h-btn--danger">
-              <i class="fa-solid fa-trash-can" />
-            </button>
-          </div>
-        </div>
+      <!-- Panel body -->
+      <div class="rs-body">
 
-        <!-- Tabs -->
-        <div class="props-tabs">
-          <button v-for="t in PROP_TABS" :key="t.id" class="props-tab" :class="{ active: propsTab === t.id }"
-            @click="propsTab = t.id" :title="t.label">
-            <i :class="t.icon" />
-            <span>{{ t.label }}</span>
-          </button>
-        </div>
+        <!-- ══ 1. STYLE ════════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'style'" class="rs-panel">
 
-        <!-- TAB: STYLE ─────────────────────────────────────────────── -->
-        <div v-show="propsTab === 'style'" class="props-body">
+          <!-- Background -->
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-fill" /> Background</div>
 
-          <!-- Position & Size -->
-          <PropSection title="Position & Size" icon="fa-solid fa-arrows-up-down-left-right" defaultOpen>
-            <div class="grid-4">
-              <PropField label="X">
-                <input type="number" :value="Math.round(selectedEl.position?.x || 0)"
-                  @input="updatePos('x', +$event.target.value)" class="num-input" />
-              </PropField>
-              <PropField label="Y">
-                <input type="number" :value="Math.round(selectedEl.position?.y || 0)"
-                  @input="updatePos('y', +$event.target.value)" class="num-input" />
-              </PropField>
-              <PropField label="W">
-                <input type="number" :value="Math.round(selectedEl.styles?.width || 100)"
-                  @input="updateStyle('width', +$event.target.value)" class="num-input" min="4" />
-              </PropField>
-              <PropField label="H">
-                <input type="number" :value="Math.round(selectedEl.styles?.height || 50)"
-                  @input="updateStyle('height', +$event.target.value)" class="num-input" min="4" />
-              </PropField>
-            </div>
-
-            <div class="prop-row">
-              <label>Rotation</label>
-              <div class="slider-row">
-                <input type="range" min="-180" max="180" :value="selectedEl.styles?.rotate || 0"
-                  @input="updateStyle('rotate', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ Math.round(selectedEl.styles?.rotate || 0) }}°</span>
+            <div class="rs-row">
+              <label class="rs-label">Type</label>
+              <div class="rs-btn-group">
+                <button :class="{ active: !s.useGradient }" @click="setProp('styles.useGradient', false)">Solid</button>
+                <button :class="{ active: s.useGradient }"
+                  @click="setProp('styles.useGradient', true)">Gradient</button>
               </div>
             </div>
 
-            <div class="prop-row">
-              <label>Z-Index</label>
-              <input type="number" :value="selectedEl.styles?.zIndex || 1"
-                @input="updateStyle('zIndex', +$event.target.value)" class="num-input sm" min="0" max="9999" />
-            </div>
-
-            <div class="prop-row">
-              <label>Lock Aspect</label>
-              <ToggleSwitch :value="selectedEl.styles?.lockAspect" @update="updateStyle('lockAspect', $event)" />
-            </div>
-          </PropSection>
-
-          <!-- Fill & Color -->
-          <PropSection title="Fill & Color" icon="fa-solid fa-palette" defaultOpen>
-            <div class="prop-row">
-              <label>Background</label>
-              <div class="color-row">
-                <input type="color"
-                  :value="(selectedEl.styles?.backgroundColor === 'transparent' ? '#ffffff' : selectedEl.styles?.backgroundColor) || '#ffffff'"
-                  @input="updateStyle('backgroundColor', $event.target.value)" class="color-input" />
-                <input type="text" :value="selectedEl.styles?.backgroundColor || 'transparent'"
-                  @input="updateStyle('backgroundColor', $event.target.value)" class="color-text-input" />
-                <button class="clear-color-btn" @click="updateStyle('backgroundColor', 'transparent')" title="No fill">
-                  <i class="fa-solid fa-ban" />
-                </button>
+            <template v-if="!s.useGradient">
+              <div class="rs-row">
+                <label class="rs-label">Color</label>
+                <div class="rs-color-row">
+                  <input type="color" :value="s.backgroundColor || '#ffffff'"
+                    @input="setProp('styles.backgroundColor', $event.target.value)" class="rs-color" />
+                  <input type="text" :value="s.backgroundColor || '#ffffff'"
+                    @input="setProp('styles.backgroundColor', $event.target.value)" class="rs-hex" maxlength="9"
+                    placeholder="#ffffff" />
+                  <button class="rs-clear-btn" @click="setProp('styles.backgroundColor', 'transparent')"
+                    title="Transparent">
+                    <i class="fa-solid fa-droplet-slash" />
+                  </button>
+                </div>
               </div>
-            </div>
+            </template>
 
-            <div class="prop-row">
-              <label>Opacity</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="100" :value="selectedEl.styles?.opacity ?? 100"
-                  @input="updateStyle('opacity', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.opacity ?? 100 }}%</span>
+            <template v-else>
+              <div class="rs-row">
+                <label class="rs-label">From</label>
+                <input type="color" :value="s.gradientFrom || '#6366f1'"
+                  @input="setProp('styles.gradientFrom', $event.target.value)" class="rs-color" />
               </div>
-            </div>
-
-            <!-- Gradient -->
-            <div class="prop-row">
-              <label>Gradient</label>
-              <ToggleSwitch :value="selectedEl.styles?.useGradient" @update="updateStyle('useGradient', $event)" />
-            </div>
-            <template v-if="selectedEl.styles?.useGradient">
-              <div class="prop-row">
-                <label>From</label>
-                <input type="color" :value="selectedEl.styles?.gradientFrom || '#6366f1'"
-                  @input="updateStyle('gradientFrom', $event.target.value)" class="color-input" />
+              <div class="rs-row">
+                <label class="rs-label">To</label>
+                <input type="color" :value="s.gradientTo || '#8b5cf6'"
+                  @input="setProp('styles.gradientTo', $event.target.value)" class="rs-color" />
               </div>
-              <div class="prop-row">
-                <label>To</label>
-                <input type="color" :value="selectedEl.styles?.gradientTo || '#8b5cf6'"
-                  @input="updateStyle('gradientTo', $event.target.value)" class="color-input" />
-              </div>
-              <div class="prop-row">
-                <label>Direction</label>
-                <select :value="selectedEl.styles?.gradientDir || '135deg'"
-                  @change="updateStyle('gradientDir', $event.target.value)" class="prop-select">
-                  <option value="90deg">→ Horizontal</option>
-                  <option value="180deg">↓ Vertical</option>
+              <div class="rs-row">
+                <label class="rs-label">Direction</label>
+                <select class="rs-select" :value="s.gradientDir || '135deg'"
+                  @change="setProp('styles.gradientDir', $event.target.value)">
+                  <option value="to right">→ Left to Right</option>
+                  <option value="to left">← Right to Left</option>
+                  <option value="to bottom">↓ Top to Bottom</option>
+                  <option value="to top">↑ Bottom to Top</option>
                   <option value="135deg">↘ Diagonal</option>
-                  <option value="45deg">↗ Diagonal</option>
-                  <option value="0deg">↑ Bottom-Up</option>
+                  <option value="45deg">↗ Diagonal Rev</option>
                 </select>
               </div>
             </template>
 
-            <!-- Recent colors -->
-            <div class="color-presets">
-              <button v-for="c in recentColors" :key="c" class="color-preset" :style="{ background: c }"
-                @click="updateStyle('backgroundColor', c)" :title="c" />
-              <button class="color-preset color-preset--add" @click="addRecentColor" title="Save current color">
-                <i class="fa-solid fa-plus" />
-              </button>
+            <!-- Opacity -->
+            <div class="rs-row">
+              <label class="rs-label">Opacity <span class="rs-val">{{ s.opacity ?? 100 }}%</span></label>
+              <input type="range" min="0" max="100" step="1" :value="s.opacity ?? 100"
+                @input="setProp('styles.opacity', +$event.target.value)" class="rs-range" />
             </div>
-          </PropSection>
+          </div>
 
           <!-- Border -->
-          <PropSection title="Border" icon="fa-solid fa-border-all">
-            <div class="grid-2">
-              <PropField label="Width">
-                <input type="number" min="0" max="20" :value="selectedEl.styles?.borderWidth || 0"
-                  @input="updateStyle('borderWidth', +$event.target.value)" class="num-input" />
-              </PropField>
-              <PropField label="Style">
-                <select :value="selectedEl.styles?.borderStyle || 'solid'"
-                  @change="updateStyle('borderStyle', $event.target.value)" class="prop-select">
-                  <option value="solid">Solid</option>
-                  <option value="dashed">Dashed</option>
-                  <option value="dotted">Dotted</option>
-                  <option value="double">Double</option>
-                  <option value="none">None</option>
-                </select>
-              </PropField>
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-border-all" /> Border</div>
+            <div class="rs-row">
+              <label class="rs-label">Width <span class="rs-val">{{ s.borderWidth || 0 }}px</span></label>
+              <input type="range" min="0" max="20" step="1" :value="s.borderWidth || 0"
+                @input="setProp('styles.borderWidth', +$event.target.value)" class="rs-range" />
             </div>
-            <div class="prop-row" v-if="selectedEl.styles?.borderWidth">
-              <label>Color</label>
-              <div class="color-row">
-                <input type="color" :value="selectedEl.styles?.borderColor || '#000000'"
-                  @input="updateStyle('borderColor', $event.target.value)" class="color-input" />
-                <input type="text" :value="selectedEl.styles?.borderColor || '#000000'"
-                  @input="updateStyle('borderColor', $event.target.value)" class="color-text-input" />
+            <div class="rs-row">
+              <label class="rs-label">Style</label>
+              <select class="rs-select" :value="s.borderStyle || 'solid'"
+                @change="setProp('styles.borderStyle', $event.target.value)">
+                <option>solid</option>
+                <option>dashed</option>
+                <option>dotted</option>
+                <option>double</option>
+                <option>groove</option>
+                <option>ridge</option>
+              </select>
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Color</label>
+              <div class="rs-color-row">
+                <input type="color" :value="s.borderColor || '#e2e8f0'"
+                  @input="setProp('styles.borderColor', $event.target.value)" class="rs-color" />
+                <input type="text" :value="s.borderColor || '#e2e8f0'"
+                  @input="setProp('styles.borderColor', $event.target.value)" class="rs-hex" maxlength="9" />
               </div>
             </div>
-            <div class="prop-row">
-              <label>Radius</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="200" :value="selectedEl.styles?.borderRadius || 0"
-                  @input="updateStyle('borderRadius', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.borderRadius || 0 }}px</span>
-              </div>
+            <div class="rs-row">
+              <label class="rs-label">Radius <span class="rs-val">{{ s.borderRadius || 0 }}px</span></label>
+              <input type="range" min="0" max="200" step="2" :value="s.borderRadius || 0"
+                @input="setProp('styles.borderRadius', +$event.target.value)" class="rs-range" />
             </div>
-          </PropSection>
+          </div>
 
           <!-- Shadow -->
-          <PropSection title="Shadow" icon="fa-solid fa-layer-group">
-            <div class="shadow-presets">
-              <button v-for="s in SHADOW_PRESETS" :key="s.name" class="shadow-preset"
-                :class="{ active: selectedEl.styles?.boxShadow === s.value }" @click="updateStyle('boxShadow', s.value)"
-                :title="s.name">
-                <div class="shadow-demo" :style="{ boxShadow: s.value }" />
-                <span>{{ s.name }}</span>
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-droplet" /> Shadow</div>
+            <div class="rs-shadow-presets">
+              <button v-for="sh in SHADOW_PRESETS" :key="sh.label" class="rs-shadow-btn"
+                :class="{ active: s.boxShadow === sh.value }"
+                @click="setProp('styles.boxShadow', s.boxShadow === sh.value ? 'none' : sh.value)" :title="sh.label">
+                <div class="rs-shadow-demo" :style="{ boxShadow: sh.value }" />
               </button>
             </div>
-            <div class="prop-row">
-              <label>Custom</label>
-              <input type="text" :value="selectedEl.styles?.boxShadow || ''"
-                @input="updateStyle('boxShadow', $event.target.value)" class="prop-input"
-                placeholder="0 4px 12px rgba(0,0,0,.15)" />
+            <div class="rs-row">
+              <label class="rs-label">Custom</label>
+              <input type="text" class="rs-input" :value="s.boxShadow || ''"
+                @input="setProp('styles.boxShadow', $event.target.value)"
+                placeholder="e.g. 0 4px 12px rgba(0,0,0,.15)" />
             </div>
-          </PropSection>
+          </div>
 
-          <!-- Priority stripe -->
-          <PropSection title="Priority Stripe" icon="fa-solid fa-flag">
-            <div class="priority-btns">
-              <button v-for="p in ['none', 'low', 'medium', 'high', 'urgent']" :key="p" class="priority-btn"
-                :class="['prio-' + p, { active: (selectedEl.styles?.priority || 'none') === p }]"
-                @click="updateStyle('priority', p === 'none' ? undefined : p)">
-                <span class="prio-dot" :style="{ background: getPriorityColor(p) }" />
-                {{ p }}
-              </button>
-            </div>
-          </PropSection>
         </div>
 
-        <!-- TAB: TYPOGRAPHY ─────────────────────────────────────────── -->
-        <div v-show="propsTab === 'typography'" class="props-body">
-          <template v-if="isTextType(selectedEl.type)">
+        <!-- ══ 2. TYPOGRAPHY ══════════════════════════════════════════ -->
+        <div v-show="activeTab === 'typography'" class="rs-panel">
 
-            <PropSection title="Font" icon="fa-solid fa-font" defaultOpen>
-              <div class="prop-row">
-                <label>Family</label>
-                <select :value="selectedEl.styles?.fontFamily || settings.font_family || 'DM Sans'"
-                  @change="updateStyle('fontFamily', $event.target.value)" class="prop-select">
-                  <option v-for="f in FONT_LIST" :key="f" :value="f">{{ f }}</option>
+          <div v-if="!isTextEl" class="rs-empty-tab">
+            <i class="fa-solid fa-font" />
+            <span>No typography options for {{ elTypeLabel }} elements</span>
+          </div>
+
+          <template v-else>
+            <!-- Font family -->
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-font" /> Font</div>
+              <div class="rs-row">
+                <label class="rs-label">Family</label>
+                <select class="rs-select" :value="s.fontFamily || settings.font_family || 'DM Sans'"
+                  @change="setProp('styles.fontFamily', $event.target.value)">
+                  <option v-for="f in FONTS" :key="f" :value="f" :style="{ fontFamily: f }">{{ f }}</option>
                 </select>
               </div>
-              <div class="grid-2">
-                <PropField label="Size">
-                  <input type="number" min="6" max="300" :value="selectedEl.styles?.fontSize || 14"
-                    @input="updateStyle('fontSize', +$event.target.value)" class="num-input" />
-                </PropField>
-                <PropField label="Weight">
-                  <select :value="selectedEl.styles?.fontWeight || '400'"
-                    @change="updateStyle('fontWeight', $event.target.value)" class="prop-select">
-                    <option value="300">Light</option>
-                    <option value="400">Regular</option>
-                    <option value="500">Medium</option>
-                    <option value="600">Semi Bold</option>
-                    <option value="700">Bold</option>
-                    <option value="800">Extra Bold</option>
-                    <option value="900">Black</option>
-                  </select>
-                </PropField>
+              <div class="rs-row">
+                <label class="rs-label">Size <span class="rs-val">{{ s.fontSize || 14 }}px</span></label>
+                <div class="rs-slider-number">
+                  <input type="range" min="6" max="200" step="1" :value="s.fontSize || 14"
+                    @input="setProp('styles.fontSize', +$event.target.value)" class="rs-range" />
+                  <input type="number" min="6" max="200" :value="s.fontSize || 14"
+                    @input="setProp('styles.fontSize', +$event.target.value)" class="rs-num-input" />
+                </div>
               </div>
-            </PropSection>
+              <div class="rs-row">
+                <label class="rs-label">Weight</label>
+                <select class="rs-select" :value="s.fontWeight || '400'"
+                  @change="setProp('styles.fontWeight', $event.target.value)">
+                  <option value="100">Thin 100</option>
+                  <option value="200">ExtraLight 200</option>
+                  <option value="300">Light 300</option>
+                  <option value="400">Regular 400</option>
+                  <option value="500">Medium 500</option>
+                  <option value="600">SemiBold 600</option>
+                  <option value="700">Bold 700</option>
+                  <option value="800">ExtraBold 800</option>
+                  <option value="900">Black 900</option>
+                </select>
+              </div>
+            </div>
 
-            <PropSection title="Color" icon="fa-solid fa-eye-dropper" defaultOpen>
-              <div class="prop-row">
-                <label>Text</label>
-                <div class="color-row">
-                  <input type="color" :value="selectedEl.styles?.color || '#000000'"
-                    @input="updateStyle('color', $event.target.value)" class="color-input" />
-                  <input type="text" :value="selectedEl.styles?.color || '#000000'"
-                    @input="updateStyle('color', $event.target.value)" class="color-text-input" />
-                </div>
+            <!-- Style toggles -->
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-italic" /> Style</div>
+              <div class="rs-toggle-row">
+                <button class="rs-fmt-btn" :class="{ active: s.fontStyle === 'italic' }"
+                  @click="toggle('styles.fontStyle', 'italic', 'normal')"><em>I</em> Italic</button>
+                <button class="rs-fmt-btn" :class="{ active: s.textDecoration === 'underline' }"
+                  @click="toggle('styles.textDecoration', 'underline', 'none')"><u>U</u> Underline</button>
+                <button class="rs-fmt-btn" :class="{ active: s.textDecoration === 'line-through' }"
+                  @click="toggle('styles.textDecoration', 'line-through', 'none')"><s>S</s> Strike</button>
               </div>
-              <div class="prop-row">
-                <label>Gradient</label>
-                <ToggleSwitch :value="selectedEl.styles?.textGradient" @update="updateStyle('textGradient', $event)" />
-              </div>
-              <template v-if="selectedEl.styles?.textGradient">
-                <div class="prop-row">
-                  <label>From</label>
-                  <input type="color" :value="selectedEl.styles?.textGradientFrom || '#6366f1'"
-                    @input="updateStyle('textGradientFrom', $event.target.value)" class="color-input" />
-                </div>
-                <div class="prop-row">
-                  <label>To</label>
-                  <input type="color" :value="selectedEl.styles?.textGradientTo || '#ec4899'"
-                    @input="updateStyle('textGradientTo', $event.target.value)" class="color-input" />
-                </div>
-              </template>
-            </PropSection>
-
-            <PropSection title="Alignment" icon="fa-solid fa-align-left">
-              <div class="align-btns">
-                <button v-for="a in ['left', 'center', 'right', 'justify']" :key="a" class="align-btn"
-                  :class="{ active: selectedEl.styles?.textAlign === a }" @click="updateStyle('textAlign', a)"
-                  :title="`Align ${a}`">
-                  <i :class="`fa-solid fa-align-${a}`" />
-                </button>
-              </div>
-            </PropSection>
-
-            <PropSection title="Spacing" icon="fa-solid fa-arrows-left-right-to-line">
-              <div class="prop-row">
-                <label>Line Height</label>
-                <div class="slider-row">
-                  <input type="range" min="1" max="4" step="0.1" :value="selectedEl.styles?.lineHeight || 1.5"
-                    @input="updateStyle('lineHeight', +$event.target.value)" class="prop-range" />
-                  <span class="prop-val">{{ Number(selectedEl.styles?.lineHeight || 1.5).toFixed(1) }}</span>
-                </div>
-              </div>
-              <div class="prop-row">
-                <label>Letter Spacing</label>
-                <div class="slider-row">
-                  <input type="range" min="-4" max="20" step="0.5" :value="selectedEl.styles?.letterSpacing || 0"
-                    @input="updateStyle('letterSpacing', +$event.target.value)" class="prop-range" />
-                  <span class="prop-val">{{ selectedEl.styles?.letterSpacing || 0 }}px</span>
-                </div>
-              </div>
-              <div class="prop-row">
-                <label>Padding</label>
-                <input type="number" min="0" max="80" :value="selectedEl.styles?.padding || 0"
-                  @input="updateStyle('padding', +$event.target.value)" class="num-input sm" />
-              </div>
-            </PropSection>
-
-            <PropSection title="Decoration" icon="fa-solid fa-wand-magic-sparkles">
-              <div class="prop-row">
-                <label>Style</label>
-                <div class="btn-group">
-                  <button :class="{ active: selectedEl.styles?.fontStyle === 'italic' }"
-                    @click="updateStyle('fontStyle', selectedEl.styles?.fontStyle === 'italic' ? 'normal' : 'italic')"
-                    title="Italic">
-                    <i>I</i>
-                  </button>
-                  <button :class="{ active: selectedEl.styles?.textDecoration === 'underline' }"
-                    @click="updateStyle('textDecoration', selectedEl.styles?.textDecoration === 'underline' ? 'none' : 'underline')"
-                    title="Underline">
-                    <u>U</u>
-                  </button>
-                  <button :class="{ active: selectedEl.styles?.textDecoration === 'line-through' }"
-                    @click="updateStyle('textDecoration', selectedEl.styles?.textDecoration === 'line-through' ? 'none' : 'line-through')"
-                    title="Strikethrough">
-                    <s>S</s>
-                  </button>
-                </div>
-              </div>
-              <div class="prop-row">
-                <label>Transform</label>
-                <select :value="selectedEl.styles?.textTransform || 'none'"
-                  @change="updateStyle('textTransform', $event.target.value)" class="prop-select">
+              <div class="rs-row">
+                <label class="rs-label">Transform</label>
+                <select class="rs-select" :value="s.textTransform || 'none'"
+                  @change="setProp('styles.textTransform', $event.target.value)">
                   <option value="none">None</option>
                   <option value="uppercase">UPPERCASE</option>
                   <option value="lowercase">lowercase</option>
                   <option value="capitalize">Capitalize</option>
                 </select>
               </div>
-              <div class="prop-row">
-                <label>Columns</label>
-                <input type="number" min="1" max="5" :value="selectedEl.styles?.columns || 1"
-                  @input="updateStyle('columns', +$event.target.value)" class="num-input sm" />
+            </div>
+
+            <!-- Colour -->
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-palette" /> Colour</div>
+              <div class="rs-row">
+                <label class="rs-label">Text Color</label>
+                <div class="rs-color-row">
+                  <input type="color" :value="s.color || '#0f172a'"
+                    @input="setProp('styles.color', $event.target.value)" class="rs-color" />
+                  <input type="text" :value="s.color || '#0f172a'" @input="setProp('styles.color', $event.target.value)"
+                    class="rs-hex" maxlength="9" />
+                </div>
               </div>
-            </PropSection>
+              <div class="rs-row">
+                <label class="rs-label">Gradient Text</label>
+                <label class="rs-toggle-sw">
+                  <input type="checkbox" :checked="s.textGradient"
+                    @change="setProp('styles.textGradient', $event.target.checked)" />
+                  <span class="rs-sw-track" /><span class="rs-sw-label">{{ s.textGradient ? 'On' : 'Off' }}</span>
+                </label>
+              </div>
+              <template v-if="s.textGradient">
+                <div class="rs-row">
+                  <label class="rs-label">From</label>
+                  <input type="color" :value="s.textGradientFrom || '#6366f1'"
+                    @input="setProp('styles.textGradientFrom', $event.target.value)" class="rs-color" />
+                </div>
+                <div class="rs-row">
+                  <label class="rs-label">To</label>
+                  <input type="color" :value="s.textGradientTo || '#8b5cf6'"
+                    @input="setProp('styles.textGradientTo', $event.target.value)" class="rs-color" />
+                </div>
+              </template>
+            </div>
+
+            <!-- Spacing -->
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-text-height" /> Spacing</div>
+              <div class="rs-row">
+                <label class="rs-label">Alignment</label>
+                <div class="rs-align-btns">
+                  <button v-for="a in ['left', 'center', 'right', 'justify']" :key="a"
+                    :class="{ active: s.textAlign === a }" @click="setProp('styles.textAlign', a)"
+                    :title="`Align ${a}`">
+                    <i :class="`fa-solid fa-align-${a}`" />
+                  </button>
+                </div>
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Line Height <span class="rs-val">{{ s.lineHeight || 1.5 }}</span></label>
+                <input type="range" min="0.8" max="4" step="0.05" :value="s.lineHeight || 1.5"
+                  @input="setProp('styles.lineHeight', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Letter Spacing <span class="rs-val">{{ s.letterSpacing || 0 }}px</span></label>
+                <input type="range" min="-5" max="20" step="0.5" :value="s.letterSpacing || 0"
+                  @input="setProp('styles.letterSpacing', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Columns</label>
+                <select class="rs-select" :value="s.columns || 1"
+                  @change="setProp('styles.columns', +$event.target.value)">
+                  <option :value="1">1 column</option>
+                  <option :value="2">2 columns</option>
+                  <option :value="3">3 columns</option>
+                  <option :value="4">4 columns</option>
+                </select>
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Padding <span class="rs-val">{{ s.padding || 0 }}px</span></label>
+                <input type="range" min="0" max="60" step="2" :value="s.padding || 0"
+                  @input="setProp('styles.padding', +$event.target.value)" class="rs-range" />
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- ══ 3. CONTENT ═════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'content'" class="rs-panel">
+
+          <!-- Generic text content -->
+          <div v-if="isTextEl" class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-pen-to-square" /> Text Content</div>
+            <textarea class="rs-textarea" :value="el.content || ''" @input="setElProp('content', $event.target.value)"
+              rows="5" placeholder="Enter text content…" />
+          </div>
+
+          <!-- Metric / KPI -->
+          <template v-if="el.type === 'metric'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-arrow-trend-up" /> KPI Metric</div>
+              <div class="rs-row"><label class="rs-label">Label</label><input class="rs-input" :value="el.label"
+                  @input="setElProp('label', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Value</label><input class="rs-input" :value="el.value"
+                  @input="setElProp('value', $event.target.value)" placeholder="$1.2M" /></div>
+              <div class="rs-row"><label class="rs-label">Change</label><input class="rs-input" :value="el.change"
+                  @input="setElProp('change', $event.target.value)" placeholder="+12%" /></div>
+              <div class="rs-row"><label class="rs-label">Period</label><input class="rs-input" :value="el.changePeriod"
+                  @input="setElProp('changePeriod', $event.target.value)" placeholder="vs last month" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Trend</label>
+                <div class="rs-btn-group">
+                  <button :class="{ active: el.changeType === 'positive' }"
+                    @click="setElProp('changeType', 'positive')"><i class="fa-solid fa-arrow-up" /> Up</button>
+                  <button :class="{ active: el.changeType === 'negative' }"
+                    @click="setElProp('changeType', 'negative')"><i class="fa-solid fa-arrow-down" /> Down</button>
+                </div>
+              </div>
+              <div class="rs-row"><label class="rs-label">Accent Color</label><input type="color"
+                  :value="s.color || '#6366f1'" @input="setProp('styles.color', $event.target.value)"
+                  class="rs-color" /></div>
+            </div>
           </template>
 
-          <div v-else class="no-props">
-            <i class="fa-solid fa-font" />
-            <p>Typography options are only available for text elements</p>
+          <!-- Progress bar / Circular progress -->
+          <template v-if="el.type === 'progress' || el.type === 'circular-progress'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-bars-progress" /> Progress</div>
+              <div class="rs-row"><label class="rs-label">Label</label><input class="rs-input" :value="el.label"
+                  @input="setElProp('label', $event.target.value)" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Value <span class="rs-val">{{ el.value || 0 }}%</span></label>
+                <input type="range" min="0" max="100" step="1" :value="el.value || 0"
+                  @input="setElProp('value', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row"><label class="rs-label">Fill Color</label><input type="color"
+                  :value="s.color || '#6366f1'" @input="setProp('styles.color', $event.target.value)"
+                  class="rs-color" /></div>
+              <div class="rs-row"><label class="rs-label">Track Color</label><input type="color"
+                  :value="s.trackColor || '#e2e8f0'" @input="setProp('styles.trackColor', $event.target.value)"
+                  class="rs-color" /></div>
+            </div>
+          </template>
+
+          <!-- Charts -->
+          <template v-if="isChartEl">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-chart-bar" /> Chart Data</div>
+              <div class="rs-row"><label class="rs-label">Title</label><input class="rs-input"
+                  :value="el.chartTitle || ''" @input="setElProp('chartTitle', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Color</label><input type="color"
+                  :value="el.chartColor || '#6366f1'" @input="setElProp('chartColor', $event.target.value)"
+                  class="rs-color" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Labels</label>
+                <input class="rs-input" :value="chartLabels" @input="setChartLabels($event.target.value)"
+                  placeholder="Q1,Q2,Q3,Q4" />
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Values</label>
+                <input class="rs-input" :value="chartValues" @input="setChartValues($event.target.value)"
+                  placeholder="25,40,35,55" />
+              </div>
+            </div>
+          </template>
+
+          <!-- Image -->
+          <template v-if="el.type === 'image'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-image" /> Image</div>
+              <div class="rs-row"><label class="rs-label">URL</label><input class="rs-input" :value="el.src"
+                  @input="setElProp('src', $event.target.value)" placeholder="https://…" /></div>
+              <div class="rs-row"><label class="rs-label">Alt Text</label><input class="rs-input" :value="el.alt"
+                  @input="setElProp('alt', $event.target.value)" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Object Fit</label>
+                <select class="rs-select" :value="s.objectFit || 'cover'"
+                  @change="setProp('styles.objectFit', $event.target.value)">
+                  <option>cover</option>
+                  <option>contain</option>
+                  <option>fill</option>
+                  <option>scale-down</option>
+                  <option>none</option>
+                </select>
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Filter</label>
+                <select class="rs-select" :value="s.imageFilter || 'none'"
+                  @change="setProp('styles.imageFilter', $event.target.value)">
+                  <option value="none">None</option>
+                  <option value="grayscale">Grayscale</option>
+                  <option value="sepia">Sepia</option>
+                  <option value="vintage">Vintage</option>
+                  <option value="blur">Blur</option>
+                  <option value="bright">Brighten</option>
+                </select>
+              </div>
+            </div>
+          </template>
+
+          <!-- Table -->
+          <template v-if="el.type === 'table'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-table" /> Table Style</div>
+              <div class="rs-row"><label class="rs-label">Header BG</label><input type="color"
+                  :value="s.headerBg || '#6366f1'" @input="setProp('styles.headerBg', $event.target.value)"
+                  class="rs-color" /></div>
+              <div class="rs-row"><label class="rs-label">Even Row</label><input type="color"
+                  :value="s.evenRowBg || '#ffffff'" @input="setProp('styles.evenRowBg', $event.target.value)"
+                  class="rs-color" /></div>
+              <div class="rs-row"><label class="rs-label">Odd Row</label><input type="color"
+                  :value="s.oddRowBg || '#f8fafc'" @input="setProp('styles.oddRowBg', $event.target.value)"
+                  class="rs-color" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Cell Padding <span class="rs-val">{{ s.cellPadding || 8 }}px</span></label>
+                <input type="range" min="2" max="30" step="1" :value="s.cellPadding || 8"
+                  @input="setProp('styles.cellPadding', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row rs-row--stacked">
+                <div class="rs-table-actions">
+                  <button class="rs-action-btn" @click="$emit('add-table-row')"><i class="fa-solid fa-plus" />
+                    Row</button>
+                  <button class="rs-action-btn" @click="$emit('add-table-col')"><i class="fa-solid fa-plus" />
+                    Column</button>
+                  <button class="rs-action-btn rs-danger-sm" @click="$emit('remove-table-row')"><i
+                      class="fa-solid fa-minus" /> Row</button>
+                  <button class="rs-action-btn rs-danger-sm" @click="$emit('remove-table-col')"><i
+                      class="fa-solid fa-minus" /> Column</button>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- Checklist -->
+          <template v-if="el.type === 'checklist'">
+            <div class="rs-section">
+              <div class="rs-section-title">
+                <i class="fa-solid fa-square-check" /> Checklist
+                <button class="rs-section-add" @click="addChecklistItem"><i class="fa-solid fa-plus" /></button>
+              </div>
+              <div v-for="(item, i) in (el.items || [])" :key="i" class="rs-list-item">
+                <input type="checkbox" :checked="item.checked"
+                  @change="item.checked = $event.target.checked; emit('mark-dirty')" class="rs-checkbox" />
+                <input class="rs-input rs-list-input" :value="item.text"
+                  @input="item.text = $event.target.value; emit('mark-dirty')" />
+                <button class="rs-list-del" @click="removeItem('items', i)"><i class="fa-solid fa-xmark" /></button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Timeline -->
+          <template v-if="el.type === 'timeline'">
+            <div class="rs-section">
+              <div class="rs-section-title">
+                <i class="fa-solid fa-timeline" /> Timeline
+                <button class="rs-section-add" @click="addTimelineItem"><i class="fa-solid fa-plus" /></button>
+              </div>
+              <div v-for="(item, i) in (el.items || [])" :key="i" class="rs-timeline-item-editor">
+                <div class="rs-tl-num">{{ i + 1 }}</div>
+                <div class="rs-tl-fields">
+                  <input class="rs-input rs-mb4" :value="item.date"
+                    @input="item.date = $event.target.value; emit('mark-dirty')" placeholder="Date / Period" />
+                  <input class="rs-input rs-mb4" :value="item.label"
+                    @input="item.label = $event.target.value; emit('mark-dirty')" placeholder="Milestone title" />
+                  <input class="rs-input" :value="item.desc"
+                    @input="item.desc = $event.target.value; emit('mark-dirty')" placeholder="Description" />
+                </div>
+                <button class="rs-list-del" @click="removeItem('items', i)"><i class="fa-solid fa-xmark" /></button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Steps -->
+          <template v-if="el.type === 'steps'">
+            <div class="rs-section">
+              <div class="rs-section-title">
+                <i class="fa-solid fa-stairs" /> Steps
+                <button class="rs-section-add" @click="addStepItem"><i class="fa-solid fa-plus" /></button>
+              </div>
+              <div v-for="(item, i) in (el.items || [])" :key="i" class="rs-list-item">
+                <div class="rs-step-num">{{ i + 1 }}</div>
+                <input class="rs-input rs-list-input" :value="item.label"
+                  @input="item.label = $event.target.value; emit('mark-dirty')" placeholder="Step label" />
+                <button class="rs-list-del" @click="removeItem('items', i)"><i class="fa-solid fa-xmark" /></button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Rating -->
+          <template v-if="el.type === 'rating'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-star" /> Rating</div>
+              <div class="rs-row">
+                <label class="rs-label">Stars <span class="rs-val">{{ el.value || 4 }} / 5</span></label>
+                <input type="range" min="1" max="5" step="1" :value="el.value || 4"
+                  @input="setElProp('value', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row"><label class="rs-label">Color</label><input type="color" :value="s.color || '#f59e0b'"
+                  @input="setProp('styles.color', $event.target.value)" class="rs-color" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Size <span class="rs-val">{{ s.fontSize || 20 }}px</span></label>
+                <input type="range" min="12" max="64" step="2" :value="s.fontSize || 20"
+                  @input="setProp('styles.fontSize', +$event.target.value)" class="rs-range" />
+              </div>
+            </div>
+          </template>
+
+          <!-- Callout -->
+          <template v-if="el.type === 'callout'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-bullhorn" /> Callout</div>
+              <div class="rs-row"><label class="rs-label">Emoji</label><input class="rs-input rs-emoji-input"
+                  :value="el.emoji" @input="setElProp('emoji', $event.target.value)" placeholder="💡" /></div>
+              <div class="rs-row"><label class="rs-label">Border Color</label><input type="color"
+                  :value="s.borderColor || '#6366f1'" @input="setProp('styles.borderColor', $event.target.value)"
+                  class="rs-color" /></div>
+            </div>
+          </template>
+
+          <!-- Testimonial -->
+          <template v-if="el.type === 'testimonial'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-comment-quote" /> Testimonial</div>
+              <div class="rs-row rs-row--stacked">
+                <label class="rs-label-block">Quote</label>
+                <textarea class="rs-textarea rs-textarea--sm" :value="el.content"
+                  @input="setElProp('content', $event.target.value)" rows="3" />
+              </div>
+              <div class="rs-row"><label class="rs-label">Author</label><input class="rs-input" :value="el.author"
+                  @input="setElProp('author', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Role</label><input class="rs-input" :value="el.role"
+                  @input="setElProp('role', $event.target.value)" /></div>
+            </div>
+          </template>
+
+          <!-- Signature -->
+          <template v-if="el.type === 'signature'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-signature" /> Signature</div>
+              <div class="rs-row"><label class="rs-label">Name</label><input class="rs-input" :value="el.content"
+                  @input="setElProp('content', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Title</label><input class="rs-input" :value="el.label"
+                  @input="setElProp('label', $event.target.value)" /></div>
+            </div>
+          </template>
+
+          <!-- QR Code -->
+          <template v-if="el.type === 'qr-code'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-qrcode" /> QR Code</div>
+              <div class="rs-row"><label class="rs-label">URL / Text</label><input class="rs-input" :value="el.qrText"
+                  @input="setElProp('qrText', $event.target.value)" placeholder="https://example.com" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Size <span class="rs-val">{{ el.qrSize || 160 }}px</span></label>
+                <input type="range" min="80" max="400" step="10" :value="el.qrSize || 160"
+                  @input="setElProp('qrSize', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row"><button class="rs-action-btn rs-full-btn" @click="regenerateQr"><i
+                    class="fa-solid fa-rotate" /> Generate QR Code</button></div>
+            </div>
+          </template>
+
+          <!-- Video -->
+          <template v-if="el.type === 'video'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-video" /> Video</div>
+              <div class="rs-row"><label class="rs-label">YouTube URL</label><input class="rs-input"
+                  :value="el.videoUrl" @input="setElProp('videoUrl', $event.target.value)"
+                  placeholder="https://youtube.com/watch?v=…" /></div>
+            </div>
+          </template>
+
+          <!-- Map -->
+          <template v-if="el.type === 'map'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-map-location-dot" /> Map</div>
+              <div class="rs-row"><label class="rs-label">Address</label><input class="rs-input" :value="el.mapAddress"
+                  @input="setElProp('mapAddress', $event.target.value)"
+                  placeholder="1600 Amphitheatre Pkwy, Mountain View, CA" /></div>
+            </div>
+          </template>
+
+          <!-- Price card -->
+          <template v-if="el.type === 'price-card'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-tag" /> Pricing Card</div>
+              <div class="rs-row"><label class="rs-label">Plan Name</label><input class="rs-input" :value="el.plan"
+                  @input="setElProp('plan', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Price</label><input class="rs-input" :value="el.price"
+                  @input="setElProp('price', $event.target.value)" placeholder="$99" /></div>
+              <div class="rs-row"><label class="rs-label">Period</label><input class="rs-input" :value="el.period"
+                  @input="setElProp('period', $event.target.value)" placeholder="/month" /></div>
+              <div class="rs-section-title" style="margin-top:8px">
+                Features
+                <button class="rs-section-add" @click="addFeature"><i class="fa-solid fa-plus" /></button>
+              </div>
+              <div v-for="(f, i) in (el.features || [])" :key="i" class="rs-list-item">
+                <input class="rs-input rs-list-input" :value="f"
+                  @input="el.features[i] = $event.target.value; emit('mark-dirty')" />
+                <button class="rs-list-del" @click="el.features.splice(i, 1); emit('mark-dirty')"><i
+                    class="fa-solid fa-xmark" /></button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Stat row -->
+          <template v-if="el.type === 'stat-row'">
+            <div class="rs-section">
+              <div class="rs-section-title">
+                <i class="fa-solid fa-table-columns" /> Stats
+                <button class="rs-section-add" @click="addStat"><i class="fa-solid fa-plus" /></button>
+              </div>
+              <div v-for="(stat, i) in (el.stats || [])" :key="i" class="rs-stat-editor">
+                <input class="rs-input rs-mb4" :value="stat.value"
+                  @input="stat.value = $event.target.value; emit('mark-dirty')" placeholder="Value" />
+                <input class="rs-input" :value="stat.label"
+                  @input="stat.label = $event.target.value; emit('mark-dirty')" placeholder="Label" />
+                <button class="rs-list-del" @click="el.stats.splice(i, 1); emit('mark-dirty')"><i
+                    class="fa-solid fa-xmark" /></button>
+              </div>
+            </div>
+          </template>
+
+          <!-- Icon / Avatar -->
+          <template v-if="el.type === 'icon' || el.type === 'avatar'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-icons" /> Icon / Avatar</div>
+              <div class="rs-row"><label class="rs-label">Emoji</label><input class="rs-input rs-emoji-input"
+                  :value="el.content" @input="setElProp('content', $event.target.value)" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Size <span class="rs-val">{{ s.fontSize || 40 }}px</span></label>
+                <input type="range" min="16" max="200" step="4" :value="s.fontSize || 40"
+                  @input="setProp('styles.fontSize', +$event.target.value)" class="rs-range" />
+              </div>
+            </div>
+          </template>
+
+          <!-- Watermark element -->
+          <template v-if="el.type === 'watermark'">
+            <div class="rs-section">
+              <div class="rs-section-title"><i class="fa-solid fa-droplet" /> Watermark</div>
+              <div class="rs-row"><label class="rs-label">Text</label><input class="rs-input" :value="el.content"
+                  @input="setElProp('content', $event.target.value)" /></div>
+              <div class="rs-row"><label class="rs-label">Color</label><input type="color" :value="s.color || '#94a3b8'"
+                  @input="setProp('styles.color', $event.target.value)" class="rs-color" /></div>
+              <div class="rs-row">
+                <label class="rs-label">Opacity <span class="rs-val">{{ s.opacity || 20 }}%</span></label>
+                <input type="range" min="1" max="100" step="1" :value="s.opacity || 20"
+                  @input="setProp('styles.opacity', +$event.target.value)" class="rs-range" />
+              </div>
+              <div class="rs-row">
+                <label class="rs-label">Size <span class="rs-val">{{ s.fontSize || 48 }}px</span></label>
+                <input type="range" min="12" max="200" step="4" :value="s.fontSize || 48"
+                  @input="setProp('styles.fontSize', +$event.target.value)" class="rs-range" />
+              </div>
+            </div>
+          </template>
+
+        </div>
+
+        <!-- ══ 4. EFFECTS ═════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'effects'" class="rs-panel">
+
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-wand-magic-sparkles" /> CSS Filters</div>
+            <div class="rs-row">
+              <label class="rs-label">Blur <span class="rs-val">{{ s.blur || 0 }}px</span></label>
+              <input type="range" min="0" max="40" step="0.5" :value="s.blur || 0"
+                @input="setProp('styles.blur', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Brightness <span class="rs-val">{{ s.brightness ?? 100 }}%</span></label>
+              <input type="range" min="0" max="300" step="5" :value="s.brightness ?? 100"
+                @input="setProp('styles.brightness', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Contrast <span class="rs-val">{{ s.contrast ?? 100 }}%</span></label>
+              <input type="range" min="0" max="300" step="5" :value="s.contrast ?? 100"
+                @input="setProp('styles.contrast', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Saturate <span class="rs-val">{{ s.saturate ?? 100 }}%</span></label>
+              <input type="range" min="0" max="400" step="5" :value="s.saturate ?? 100"
+                @input="setProp('styles.saturate', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Grayscale <span class="rs-val">{{ s.grayscale || 0 }}%</span></label>
+              <input type="range" min="0" max="100" step="5" :value="s.grayscale || 0"
+                @input="setProp('styles.grayscale', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Sepia <span class="rs-val">{{ s.sepia || 0 }}%</span></label>
+              <input type="range" min="0" max="100" step="5" :value="s.sepia || 0"
+                @input="setProp('styles.sepia', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Hue Rotate <span class="rs-val">{{ s.hueRotate || 0 }}°</span></label>
+              <input type="range" min="0" max="360" step="5" :value="s.hueRotate || 0"
+                @input="setProp('styles.hueRotate', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <label class="rs-label">Invert <span class="rs-val">{{ s.invert || 0 }}%</span></label>
+              <input type="range" min="0" max="100" step="5" :value="s.invert || 0"
+                @input="setProp('styles.invert', +$event.target.value)" class="rs-range" />
+            </div>
+            <div class="rs-row">
+              <button class="rs-action-btn" @click="resetFilters">
+                <i class="fa-solid fa-rotate-left" /> Reset Filters
+              </button>
+            </div>
+          </div>
+
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-layer-group" /> Blend Mode</div>
+            <div class="rs-row">
+              <label class="rs-label">Mode</label>
+              <select class="rs-select" :value="s.mixBlendMode || 'normal'"
+                @change="setProp('styles.mixBlendMode', $event.target.value)">
+                <option>normal</option>
+                <option>multiply</option>
+                <option>screen</option>
+                <option>overlay</option>
+                <option>darken</option>
+                <option>lighten</option>
+                <option>color-dodge</option>
+                <option>color-burn</option>
+                <option>hard-light</option>
+                <option>soft-light</option>
+                <option>difference</option>
+                <option>exclusion</option>
+                <option>hue</option>
+                <option>saturation</option>
+                <option>color</option>
+                <option>luminosity</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-arrows-left-right" /> Flip</div>
+            <div class="rs-toggle-row">
+              <button class="rs-fmt-btn" :class="{ active: s.scaleX === -1 }"
+                @click="setProp('styles.scaleX', s.scaleX === -1 ? 1 : -1)">
+                <i class="fa-solid fa-flip-horizontal" /> Flip H
+              </button>
+              <button class="rs-fmt-btn" :class="{ active: s.scaleY === -1 }"
+                @click="setProp('styles.scaleY', s.scaleY === -1 ? 1 : -1)">
+                <i class="fa-solid fa-flip-vertical" /> Flip V
+              </button>
+            </div>
           </div>
         </div>
 
-        <!-- TAB: CONTENT ─────────────────────────────────────────────── -->
-        <div v-show="propsTab === 'content'" class="props-body">
+        <!-- ══ 5. ARRANGE ═════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'arrange'" class="rs-panel">
 
-          <!-- Text content -->
-          <PropSection v-if="isTextType(selectedEl.type)" title="Text Content" icon="fa-solid fa-align-left"
-            defaultOpen>
-            <textarea :value="selectedEl.content || ''" @input="$emit('update:el-prop', 'content', $event.target.value)"
-              class="content-textarea" rows="6" placeholder="Enter text content…" />
-          </PropSection>
-
-          <!-- Image -->
-          <PropSection v-if="selectedEl.type === 'image'" title="Image" icon="fa-solid fa-image" defaultOpen>
-            <div class="prop-row">
-              <label>URL</label>
-              <input type="text" :value="selectedEl.src || ''"
-                @input="$emit('update:el-prop', 'src', $event.target.value)" class="prop-input"
-                placeholder="https://…" />
-            </div>
-            <div class="prop-row">
-              <label>Alt Text</label>
-              <input type="text" :value="selectedEl.alt || ''"
-                @input="$emit('update:el-prop', 'alt', $event.target.value)" class="prop-input"
-                placeholder="Describe the image…" />
-            </div>
-            <div class="prop-row">
-              <label>Object Fit</label>
-              <select :value="selectedEl.styles?.objectFit || 'cover'"
-                @change="updateStyle('objectFit', $event.target.value)" class="prop-select">
-                <option value="cover">Cover</option>
-                <option value="contain">Contain</option>
-                <option value="fill">Fill</option>
-                <option value="none">None</option>
-                <option value="scale-down">Scale Down</option>
-              </select>
-            </div>
-            <div class="prop-row">
-              <label>Filter</label>
-              <select :value="selectedEl.styles?.imageFilter || 'none'"
-                @change="updateStyle('imageFilter', $event.target.value)" class="prop-select">
-                <option value="none">None</option>
-                <option value="grayscale">Grayscale</option>
-                <option value="sepia">Sepia</option>
-                <option value="vintage">Vintage</option>
-                <option value="blur">Blur</option>
-                <option value="bright">Bright</option>
-              </select>
-            </div>
-            <button class="action-btn-full" @click="$emit('image-replace', selectedEl)">
-              <i class="fa-solid fa-upload" /> Replace Image
-            </button>
-          </PropSection>
-
-          <!-- Table -->
-          <PropSection v-if="selectedEl.type === 'table'" title="Table Data" icon="fa-solid fa-table" defaultOpen>
-            <div class="table-stats">
-              <span>{{ (selectedEl.columns || []).length }} columns</span>
-              <span>{{ (selectedEl.data || []).length }} rows</span>
-            </div>
-            <div class="table-actions">
-              <button class="tbl-btn" @click="$emit('add-table-row')"><i class="fa-solid fa-plus" /> Row</button>
-              <button class="tbl-btn" @click="$emit('add-table-col')"><i class="fa-solid fa-plus" /> Column</button>
-              <button class="tbl-btn danger" @click="$emit('remove-table-row')"
-                :disabled="(selectedEl.data || []).length <= 1">
-                <i class="fa-solid fa-minus" /> Row
-              </button>
-              <button class="tbl-btn danger" @click="$emit('remove-table-col')"
-                :disabled="(selectedEl.columns || []).length <= 1">
-                <i class="fa-solid fa-minus" /> Col
-              </button>
-            </div>
-            <div class="prop-row">
-              <label>Header BG</label>
-              <input type="color" :value="selectedEl.styles?.headerBg || settings.primary_color || '#6366f1'"
-                @input="updateStyle('headerBg', $event.target.value)" class="color-input" />
-            </div>
-            <div class="prop-row">
-              <label>Even Row</label>
-              <input type="color" :value="selectedEl.styles?.evenRowBg || '#ffffff'"
-                @input="updateStyle('evenRowBg', $event.target.value)" class="color-input" />
-            </div>
-            <div class="prop-row">
-              <label>Odd Row</label>
-              <input type="color" :value="selectedEl.styles?.oddRowBg || '#f8fafc'"
-                @input="updateStyle('oddRowBg', $event.target.value)" class="color-input" />
-            </div>
-          </PropSection>
-
-          <!-- Charts -->
-          <PropSection v-if="isChartType(selectedEl.type)" title="Chart Data" icon="fa-solid fa-chart-bar" defaultOpen>
-            <div class="prop-row">
-              <label>Title</label>
-              <input type="text" :value="selectedEl.chartTitle || ''"
-                @input="$emit('update:el-prop', 'chartTitle', $event.target.value)" class="prop-input"
-                placeholder="Chart title…" />
-            </div>
-            <div class="prop-row">
-              <label>Type</label>
-              <select :value="selectedEl.type" @change="$emit('change-chart-type', $event.target.value)"
-                class="prop-select">
-                <option value="bar-chart">Bar</option>
-                <option value="line-chart">Line</option>
-                <option value="area-chart">Area</option>
-                <option value="pie-chart">Pie</option>
-                <option value="doughnut-chart">Doughnut</option>
-                <option value="radar-chart">Radar</option>
-                <option value="scatter-chart">Scatter</option>
-                <option value="polar-chart">Polar Area</option>
-              </select>
-            </div>
-            <div class="prop-row">
-              <label>Labels</label>
-              <input type="text" :value="(selectedEl.chartData?.labels || []).join(', ')"
-                @input="$emit('set-chart-labels', $event.target.value.split(',').map(s => s.trim()))" class="prop-input"
-                placeholder="Q1, Q2, Q3, Q4" />
-            </div>
-            <div class="prop-row">
-              <label>Values</label>
-              <input type="text" :value="(selectedEl.chartData?.values || []).join(', ')"
-                @input="$emit('set-chart-values', $event.target.value.split(',').map(s => +s.trim()).filter(v => !isNaN(v)))"
-                class="prop-input" placeholder="25, 40, 35, 55" />
-            </div>
-            <div class="prop-row">
-              <label>Color</label>
-              <input type="color" :value="selectedEl.chartColor || settings.primary_color || '#6366f1'"
-                @input="$emit('update:el-prop', 'chartColor', $event.target.value)" class="color-input" />
-            </div>
-          </PropSection>
-
-          <!-- Metric/KPI -->
-          <PropSection v-if="selectedEl.type === 'metric'" title="KPI Card" icon="fa-solid fa-gauge-high" defaultOpen>
-            <div class="prop-row"><label>Value</label>
-              <input type="text" :value="selectedEl.value || ''"
-                @input="$emit('update:el-prop', 'value', $event.target.value)" class="prop-input" placeholder="$48K" />
-            </div>
-            <div class="prop-row"><label>Label</label>
-              <input type="text" :value="selectedEl.label || ''"
-                @input="$emit('update:el-prop', 'label', $event.target.value)" class="prop-input"
-                placeholder="Revenue" />
-            </div>
-            <div class="prop-row"><label>Change</label>
-              <input type="text" :value="selectedEl.change || ''"
-                @input="$emit('update:el-prop', 'change', $event.target.value)" class="prop-input" placeholder="+12%" />
-            </div>
-            <div class="prop-row"><label>Trend</label>
-              <div class="btn-group">
-                <button :class="{ active: selectedEl.changeType === 'positive' }"
-                  @click="$emit('update:el-prop', 'changeType', 'positive')">▲ Positive</button>
-                <button :class="{ active: selectedEl.changeType === 'negative' }"
-                  @click="$emit('update:el-prop', 'changeType', 'negative')">▼ Negative</button>
+          <!-- Position + Size -->
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-up-down-left-right" /> Position & Size</div>
+            <div class="rs-pos-grid">
+              <div class="rs-pos-field">
+                <label>X</label>
+                <input type="number" :value="Math.round(el.position?.x || 0)" @input="setPos('x', +$event.target.value)"
+                  class="rs-pos-input" />
+              </div>
+              <div class="rs-pos-field">
+                <label>Y</label>
+                <input type="number" :value="Math.round(el.position?.y || 0)" @input="setPos('y', +$event.target.value)"
+                  class="rs-pos-input" />
+              </div>
+              <div class="rs-pos-field">
+                <label>W</label>
+                <input type="number" min="1" :value="Math.round(s.width || 100)"
+                  @input="setProp('styles.width', +$event.target.value)" class="rs-pos-input" />
+              </div>
+              <div class="rs-pos-field">
+                <label>H</label>
+                <input type="number" min="1" :value="Math.round(s.height || 60)"
+                  @input="setProp('styles.height', +$event.target.value)" class="rs-pos-input" />
               </div>
             </div>
-            <div class="prop-row"><label>Period</label>
-              <input type="text" :value="selectedEl.changePeriod || ''"
-                @input="$emit('update:el-prop', 'changePeriod', $event.target.value)" class="prop-input"
-                placeholder="vs last month" />
-            </div>
-          </PropSection>
-
-          <!-- Progress -->
-          <PropSection v-if="selectedEl.type === 'progress'" title="Progress Bar" icon="fa-solid fa-bars-progress"
-            defaultOpen>
-            <div class="prop-row"><label>Label</label>
-              <input type="text" :value="selectedEl.label || ''"
-                @input="$emit('update:el-prop', 'label', $event.target.value)" class="prop-input" />
-            </div>
-            <div class="prop-row">
-              <label>Value</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="100" :value="selectedEl.value || 0"
-                  @input="$emit('update:el-prop', 'value', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.value || 0 }}%</span>
+            <div class="rs-row">
+              <label class="rs-label">Rotation <span class="rs-val">{{ s.rotate || 0 }}°</span></label>
+              <div class="rs-slider-number">
+                <input type="range" min="-180" max="180" step="1" :value="s.rotate || 0"
+                  @input="setProp('styles.rotate', +$event.target.value)" class="rs-range" />
+                <input type="number" min="-180" max="180" :value="s.rotate || 0"
+                  @input="setProp('styles.rotate', +$event.target.value)" class="rs-num-input" />
               </div>
             </div>
-          </PropSection>
+            <div class="rs-row">
+              <label class="rs-label">Z-Index</label>
+              <input type="number" min="1" max="999" :value="s.zIndex || 1"
+                @input="setProp('styles.zIndex', +$event.target.value)" class="rs-pos-input" />
+            </div>
+          </div>
 
-          <!-- Timeline -->
-          <PropSection v-if="selectedEl.type === 'timeline'" title="Timeline Items" icon="fa-solid fa-timeline"
-            defaultOpen>
-            <div v-for="(item, ti) in (selectedEl.items || [])" :key="ti" class="timeline-edit-item">
-              <input type="text" :value="item.date" @input="updateTimelineItem(ti, 'date', $event.target.value)"
-                class="prop-input" placeholder="Date" />
-              <input type="text" :value="item.label" @input="updateTimelineItem(ti, 'label', $event.target.value)"
-                class="prop-input" placeholder="Title" />
-              <input type="text" :value="item.desc" @input="updateTimelineItem(ti, 'desc', $event.target.value)"
-                class="prop-input" placeholder="Description" />
-              <button class="tbl-btn danger" @click="$emit('remove-timeline-item', ti)"><i
-                  class="fa-solid fa-xmark" /></button>
+          <!-- Layer order -->
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-layer-group" /> Layer Order</div>
+            <div class="rs-toggle-row">
+              <button class="rs-fmt-btn" @click="$emit('bring-front')"><i class="fa-solid fa-angles-up" />
+                Front</button>
+              <button class="rs-fmt-btn" @click="$emit('send-back')"><i class="fa-solid fa-angles-down" /> Back</button>
             </div>
-            <button class="action-btn-full" @click="$emit('add-timeline-item')"><i class="fa-solid fa-plus" /> Add
-              Item</button>
-          </PropSection>
+          </div>
 
-          <!-- Checklist -->
-          <PropSection v-if="selectedEl.type === 'checklist'" title="Checklist Items" icon="fa-solid fa-list-check"
-            defaultOpen>
-            <div v-for="(item, ci) in (selectedEl.items || [])" :key="ci" class="list-edit-row">
-              <input type="checkbox" :checked="item.checked"
-                @change="updateChecklistItem(ci, 'checked', $event.target.checked)" />
-              <input type="text" :value="item.text" @input="updateChecklistItem(ci, 'text', $event.target.value)"
-                class="prop-input" />
-              <button class="icon-remove-btn" @click="$emit('remove-checklist-item', ci)"><i
-                  class="fa-solid fa-xmark" /></button>
-            </div>
-            <button class="action-btn-full" @click="$emit('add-checklist-item')"><i class="fa-solid fa-plus" /> Add
-              Item</button>
-          </PropSection>
-
-          <!-- Video -->
-          <PropSection v-if="selectedEl.type === 'video'" title="Video" icon="fa-solid fa-video" defaultOpen>
-            <div class="prop-row"><label>YouTube URL</label>
-              <input type="text" :value="selectedEl.videoUrl || ''"
-                @input="$emit('update:el-prop', 'videoUrl', $event.target.value)" class="prop-input"
-                placeholder="https://youtube.com/watch?v=…" />
-            </div>
-          </PropSection>
-
-          <!-- Map -->
-          <PropSection v-if="selectedEl.type === 'map'" title="Map" icon="fa-solid fa-map-location-dot" defaultOpen>
-            <div class="prop-row"><label>Address</label>
-              <input type="text" :value="selectedEl.mapAddress || ''"
-                @input="$emit('update:el-prop', 'mapAddress', $event.target.value)" class="prop-input"
-                placeholder="New York, USA" />
-            </div>
-          </PropSection>
-
-          <!-- QR Code -->
-          <PropSection v-if="selectedEl.type === 'qr-code'" title="QR Code" icon="fa-solid fa-qrcode" defaultOpen>
-            <div class="prop-row"><label>URL/Text</label>
-              <input type="text" :value="selectedEl.qrText || ''"
-                @input="$emit('update:el-prop', 'qrText', $event.target.value)" class="prop-input"
-                placeholder="https://example.com" />
-            </div>
-            <div class="prop-row">
-              <label>Size</label>
-              <input type="number" :value="selectedEl.qrSize || 160" min="80" max="500"
-                @input="$emit('update:el-prop', 'qrSize', +$event.target.value)" class="num-input sm" />
-            </div>
-          </PropSection>
-
-          <!-- Rating -->
-          <PropSection v-if="selectedEl.type === 'rating'" title="Rating" icon="fa-solid fa-star" defaultOpen>
-            <div class="prop-row">
-              <label>Score</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="5" step="0.5" :value="selectedEl.value || 0"
-                  @input="$emit('update:el-prop', 'value', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.value || 0 }}</span>
-              </div>
-            </div>
-          </PropSection>
-
-          <!-- Testimonial -->
-          <PropSection v-if="selectedEl.type === 'testimonial'" title="Testimonial" icon="fa-solid fa-comment-dots"
-            defaultOpen>
-            <div class="prop-row"><label>Author</label>
-              <input type="text" :value="selectedEl.author || ''"
-                @input="$emit('update:el-prop', 'author', $event.target.value)" class="prop-input" />
-            </div>
-            <div class="prop-row"><label>Role</label>
-              <input type="text" :value="selectedEl.role || ''"
-                @input="$emit('update:el-prop', 'role', $event.target.value)" class="prop-input" />
-            </div>
-            <textarea :value="selectedEl.content || ''" @input="$emit('update:el-prop', 'content', $event.target.value)"
-              class="content-textarea" rows="3" placeholder="Quote text…" />
-          </PropSection>
-
-          <!-- Stat Row -->
-          <PropSection v-if="selectedEl.type === 'stat-row'" title="Stats" icon="fa-solid fa-bars-staggered"
-            defaultOpen>
-            <div v-for="(stat, si) in (selectedEl.stats || [])" :key="si" class="list-edit-row">
-              <input type="text" :value="stat.value" @input="updateStatItem(si, 'value', $event.target.value)"
-                class="prop-input" placeholder="42K" />
-              <input type="text" :value="stat.label" @input="updateStatItem(si, 'label', $event.target.value)"
-                class="prop-input" placeholder="Users" />
-              <button class="icon-remove-btn" @click="$emit('remove-stat-item', si)"><i
-                  class="fa-solid fa-xmark" /></button>
-            </div>
-            <button class="action-btn-full" @click="$emit('add-stat-item')"><i class="fa-solid fa-plus" /> Add
-              Stat</button>
-          </PropSection>
-
-        </div>
-
-        <!-- TAB: EFFECTS ─────────────────────────────────────────────── -->
-        <div v-show="propsTab === 'effects'" class="props-body">
-
-          <PropSection title="CSS Filters" icon="fa-solid fa-sliders" defaultOpen>
-            <div class="prop-row">
-              <label>Blur</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="20" :value="selectedEl.styles?.blur || 0"
-                  @input="updateStyle('blur', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.blur || 0 }}px</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Brightness</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="300" :value="selectedEl.styles?.brightness ?? 100"
-                  @input="updateStyle('brightness', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.brightness ?? 100 }}%</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Contrast</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="300" :value="selectedEl.styles?.contrast ?? 100"
-                  @input="updateStyle('contrast', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.contrast ?? 100 }}%</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Grayscale</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="100" :value="selectedEl.styles?.grayscale || 0"
-                  @input="updateStyle('grayscale', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.grayscale || 0 }}%</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Sepia</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="100" :value="selectedEl.styles?.sepia || 0"
-                  @input="updateStyle('sepia', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.sepia || 0 }}%</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Saturate</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="300" :value="selectedEl.styles?.saturate ?? 100"
-                  @input="updateStyle('saturate', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.saturate ?? 100 }}%</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Hue Rotate</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="360" :value="selectedEl.styles?.hueRotate || 0"
-                  @input="updateStyle('hueRotate', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.hueRotate || 0 }}°</span>
-              </div>
-            </div>
-            <div class="prop-row">
-              <label>Invert</label>
-              <div class="slider-row">
-                <input type="range" min="0" max="100" :value="selectedEl.styles?.invert || 0"
-                  @input="updateStyle('invert', +$event.target.value)" class="prop-range" />
-                <span class="prop-val">{{ selectedEl.styles?.invert || 0 }}%</span>
-              </div>
-            </div>
-            <button class="action-btn-full" style="margin-top:4px" @click="resetFilters">
-              <i class="fa-solid fa-rotate-left" /> Reset Filters
-            </button>
-          </PropSection>
-
-          <PropSection title="Blend Mode" icon="fa-solid fa-circle-half-stroke">
-            <div class="prop-row">
-              <label>Mode</label>
-              <select :value="selectedEl.styles?.mixBlendMode || 'normal'"
-                @change="updateStyle('mixBlendMode', $event.target.value)" class="prop-select">
-                <option v-for="mode in BLEND_MODES" :key="mode" :value="mode">{{ mode }}</option>
-              </select>
-            </div>
-          </PropSection>
-
-          <PropSection title="Transform" icon="fa-solid fa-rotate">
-            <div class="prop-row">
-              <label>Flip H</label>
-              <ToggleSwitch :value="selectedEl.styles?.scaleX === -1"
-                @update="updateStyle('scaleX', $event ? -1 : 1)" />
-            </div>
-            <div class="prop-row">
-              <label>Flip V</label>
-              <ToggleSwitch :value="selectedEl.styles?.scaleY === -1"
-                @update="updateStyle('scaleY', $event ? -1 : 1)" />
-            </div>
-          </PropSection>
-
-        </div>
-
-        <!-- TAB: ARRANGE ─────────────────────────────────────────────── -->
-        <div v-show="propsTab === 'arrange'" class="props-body">
-
-          <PropSection title="Layer Order" icon="fa-solid fa-layer-group" defaultOpen>
-            <div class="arrange-grid">
-              <button class="arrange-btn" @click="$emit('bring-front')" title="Bring to Front">
-                <i class="fa-solid fa-angles-up" /> To Front
-              </button>
-              <button class="arrange-btn" @click="$emit('send-back')" title="Send to Back">
-                <i class="fa-solid fa-angles-down" /> To Back
-              </button>
-              <button class="arrange-btn" @click="$emit('bring-forward')" title="Bring Forward">
-                <i class="fa-solid fa-angle-up" /> Forward
-              </button>
-              <button class="arrange-btn" @click="$emit('send-backward')" title="Send Backward">
-                <i class="fa-solid fa-angle-down" /> Backward
-              </button>
-            </div>
-          </PropSection>
-
-          <PropSection title="Align to Page" icon="fa-solid fa-arrows-to-dot" defaultOpen>
-            <div class="align-grid">
-              <button @click="$emit('align-to-page', 'left')" title="Align Left"><i
+          <!-- Align to page -->
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-align-center" /> Align to Page</div>
+            <div class="rs-align-grid">
+              <button class="rs-align-btn" @click="alignEl('left')" title="Align left"><i
                   class="fa-solid fa-align-left" /></button>
-              <button @click="$emit('align-to-page', 'center-h')" title="Center Horizontal"><i
+              <button class="rs-align-btn" @click="alignEl('center')" title="Center H"><i
                   class="fa-solid fa-align-center" /></button>
-              <button @click="$emit('align-to-page', 'right')" title="Align Right"><i
+              <button class="rs-align-btn" @click="alignEl('right')" title="Align right"><i
                   class="fa-solid fa-align-right" /></button>
-              <button @click="$emit('align-to-page', 'top')" title="Align Top"><i
-                  class="fa-solid fa-arrow-up" /></button>
-              <button @click="$emit('align-to-page', 'center-v')" title="Center Vertical"><i
+              <button class="rs-align-btn" @click="alignEl('top')" title="Align top"><i
+                  class="fa-solid fa-arrow-up-to-line" /></button>
+              <button class="rs-align-btn" @click="alignEl('middle')" title="Center V"><i
                   class="fa-solid fa-arrows-up-down" /></button>
-              <button @click="$emit('align-to-page', 'bottom')" title="Align Bottom"><i
-                  class="fa-solid fa-arrow-down" /></button>
+              <button class="rs-align-btn" @click="alignEl('bottom')" title="Align bottom"><i
+                  class="fa-solid fa-arrow-down-to-line" /></button>
             </div>
-          </PropSection>
+          </div>
 
-          <PropSection title="Quick Actions" icon="fa-solid fa-bolt" defaultOpen>
-            <div class="quick-actions-grid">
-              <button class="qa-btn" @click="$emit('duplicate-el')"><i class="fa-solid fa-clone" /> Duplicate</button>
-              <button class="qa-btn" @click="$emit('copy-el')"><i class="fa-solid fa-copy" /> Copy</button>
-              <button class="qa-btn" @click="$emit('paste-el')" :disabled="!clipboard"><i class="fa-solid fa-paste" />
-                Paste</button>
-              <button class="qa-btn" @click="stylePainterCopy"><i class="fa-solid fa-paintbrush" /> Copy Style</button>
-              <button class="qa-btn" @click="$emit('style-painter-paste')" :disabled="!stylePainterClipboard"><i
-                  class="fa-solid fa-brush" /> Paste Style</button>
-              <button class="qa-btn" @click="$emit('reset-styles')"><i class="fa-solid fa-rotate-left" /> Reset
-                Styles</button>
-              <button class="qa-btn danger" @click="$emit('delete-el')"><i class="fa-solid fa-trash-can" />
-                Delete</button>
+          <!-- Actions -->
+          <div class="rs-section">
+            <div class="rs-section-title"><i class="fa-solid fa-toolbox" /> Actions</div>
+            <div class="rs-toggle-row">
+              <button class="rs-fmt-btn" :class="{ active: el.locked }" @click="$emit('lock-el')">
+                <i :class="el.locked ? 'fa-solid fa-lock' : 'fa-solid fa-lock-open'" /> {{ el.locked ? 'Locked' : 'Lock'
+                }}
+              </button>
+              <button class="rs-fmt-btn" @click="$emit('duplicate-el')"><i class="fa-solid fa-clone" />
+                Duplicate</button>
             </div>
-          </PropSection>
+            <button class="rs-action-btn rs-full-btn rs-danger-full" @click="$emit('delete-el')">
+              <i class="fa-solid fa-trash-can" /> Delete Element
+            </button>
+          </div>
 
         </div>
-      </template>
-    </div>
+      </div>
+    </template>
   </aside>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
-// ── Sub-components defined inline (no separate files needed) ──────────
-const PropSection = {
-  name: 'PropSection',
-  props: { title: String, icon: String, defaultOpen: Boolean },
-  setup(props) {
-    const open = ref(props.defaultOpen !== false)
-    return { open }
-  },
-  template: `
-    <div class="prop-section">
-      <button class="prop-section-header" @click="open = !open">
-        <i :class="icon" class="prop-section-icon" />
-        <span>{{ title }}</span>
-        <i :class="open ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'" class="prop-section-chevron" />
-      </button>
-      <div v-if="open" class="prop-section-body">
-        <slot />
-      </div>
-    </div>
-  `,
-}
-
-const PropField = {
-  name: 'PropField',
-  props: { label: String },
-  template: `
-    <div class="prop-field">
-      <label class="prop-field-label">{{ label }}</label>
-      <slot />
-    </div>
-  `,
-}
-
-const ToggleSwitch = {
-  name: 'ToggleSwitch',
-  props: { value: Boolean },
-  emits: ['update'],
-  template: `
-    <label class="toggle-sw">
-      <input type="checkbox" :checked="value" @change="$emit('update', $event.target.checked)" class="toggle-sw-input" />
-      <span class="toggle-sw-track"><span class="toggle-sw-thumb" /></span>
-    </label>
-  `,
-}
-
-// ── Props ──────────────────────────────────────────────────────────────
+// ── Props / Emits ───────────────────────────────────────────────────
 const props = defineProps({
-  selectedEl: { type: Object, default: null },
-  selectedEls: { type: Array, default: () => [] },
+  el: { type: Object, default: null },
   settings: { type: Object, required: true },
-  currentPageElements: { type: Array, default: () => [] },
-  clipboard: { type: Object, default: null },
-  stylePainterClipboard: { type: Object, default: null },
-  isCollapsed: { type: Boolean, default: false },
   isDark: { type: Boolean, default: false },
+  pageIndex: { type: Number, default: 0 },
+  elIndex: { type: Number, default: null },
+  pageDims: { type: Array, default: () => [794, 1123] }, // [w, h]
 })
 
-// ── Emits ──────────────────────────────────────────────────────────────
 const emit = defineEmits([
-  'update:style', 'update:el-prop', 'delete-el', 'duplicate-el', 'copy-el',
-  'paste-el', 'lock-el', 'bring-front', 'send-back', 'bring-forward', 'send-backward',
-  'align-to-page', 'align-elements', 'distribute-h', 'distribute-v',
-  'group-elements', 'ungroup-elements', 'reset-styles', 'style-painter-copy', 'style-painter-paste',
-  'change-chart-type', 'set-chart-labels', 'set-chart-values',
+  'update:el-prop', 'apply-style', 'delete-el', 'duplicate-el', 'lock-el',
+  'bring-front', 'send-back',
   'add-table-row', 'add-table-col', 'remove-table-row', 'remove-table-col',
-  'add-timeline-item', 'remove-timeline-item',
-  'add-checklist-item', 'remove-checklist-item',
-  'add-stat-item', 'remove-stat-item',
-  'image-replace', 'mark-dirty', 'update:is-collapsed',
+  'mark-dirty',
 ])
 
-// ── State ──────────────────────────────────────────────────────────────
-const propsTab = ref('style')
-const recentColors = ref(['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'])
+// ── State ───────────────────────────────────────────────────────────
+const activeTab = ref('style')
 
-// ── Constants ──────────────────────────────────────────────────────────
-const PROP_TABS = [
-  { id: 'style', label: 'Style', icon: 'fa-solid fa-paint-brush' },
-  { id: 'typography', label: 'Text', icon: 'fa-solid fa-font' },
-  { id: 'content', label: 'Content', icon: 'fa-solid fa-align-left' },
-  { id: 'effects', label: 'Effects', icon: 'fa-solid fa-sliders' },
-  { id: 'arrange', label: 'Arrange', icon: 'fa-solid fa-layer-group' },
+// Switch to content tab when a new element is selected
+watch(() => props.el?.id, () => { activeTab.value = 'style' })
+
+// ── Shorthand ───────────────────────────────────────────────────────
+const s = computed(() => props.el?.styles || {})
+
+// ── Helpers ─────────────────────────────────────────────────────────
+function setProp(path, value) {
+  emit('update:el-prop', path, value)
+}
+
+function setElProp(key, value) {
+  emit('update:el-prop', key, value)
+}
+
+function setPos(axis, value) {
+  if (!props.el) return
+  const pos = { ...(props.el.position || { x: 0, y: 0 }) }
+  pos[axis] = Math.max(0, value)
+  emit('update:el-prop', 'position', pos)
+}
+
+function toggle(path, onVal, offVal) {
+  const current = s.value[path.split('.')[1]]
+  setProp(path, current === onVal ? offVal : onVal)
+}
+
+// ── Element type helpers ─────────────────────────────────────────────
+const TEXT_TYPES = ['text', 'heading', 'subheading', 'quote', 'blockquote', 'highlight', 'badge', 'code', 'link', 'callout', 'richtext', 'list', 'pagenum', 'date-el', 'watermark']
+const CHART_TYPES = ['bar-chart', 'line-chart', 'area-chart', 'pie-chart', 'doughnut-chart', 'radar-chart', 'scatter-chart']
+
+const isTextEl = computed(() => TEXT_TYPES.includes(props.el?.type))
+const isChartEl = computed(() => CHART_TYPES.includes(props.el?.type))
+
+const EL_ICONS = {
+  heading: 'fa-solid fa-heading', subheading: 'fa-solid fa-text-height', text: 'fa-solid fa-align-left',
+  richtext: 'fa-solid fa-file-pen', image: 'fa-solid fa-image', video: 'fa-solid fa-video',
+  table: 'fa-solid fa-table', 'bar-chart': 'fa-solid fa-chart-column', 'line-chart': 'fa-solid fa-chart-line',
+  'pie-chart': 'fa-solid fa-chart-pie', 'doughnut-chart': 'fa-solid fa-circle-half-stroke',
+  'area-chart': 'fa-solid fa-chart-area', metric: 'fa-solid fa-arrow-trend-up',
+  progress: 'fa-solid fa-bars-progress', checklist: 'fa-solid fa-square-check',
+  timeline: 'fa-solid fa-timeline', rectangle: 'fa-regular fa-square', circle: 'fa-regular fa-circle',
+  rating: 'fa-solid fa-star', callout: 'fa-solid fa-bullhorn', signature: 'fa-solid fa-signature',
+  toc: 'fa-solid fa-list-ol', 'qr-code': 'fa-solid fa-qrcode', map: 'fa-solid fa-map-location-dot',
+}
+
+const elIcon = computed(() => EL_ICONS[props.el?.type] || 'fa-solid fa-cube')
+const elTypeLabel = computed(() => (props.el?.type || '').replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
+
+// ── Chart helpers ────────────────────────────────────────────────────
+const chartLabels = computed(() => (props.el?.chartData?.labels || []).join(','))
+const chartValues = computed(() => (props.el?.chartData?.values || []).join(','))
+
+function setChartLabels(v) {
+  setElProp('chartData', { ...props.el?.chartData, labels: v.split(',').map(s => s.trim()) })
+}
+function setChartValues(v) {
+  setElProp('chartData', { ...props.el?.chartData, values: v.split(',').map(s => +s.trim() || 0) })
+}
+
+// ── QR Code ───────────────────────────────────────────────────────────
+function regenerateQr() {
+  const text = props.el?.qrText || 'https://example.com'
+  const size = props.el?.qrSize || 160
+  setElProp('qrUrl', `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`)
+}
+
+// ── List item helpers ─────────────────────────────────────────────────
+function addChecklistItem() { const el = props.el; (el.items = el.items || []).push({ text: 'New item', checked: false }); emit('mark-dirty') }
+function addTimelineItem() { const el = props.el; (el.items = el.items || []).push({ date: 'Date', label: 'Event', desc: '' }); emit('mark-dirty') }
+function addStepItem() { const el = props.el; (el.items = el.items || []).push({ label: 'New step' }); emit('mark-dirty') }
+function addFeature() { const el = props.el; (el.features = el.features || []).push('New feature'); emit('mark-dirty') }
+function addStat() { const el = props.el; (el.stats = el.stats || []).push({ value: '0', label: 'Label' }); emit('mark-dirty') }
+
+function removeItem(key, idx) {
+  const el = props.el
+  if (el && el[key]) { el[key].splice(idx, 1); emit('mark-dirty') }
+}
+
+// ── Align to page ─────────────────────────────────────────────────────
+function alignEl(dir) {
+  const el = props.el
+  if (!el) return
+  const [pw, ph] = props.pageDims
+  const w = s.value.width || 100
+  const h = s.value.height || 60
+  const pos = { ...(el.position || { x: 0, y: 0 }) }
+
+  if (dir === 'left') pos.x = 0
+  if (dir === 'center') pos.x = (pw - w) / 2
+  if (dir === 'right') pos.x = pw - w
+  if (dir === 'top') pos.y = 0
+  if (dir === 'middle') pos.y = (ph - h) / 2
+  if (dir === 'bottom') pos.y = ph - h
+
+  emit('update:el-prop', 'position', pos)
+}
+
+// ── Filter reset ─────────────────────────────────────────────────────
+function resetFilters() {
+  ['blur', 'brightness', 'contrast', 'saturate', 'grayscale', 'sepia', 'hueRotate', 'invert'].forEach(k => {
+    const def = ['blur', 'grayscale', 'sepia', 'hueRotate', 'invert'].includes(k) ? 0 : 100
+    setProp(`styles.${k}`, def)
+  })
+  setProp('styles.mixBlendMode', 'normal')
+}
+
+// ── Constants ─────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'style', label: 'Style', icon: 'fa-solid fa-fill' },
+  { id: 'typography', label: 'Type', icon: 'fa-solid fa-font' },
+  { id: 'content', label: 'Content', icon: 'fa-solid fa-pen-to-square' },
+  { id: 'effects', label: 'Effects', icon: 'fa-solid fa-wand-magic-sparkles' },
+  { id: 'arrange', label: 'Arrange', icon: 'fa-solid fa-up-down-left-right' },
 ]
 
-const FONT_LIST = [
-  'DM Sans', 'Inter', 'Plus Jakarta Sans', 'Space Grotesk', 'Sora', 'Nunito',
-  'Outfit', 'Poppins', 'Geist', 'Figtree', 'Georgia', 'Playfair Display',
-  'Merriweather', 'Lora', 'Fira Code', 'JetBrains Mono', 'Courier New',
+const FONTS = [
+  'DM Sans', 'Inter', 'Plus Jakarta Sans', 'Space Grotesk', 'Sora', 'Nunito', 'Outfit', 'Poppins',
+  'Figtree', 'Georgia', 'Playfair Display', 'Merriweather', 'Lora', 'Fira Code', 'Courier New', 'Times New Roman',
 ]
 
 const SHADOW_PRESETS = [
-  { name: 'None', value: 'none' },
-  { name: 'Soft', value: '0 2px 8px rgba(0,0,0,.08)' },
-  { name: 'Medium', value: '0 4px 20px rgba(0,0,0,.15)' },
-  { name: 'Heavy', value: '0 8px 40px rgba(0,0,0,.25)' },
-  { name: 'Glow', value: '0 0 24px rgba(99,102,241,.5)' },
-  { name: 'Inset', value: 'inset 0 2px 8px rgba(0,0,0,.1)' },
+  { label: 'None', value: 'none' },
+  { label: 'XS', value: '0 1px 3px rgba(0,0,0,.12)' },
+  { label: 'SM', value: '0 4px 12px rgba(0,0,0,.12)' },
+  { label: 'MD', value: '0 8px 24px rgba(0,0,0,.15)' },
+  { label: 'LG', value: '0 16px 48px rgba(0,0,0,.18)' },
+  { label: 'Glow', value: '0 0 20px rgba(99,102,241,.45)' },
+  { label: 'Warm', value: '0 8px 24px rgba(201,168,76,.35)' },
+  { label: 'Inner', value: 'inset 0 2px 8px rgba(0,0,0,.15)' },
 ]
-
-const BLEND_MODES = [
-  'normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten',
-  'color-dodge', 'color-burn', 'hard-light', 'soft-light',
-  'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity',
-]
-
-// ── Helpers ────────────────────────────────────────────────────────────
-function isTextType(type) {
-  return ['text', 'heading', 'subheading', 'quote', 'blockquote', 'highlight',
-    'badge', 'code', 'link', 'callout', 'richtext', 'list'].includes(type)
-}
-
-function isChartType(type) {
-  return type?.endsWith('-chart')
-}
-
-function getElIcon(type) {
-  const map = {
-    text: 'fa-solid fa-t', heading: 'fa-solid fa-heading', subheading: 'fa-solid fa-text-height',
-    richtext: 'fa-solid fa-file-word', quote: 'fa-solid fa-quote-right',
-    image: 'fa-solid fa-image', table: 'fa-solid fa-table', metric: 'fa-solid fa-gauge-high',
-    progress: 'fa-solid fa-bars-progress', timeline: 'fa-solid fa-timeline',
-    checklist: 'fa-solid fa-list-check', testimonial: 'fa-solid fa-comment-dots',
-    rectangle: 'fa-solid fa-square', circle: 'fa-solid fa-circle',
-    divider: 'fa-solid fa-minus', video: 'fa-solid fa-video',
-    map: 'fa-solid fa-map-location-dot', 'qr-code': 'fa-solid fa-qrcode',
-    rating: 'fa-solid fa-star', 'stat-row': 'fa-solid fa-bars-staggered',
-    sparkline: 'fa-solid fa-wave-square', callout: 'fa-solid fa-lightbulb',
-    signature: 'fa-solid fa-signature', badge: 'fa-solid fa-tag',
-    'price-card': 'fa-solid fa-credit-card', 'social-card': 'fa-solid fa-id-card',
-    'bar-chart': 'fa-solid fa-chart-bar', 'line-chart': 'fa-solid fa-chart-line',
-    'pie-chart': 'fa-solid fa-chart-pie', 'doughnut-chart': 'fa-solid fa-circle-half-stroke',
-  }
-  return map[type] || 'fa-solid fa-cube'
-}
-
-function getTypeColor(type) {
-  if (isChartType(type) || type === 'table') return '#06b6d4'
-  if (isTextType(type)) return '#6366f1'
-  if (['image', 'video', 'map'].includes(type)) return '#ec4899'
-  if (['metric', 'stat-row', 'progress'].includes(type)) return '#f59e0b'
-  if (['rectangle', 'circle', 'triangle', 'divider'].includes(type)) return '#10b981'
-  return '#94a3b8'
-}
-
-function getPriorityColor(p) {
-  return { low: '#3b82f6', medium: '#f59e0b', high: '#f97316', urgent: '#ef4444' }[p] || 'transparent'
-}
-
-// ── Update helpers ─────────────────────────────────────────────────────
-function updateStyle(prop, value) {
-  emit('update:style', prop, value)
-}
-
-function updatePos(axis, value) {
-  if (!props.selectedEl?.position) return
-  props.selectedEl.position[axis] = value
-  emit('mark-dirty')
-}
-
-function updateTimelineItem(idx, field, value) {
-  if (!props.selectedEl?.items) return
-  props.selectedEl.items[idx][field] = value
-  emit('mark-dirty')
-}
-
-function updateChecklistItem(idx, field, value) {
-  if (!props.selectedEl?.items) return
-  props.selectedEl.items[idx][field] = value
-  emit('mark-dirty')
-}
-
-function updateStatItem(idx, field, value) {
-  if (!props.selectedEl?.stats) return
-  props.selectedEl.stats[idx][field] = value
-  emit('mark-dirty')
-}
-
-function addRecentColor() {
-  const c = props.selectedEl?.styles?.backgroundColor
-  if (c && c !== 'transparent' && !recentColors.value.includes(c)) {
-    recentColors.value.unshift(c)
-    if (recentColors.value.length > 16) recentColors.value.pop()
-  }
-}
-
-function resetFilters() {
-  ;['blur', 'brightness', 'contrast', 'grayscale', 'sepia', 'saturate', 'hueRotate', 'invert'].forEach(k => {
-    const defaults = { brightness: 100, contrast: 100, saturate: 100 }
-    updateStyle(k, defaults[k] ?? 0)
-  })
-}
-
-function stylePainterCopy() {
-  emit('style-painter-copy')
-}
 </script>
 
 <style scoped>
-/* ═══ VARIABLES ════════════════════════════════════════════════════════ */
-.right-panel {
-  --rp-bg: #ffffff;
-  --rp-bg2: #f8fafc;
-  --rp-bg3: #f1f5f9;
-  --rp-border: #e2e8f0;
-  --rp-text: #0f172a;
-  --rp-text2: #475569;
-  --rp-text3: #94a3b8;
-  --rp-accent: #6366f1;
-  --rp-accent-l: rgba(99, 102, 241, .08);
+/* ═══ ROOT ═══════════════════════════════════════════════════════════ */
+.rs-root {
+  --rs-bg: #ffffff;
+  --rs-bg2: #f8fafc;
+  --rs-bg3: #f1f5f9;
+  --rs-border: #e2e8f0;
+  --rs-text: #0f172a;
+  --rs-text2: #475569;
+  --rs-text3: #94a3b8;
+  --rs-accent: #6366f1;
+  --rs-accent-l: rgba(99, 102, 241, .08);
+  --rs-danger: #ef4444;
 
-  width: 288px;
+  width: 280px;
+  min-width: 260px;
+  max-width: 300px;
+  height: 100%;
+  background: var(--rs-bg);
+  border-left: 1px solid var(--rs-border);
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
-  background: var(--rp-bg);
-  border-left: 1px solid var(--rp-border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: width .25s ease;
-  position: relative;
-}
-
-.right-panel.collapsed {
-  width: 0;
-  border-left: none;
-}
-
-.right-panel.is-dark {
-  --rp-bg: #1a2236;
-  --rp-bg2: #111827;
-  --rp-bg3: #0d1424;
-  --rp-border: #263348;
-  --rp-text: #e2e8f0;
-  --rp-text2: #94a3b8;
-  --rp-text3: #475569;
-  --rp-accent: #818cf8;
-  --rp-accent-l: rgba(129, 140, 248, .1);
-}
-
-.panel-toggle {
-  position: absolute;
-  left: -14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--rp-bg);
-  border: 1px solid var(--rp-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 10;
-  color: var(--rp-text3);
-  font-size: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
-  transition: all .15s;
-}
-
-.panel-toggle:hover {
-  color: var(--rp-accent);
-  border-color: var(--rp-accent);
-}
-
-.panel-inner {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  scrollbar-width: thin;
-  scrollbar-color: var(--rp-border) transparent;
-}
-
-.panel-inner::-webkit-scrollbar {
-  width: 4px;
-}
-
-.panel-inner::-webkit-scrollbar-thumb {
-  background: var(--rp-border);
-  border-radius: 99px;
-}
-
-/* ═══ NO SELECTION ══════════════════════════════════════════════════════ */
-.no-selection {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 40px 24px;
-  gap: 8px;
-  color: var(--rp-text3);
-}
-
-.no-sel-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: var(--rp-bg2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  opacity: .4;
-  margin-bottom: 8px;
-}
-
-.no-selection h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--rp-text2);
-  margin: 0;
-}
-
-.no-selection p {
   font-size: 12px;
-  margin: 0;
-  line-height: 1.5;
 }
 
-.page-stats {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
+.rs-root.rs-dark {
+  --rs-bg: #111827;
+  --rs-bg2: #1a2236;
+  --rs-bg3: #0f172a;
+  --rs-border: #1e2d45;
+  --rs-text: #e2e8f0;
+  --rs-text2: #94a3b8;
+  --rs-text3: #475569;
 }
 
-.stat-pill {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 99px;
-  background: var(--rp-bg2);
-  border: 1px solid var(--rp-border);
-  color: var(--rp-text2);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.stat-pill.accent {
-  background: var(--rp-accent-l);
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-/* ═══ MULTI-SELECT ═══════════════════════════════════════════════════════ */
-.multi-select {
-  padding: 16px;
+/* ═══ EMPTY ══════════════════════════════════════════════════════════ */
+.rs-empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 10px;
-}
-
-.multi-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--rp-text);
-}
-
-.multi-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.multi-btn {
-  padding: 7px 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: var(--rp-bg2);
-  color: var(--rp-text2);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  transition: all .14s;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.multi-btn:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-.multi-btn.danger:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, .06);
-}
-
-/* ═══ ELEMENT HEADER ════════════════════════════════════════════════════ */
-.el-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--rp-border);
-  flex-shrink: 0;
-}
-
-.el-type-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--rp-text2);
-  text-transform: capitalize;
-}
-
-.el-header-actions {
-  display: flex;
-  gap: 3px;
-}
-
-.h-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text3);
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .14s;
-}
-
-.h-btn:hover {
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-}
-
-.h-btn--active {
-  color: #f59e0b;
-  border-color: rgba(245, 158, 11, .4);
-  background: rgba(245, 158, 11, .06);
-}
-
-.h-btn--danger:hover {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, .4);
-  background: rgba(239, 68, 68, .06);
-}
-
-/* ═══ TABS ═══════════════════════════════════════════════════════════════ */
-.props-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--rp-border);
-  flex-shrink: 0;
-}
-
-.props-tab {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 2px 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text3);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .03em;
-  text-transform: uppercase;
-  transition: all .14s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-family: inherit;
-}
-
-.props-tab i {
-  font-size: 12px;
-}
-
-.props-tab:hover {
-  color: var(--rp-text2);
-  background: var(--rp-bg2);
-}
-
-.props-tab.active {
-  color: var(--rp-accent);
-  border-bottom-color: var(--rp-accent);
-}
-
-/* ═══ PROPS BODY ════════════════════════════════════════════════════════ */
-.props-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Section (using :deep for sub-component styles) ── */
-:deep(.prop-section) {
-  border-bottom: 1px solid var(--rp-border);
-}
-
-:deep(.prop-section-header) {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 10px 14px;
-  background: var(--rp-bg2);
-  border: none;
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  transition: background .14s;
-  font-family: inherit;
-}
-
-:deep(.prop-section-header:hover) {
-  background: var(--rp-bg3);
-}
-
-:deep(.prop-section-icon) {
-  color: var(--rp-accent);
-  font-size: 12px;
-}
-
-:deep(.prop-section-header span) {
-  flex: 1;
-  text-align: left;
-}
-
-:deep(.prop-section-chevron) {
-  font-size: 9px;
-  opacity: .5;
-}
-
-:deep(.prop-section-body) {
-  padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-:deep(.prop-field) {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-:deep(.prop-field-label) {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--rp-text3);
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-
-:deep(.toggle-sw) {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-:deep(.toggle-sw-input) {
-  display: none;
-}
-
-:deep(.toggle-sw-track) {
-  width: 32px;
-  height: 17px;
-  background: var(--rp-border);
-  border-radius: 99px;
-  position: relative;
-  transition: background .2s;
-}
-
-:deep(.toggle-sw input:checked + .toggle-sw-track) {
-  background: var(--rp-accent);
-}
-
-:deep(.toggle-sw-thumb) {
-  position: absolute;
-  width: 11px;
-  height: 11px;
-  background: #fff;
-  border-radius: 50%;
-  top: 3px;
-  left: 3px;
-  transition: transform .2s;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
-}
-
-:deep(.toggle-sw input:checked + .toggle-sw-track .toggle-sw-thumb) {
-  transform: translateX(15px);
-}
-
-/* ── Shared row / field styles ── */
-.prop-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.prop-row label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--rp-text2);
-  min-width: 64px;
-  flex-shrink: 0;
-}
-
-.grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.grid-4 {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-
-.num-input {
-  width: 100%;
-  padding: 5px 6px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-  font-size: 11px;
+  color: var(--rs-text3);
   text-align: center;
-  outline: none;
-  font-family: inherit;
-}
-
-.num-input:focus {
-  border-color: var(--rp-accent);
-}
-
-.num-input.sm {
-  width: 60px;
-}
-
-.prop-input {
-  flex: 1;
-  padding: 5px 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-  font-size: 11px;
-  outline: none;
-  font-family: inherit;
-}
-
-.prop-input:focus {
-  border-color: var(--rp-accent);
-}
-
-.prop-select {
-  flex: 1;
-  padding: 5px 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-  font-size: 11px;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-}
-
-.prop-select:focus {
-  border-color: var(--rp-accent);
-}
-
-.prop-range {
-  flex: 1;
-  accent-color: var(--rp-accent);
-  cursor: pointer;
-}
-
-.prop-val {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--rp-text3);
-  min-width: 36px;
-  text-align: right;
-}
-
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-}
-
-.color-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: 1;
-}
-
-.color-input {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  cursor: pointer;
-  padding: 1px;
-  background: transparent;
-  flex-shrink: 0;
-}
-
-.color-text-input {
-  flex: 1;
-  padding: 4px 7px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-  font-size: 11px;
-  font-family: monospace;
-  outline: none;
-}
-
-.color-text-input:focus {
-  border-color: var(--rp-accent);
-}
-
-.clear-color-btn {
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--rp-border);
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text3);
-  font-size: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.clear-color-btn:hover {
-  color: #ef4444;
-  border-color: #ef4444;
-}
-
-.color-presets {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-}
-
-.color-preset {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  border: 1.5px solid transparent;
-  cursor: pointer;
-  transition: all .14s;
-}
-
-.color-preset:hover {
-  transform: scale(1.2);
-  border-color: #fff;
-  box-shadow: 0 0 0 2px var(--rp-accent);
-}
-
-.color-preset--add {
-  background: var(--rp-bg2) !important;
-  border-color: var(--rp-border) !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  color: var(--rp-text3);
-}
-
-/* ── Shadow presets ── */
-.shadow-presets {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  margin-bottom: 6px;
-}
-
-.shadow-preset {
-  border: 1.5px solid var(--rp-border);
-  border-radius: 7px;
-  padding: 8px 4px 5px;
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  transition: all .14s;
-  font-family: inherit;
-}
-
-.shadow-preset:hover {
-  border-color: var(--rp-accent);
-}
-
-.shadow-preset.active {
-  border-color: var(--rp-accent);
-  background: var(--rp-accent-l);
-}
-
-.shadow-demo {
-  width: 30px;
-  height: 18px;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid var(--rp-border);
-}
-
-.shadow-preset span {
-  font-size: 9px;
-  color: var(--rp-text2);
-  font-weight: 500;
-  text-align: center;
-}
-
-/* ── Priority ── */
-.priority-btns {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
-}
-
-.priority-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border: 1.5px solid var(--rp-border);
-  border-radius: 99px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: capitalize;
-  color: var(--rp-text2);
-  transition: all .14s;
-  font-family: inherit;
-}
-
-.priority-btn:hover {
-  background: var(--rp-bg2);
-}
-
-.priority-btn.active {
-  border-color: currentColor;
-}
-
-.prio-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.prio-low.active {
-  color: #3b82f6;
-}
-
-.prio-medium.active {
-  color: #f59e0b;
-}
-
-.prio-high.active {
-  color: #f97316;
-}
-
-.prio-urgent.active {
-  color: #ef4444;
-}
-
-/* ── Content editing ── */
-.content-textarea {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: var(--rp-bg2);
-  color: var(--rp-text);
-  font-size: 12px;
-  font-family: inherit;
-  outline: none;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.content-textarea:focus {
-  border-color: var(--rp-accent);
-}
-
-.table-stats {
-  display: flex;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--rp-text2);
-  font-weight: 500;
-}
-
-.table-actions {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-
-.tbl-btn {
-  padding: 5px 4px;
-  border: 1px solid var(--rp-border);
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--rp-text2);
-  transition: all .14s;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-}
-
-.tbl-btn:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-.tbl-btn.danger:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, .06);
-}
-
-.tbl-btn:disabled {
-  opacity: .3;
-  cursor: not-allowed;
-}
-
-.action-btn-full {
-  width: 100%;
-  padding: 8px;
-  border: 1px dashed var(--rp-border);
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 12px;
-  font-weight: 500;
-  transition: all .14s;
-  font-family: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.action-btn-full:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-  background: var(--rp-accent-l);
-}
-
-.timeline-edit-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-}
-
-.list-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.icon-remove-btn {
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text3);
-  font-size: 10px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all .14s;
-}
-
-.icon-remove-btn:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, .08);
-}
-
-/* ── Align buttons ── */
-.align-btns {
-  display: flex;
-  gap: 3px;
-}
-
-.align-btn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .14s;
-}
-
-.align-btn:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-.align-btn.active {
-  background: var(--rp-accent-l);
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-.btn-group {
-  display: flex;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  overflow: hidden;
-  flex: 1;
-}
-
-.btn-group button {
-  flex: 1;
-  padding: 5px 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 12px;
-  font-weight: 500;
-  transition: all .14s;
-  font-family: inherit;
-}
-
-.btn-group button:hover {
-  background: var(--rp-bg2);
-}
-
-.btn-group button.active {
-  background: var(--rp-accent);
-  color: #fff;
-}
-
-.btn-group button+button {
-  border-left: 1px solid var(--rp-border);
-}
-
-/* ── Arrange ── */
-.arrange-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.arrange-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: var(--rp-bg2);
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 11px;
-  font-weight: 500;
-  transition: all .14s;
-  font-family: inherit;
-}
-
-.arrange-btn:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-}
-
-.align-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-}
-
-.align-grid button {
-  padding: 10px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: var(--rp-bg2);
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all .14s;
-}
-
-.align-grid button:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-  background: var(--rp-accent-l);
-}
-
-.quick-actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.qa-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 8px;
-  border: 1px solid var(--rp-border);
-  border-radius: 6px;
-  background: var(--rp-bg2);
-  cursor: pointer;
-  color: var(--rp-text2);
-  font-size: 11px;
-  font-weight: 500;
-  transition: all .14s;
-  font-family: inherit;
-}
-
-.qa-btn:hover {
-  border-color: var(--rp-accent);
-  color: var(--rp-accent);
-  background: var(--rp-accent-l);
-}
-
-.qa-btn.danger:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, .06);
-}
-
-.qa-btn:disabled {
-  opacity: .35;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.no-props {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
   padding: 32px 20px;
-  color: var(--rp-text3);
-  text-align: center;
+  font-size: 12px;
 }
 
-.no-props i {
+.rs-empty i {
   font-size: 28px;
   opacity: .3;
 }
 
-.no-props p {
+/* ═══ ELEMENT HEADER ═════════════════════════════════════════════════ */
+.rs-el-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--rs-border);
+  flex-shrink: 0;
+  background: var(--rs-bg2);
+}
+
+.rs-el-type-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--rs-accent-l);
+  color: var(--rs-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.rs-el-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rs-el-type {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rs-text);
+  text-transform: capitalize;
+}
+
+.rs-el-id {
+  display: block;
+  font-size: 9px;
+  color: var(--rs-text3);
+  font-family: monospace;
+}
+
+.rs-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--rs-border);
+  background: transparent;
+  cursor: pointer;
+  color: var(--rs-text2);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .14s;
+  flex-shrink: 0;
+}
+
+.rs-icon-btn:hover {
+  background: var(--rs-bg3);
+  color: var(--rs-text);
+}
+
+.rs-icon-btn.active {
+  background: var(--rs-accent-l);
+  color: var(--rs-accent);
+  border-color: var(--rs-accent);
+}
+
+.rs-danger-btn:hover {
+  background: rgba(239, 68, 68, .08);
+  color: var(--rs-danger);
+  border-color: var(--rs-danger);
+}
+
+/* ═══ TABS ═══════════════════════════════════════════════════════════ */
+.rs-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--rs-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rs-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.rs-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--rs-text3);
+  font-size: 9px;
+  font-weight: 600;
+  font-family: inherit;
+  border-bottom: 2px solid transparent;
+  transition: all .14s;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.rs-tab i {
   font-size: 12px;
 }
 
-/* ═══ RESPONSIVE ════════════════════════════════════════════════════════ */
-@media (max-width: 1024px) {
-  .right-panel {
-    position: fixed;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    height: 100vh;
-    z-index: 150;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, .15);
+.rs-tab:hover {
+  color: var(--rs-text);
+}
+
+.rs-tab.active {
+  color: var(--rs-accent);
+  border-bottom-color: var(--rs-accent);
+}
+
+/* ═══ BODY / PANEL ═══════════════════════════════════════════════════ */
+.rs-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rs-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rs-border) transparent;
+}
+
+/* ═══ SECTION ════════════════════════════════════════════════════════ */
+.rs-section {
+  border: 1px solid var(--rs-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--rs-bg);
+}
+
+.rs-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  background: var(--rs-bg2);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--rs-text2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-section-add {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--rs-border);
+  background: var(--rs-bg);
+  cursor: pointer;
+  color: var(--rs-text2);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+}
+
+.rs-section-add:hover {
+  background: var(--rs-accent);
+  color: #fff;
+  border-color: var(--rs-accent);
+}
+
+/* ═══ ROWS ═══════════════════════════════════════════════════════════ */
+.rs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-row:last-child {
+  border-bottom: none;
+}
+
+.rs-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.rs-label {
+  font-size: 11px;
+  color: var(--rs-text2);
+  flex: 1;
+  min-width: 60px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.rs-label-block {
+  font-size: 11px;
+  color: var(--rs-text2);
+  font-weight: 500;
+}
+
+.rs-val {
+  font-size: 10px;
+  color: var(--rs-accent);
+  font-weight: 600;
+}
+
+/* ═══ INPUTS ══════════════════════════════════════════════════════════ */
+.rs-input {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 11px;
+  outline: none;
+  transition: border-color .14s;
+  font-family: inherit;
+}
+
+.rs-input:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-select {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .14s;
+}
+
+.rs-select:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-color {
+  width: 32px;
+  height: 26px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+.rs-hex {
+  width: 76px;
+  padding: 5px 7px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 10px;
+  font-family: monospace;
+  outline: none;
+}
+
+.rs-hex:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-color-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rs-clear-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  cursor: pointer;
+  color: var(--rs-text3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  transition: all .12s;
+}
+
+.rs-clear-btn:hover {
+  border-color: var(--rs-accent);
+  color: var(--rs-accent);
+}
+
+.rs-range {
+  flex: 1;
+  accent-color: var(--rs-accent);
+}
+
+.rs-num-input {
+  width: 52px;
+  padding: 4px 6px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 11px;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.rs-num-input:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-slider-number {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.rs-textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--rs-border);
+  border-radius: 7px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 11px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  min-height: 80px;
+}
+
+.rs-textarea:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-textarea--sm {
+  min-height: 60px;
+}
+
+.rs-emoji-input {
+  max-width: 80px;
+  font-size: 18px;
+  text-align: center;
+}
+
+/* ═══ BUTTON GROUPS ══════════════════════════════════════════════════ */
+.rs-btn-group {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.rs-btn-group button {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text2);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all .12s;
+  font-family: inherit;
+}
+
+.rs-btn-group button:hover {
+  border-color: var(--rs-accent);
+  color: var(--rs-accent);
+}
+
+.rs-btn-group button.active {
+  background: var(--rs-accent);
+  color: #fff;
+  border-color: var(--rs-accent);
+}
+
+.rs-toggle-row {
+  display: flex;
+  gap: 5px;
+  padding: 7px 11px;
+  flex-wrap: wrap;
+}
+
+.rs-fmt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border: 1px solid var(--rs-border);
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--rs-text2);
+  background: var(--rs-bg2);
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all .12s;
+}
+
+.rs-fmt-btn:hover {
+  border-color: var(--rs-accent);
+  color: var(--rs-accent);
+}
+
+.rs-fmt-btn.active {
+  background: var(--rs-accent-l);
+  color: var(--rs-accent);
+  border-color: var(--rs-accent);
+  font-weight: 700;
+}
+
+.rs-align-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.rs-align-btns button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--rs-border);
+  border-radius: 5px;
+  background: var(--rs-bg2);
+  cursor: pointer;
+  color: var(--rs-text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all .12s;
+}
+
+.rs-align-btns button:hover,
+.rs-align-btns button.active {
+  background: var(--rs-accent);
+  color: #fff;
+  border-color: var(--rs-accent);
+}
+
+/* ═══ SHADOWS ════════════════════════════════════════════════════════ */
+.rs-shadow-presets {
+  display: flex;
+  gap: 6px;
+  padding: 8px 11px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-shadow-btn {
+  width: 36px;
+  height: 30px;
+  border: 2px solid var(--rs-border);
+  border-radius: 7px;
+  background: var(--rs-bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .14s;
+  padding: 3px;
+}
+
+.rs-shadow-btn:hover {
+  border-color: var(--rs-accent);
+}
+
+.rs-shadow-btn.active {
+  border-color: var(--rs-accent);
+  background: var(--rs-accent-l);
+}
+
+.rs-shadow-demo {
+  width: 18px;
+  height: 12px;
+  background: var(--rs-bg2);
+  border: 1px solid var(--rs-border);
+  border-radius: 3px;
+}
+
+/* ═══ TOGGLE SWITCH ══════════════════════════════════════════════════ */
+.rs-toggle-sw {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.rs-toggle-sw input {
+  display: none;
+}
+
+.rs-sw-track {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--rs-border);
+  position: relative;
+  transition: background .2s;
+  flex-shrink: 0;
+}
+
+.rs-toggle-sw input:checked~.rs-sw-track {
+  background: var(--rs-accent);
+}
+
+.rs-sw-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
+}
+
+.rs-toggle-sw input:checked~.rs-sw-track::after {
+  transform: translateX(14px);
+}
+
+.rs-sw-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--rs-text3);
+}
+
+/* ═══ ARRANGE / POSITION ═════════════════════════════════════════════ */
+.rs-pos-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-pos-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rs-pos-field label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--rs-text3);
+  letter-spacing: .06em;
+}
+
+.rs-pos-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--rs-border);
+  border-radius: 6px;
+  background: var(--rs-bg2);
+  color: var(--rs-text);
+  font-size: 11px;
+  outline: none;
+  font-family: inherit;
+  text-align: center;
+}
+
+.rs-pos-input:focus {
+  border-color: var(--rs-accent);
+}
+
+.rs-align-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 10px 11px;
+}
+
+.rs-align-btn {
+  padding: 8px;
+  border: 1px solid var(--rs-border);
+  border-radius: 7px;
+  background: var(--rs-bg2);
+  cursor: pointer;
+  color: var(--rs-text2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all .12s;
+}
+
+.rs-align-btn:hover {
+  background: var(--rs-accent);
+  color: #fff;
+  border-color: var(--rs-accent);
+}
+
+/* ═══ LIST / COMPLEX ITEM EDITORS ════════════════════════════════════ */
+.rs-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.rs-list-item:last-child {
+  border-bottom: none;
+}
+
+.rs-list-input {
+  flex: 1;
+}
+
+.rs-checkbox {
+  cursor: pointer;
+  accent-color: var(--rs-accent);
+  flex-shrink: 0;
+}
+
+.rs-list-del {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--rs-text3);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+  flex-shrink: 0;
+}
+
+.rs-list-del:hover {
+  background: rgba(239, 68, 68, .1);
+  color: var(--rs-danger);
+}
+
+.rs-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--rs-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rs-timeline-item-editor {
+  display: flex;
+  gap: 7px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--rs-border);
+  align-items: flex-start;
+}
+
+.rs-timeline-item-editor:last-child {
+  border-bottom: none;
+}
+
+.rs-tl-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--rs-accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.rs-tl-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rs-mb4 {
+  margin-bottom: 0;
+}
+
+.rs-stat-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--rs-border);
+  position: relative;
+}
+
+.rs-stat-editor:last-child {
+  border-bottom: none;
+}
+
+.rs-stat-editor .rs-list-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* ═══ ACTIONS ════════════════════════════════════════════════════════ */
+.rs-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--rs-border);
+  border-radius: 7px;
+  background: var(--rs-bg2);
+  color: var(--rs-text2);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all .14s;
+  font-weight: 500;
+}
+
+.rs-action-btn:hover {
+  border-color: var(--rs-accent);
+  color: var(--rs-accent);
+  background: var(--rs-accent-l);
+}
+
+.rs-table-actions {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.rs-full-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.rs-danger-sm:hover {
+  border-color: var(--rs-danger);
+  color: var(--rs-danger);
+  background: rgba(239, 68, 68, .05);
+}
+
+.rs-danger-full {
+  border-color: rgba(239, 68, 68, .3);
+  color: var(--rs-danger);
+  background: rgba(239, 68, 68, .05);
+}
+
+.rs-danger-full:hover {
+  background: var(--rs-danger);
+  color: #fff;
+  border-color: var(--rs-danger);
+}
+
+/* ═══ EMPTY TAB ══════════════════════════════════════════════════════ */
+.rs-empty-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--rs-text3);
+  text-align: center;
+  padding: 32px 20px;
+  font-size: 12px;
+}
+
+.rs-empty-tab i {
+  font-size: 24px;
+  opacity: .3;
+}
+
+/* ═══ RESPONSIVE ═════════════════════════════════════════════════════ */
+@media (max-width: 1200px) {
+  .rs-root {
+    width: 260px;
+    min-width: 240px;
   }
 }
 </style>

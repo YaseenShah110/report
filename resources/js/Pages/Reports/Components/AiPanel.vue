@@ -1,620 +1,367 @@
 <!--
   AiPanel.vue — Floating AI Assistant Panel
-  • Draggable, resizable, minimizable, maximizable
-  • 6 modes: Generate | Enhance | Summarize | Chart | Translate | Image
-  • Calls /api/ai/generate (local) or Pollinations free API
-  • Markdown rendering (bold, italic, code, lists, headings)
-  • Voice input (Web Speech API)
-  • Chat history (localStorage, 20 sessions)
-  • Feedback thumbs + regenerate
-  • Insert content / chart directly into canvas
-  • Copy to clipboard
-  • Token estimate display
-  • Quick prompts per mode
+  ═══════════════════════════════════════════════════════════════════
+  5 modes:
+  • Generate  — write new content from a prompt
+  • Improve   — rewrite/enhance selected element text
+  • Summarize — condense selected or entered text
+  • Translate — translate content to chosen language
+  • Chat      — free-form multi-turn conversation
+
+  API strategy (in order of availability):
+    1. /api/ai  — local Laravel proxy (can be wired to any LLM)
+    2. https://text.pollinations.ai — free, no key required (fallback)
+
+  Features:
+  • Draggable via header + resizable via bottom-right handle
+  • Streams response token-by-token
+  • Insert generated text as a new element on the canvas
+  • Apply suggestion to the selected element's content
+  • Chat history preserved during session
   • Dark mode aware
-  • Mobile: full-width bottom sheet
-  • Memory safe: all listeners cleaned on unmount
+  ═══════════════════════════════════════════════════════════════════
 -->
 <template>
-    <Teleport to="body">
-        <Transition name="ai-emerge">
-            <div v-if="visible" ref="panelRef" class="ai-panel"
-                :class="[isDark && 'ai-dark', isMaximized && 'ai-maximized', isMinimized && 'ai-minimized']"
-                :style="panelStyle" role="dialog" aria-modal="false" aria-label="AI Assistant">
-                <!-- ── Header / drag handle ──────────────────────────────── -->
-                <div class="ai-header" @mousedown="startDrag" @touchstart.prevent="startDragTouch">
-                    <div class="ai-orb" aria-hidden="true">
-                        <span class="ai-orb-ring" />
-                        <i class="fa-solid fa-wand-magic-sparkles ai-orb-icon" />
-                    </div>
+    <div ref="panelRef" class="ai-panel" :class="{ 'ai-dark': isDark, 'ai-loading': isLoading }" :style="panelStyle"
+        role="dialog" aria-label="AI Assistant" aria-modal="false">
+        <!-- ── HEADER (drag handle) ──────────────────────────────────── -->
+        <div class="ai-header" @mousedown.prevent="startDrag" aria-label="Drag to move AI panel">
+            <div class="ai-header-left">
+                <div class="ai-logo" aria-hidden="true">
+                    <i class="fa-solid fa-wand-magic-sparkles" />
+                </div>
+                <div>
+                    <div class="ai-title">AI Assistant</div>
+                    <div class="ai-subtitle">{{ modeMeta[activeMode].label }}</div>
+                </div>
+            </div>
+            <div class="ai-header-right">
+                <button class="ai-icon-btn" @click="clearAll" title="Clear conversation"
+                    aria-label="Clear conversation">
+                    <i class="fa-solid fa-rotate-left" />
+                </button>
+                <button class="ai-icon-btn" @click="$emit('close')" title="Close [Esc]" aria-label="Close AI panel">
+                    <i class="fa-solid fa-xmark" />
+                </button>
+            </div>
+        </div>
 
-                    <div class="ai-title-area">
-                        <span class="ai-title">AI Assistant</span>
-                        <span class="ai-status" :class="isLoading && 'ai-status--busy'" aria-live="polite">
-                            <span class="ai-status-dot" aria-hidden="true" />
-                            {{ isLoading ? thinkingLabel : 'Ready' }}
-                        </span>
-                    </div>
+        <!-- ── MODE TABS ──────────────────────────────────────────────── -->
+        <div class="ai-modes" role="tablist" aria-label="AI modes">
+            <button v-for="(meta, mode) in modeMeta" :key="mode" class="ai-mode-tab"
+                :class="{ active: activeMode === mode }" @click="switchMode(mode)" role="tab"
+                :aria-selected="activeMode === mode">
+                <i :class="meta.icon" />
+                <span>{{ meta.label }}</span>
+            </button>
+        </div>
 
-                    <div class="ai-header-controls">
-                        <span class="ai-token-count" :title="`~${tokenEstimate} tokens used`">
-                            {{ tokenEstimate }}t
-                        </span>
-                        <button class="ai-ctrl" @click.stop="showHistory = !showHistory" title="Conversation history"
-                            aria-label="Toggle history">
-                            <i class="fa-solid fa-clock-rotate-left" />
-                        </button>
-                        <button class="ai-ctrl" @click.stop="isMinimized = !isMinimized"
-                            :title="isMinimized ? 'Expand' : 'Minimize'"
-                            :aria-label="isMinimized ? 'Expand' : 'Minimize'">
-                            <i class="fa-solid fa-minus" />
-                        </button>
-                        <button class="ai-ctrl" @click.stop="isMaximized = !isMaximized"
-                            :title="isMaximized ? 'Restore' : 'Maximize'"
-                            :aria-label="isMaximized ? 'Restore' : 'Maximize'">
-                            <i :class="isMaximized ? 'fa-solid fa-compress' : 'fa-solid fa-expand'" />
-                        </button>
-                        <button class="ai-ctrl ai-ctrl--close" @click.stop="$emit('close')" title="Close"
-                            aria-label="Close AI panel">
-                            <i class="fa-solid fa-xmark" />
-                        </button>
+        <!-- ── BODY ───────────────────────────────────────────────────── -->
+        <div class="ai-body">
+
+            <!-- Context strip (shows selected element type) -->
+            <div v-if="selectedEl && activeMode !== 'chat'" class="ai-context-strip">
+                <i class="fa-solid fa-crosshairs" />
+                <span>Using: <strong>{{ selectedEl.type }}</strong> element</span>
+                <button class="ai-ctx-use" @click="prefillFromEl" title="Use element content as input">Use
+                    content</button>
+            </div>
+
+            <!-- Chat history (chat mode only) -->
+            <div v-if="activeMode === 'chat'" class="ai-chat-history" ref="chatHistoryRef">
+                <div v-for="(msg, i) in chatHistory" :key="i" class="ai-chat-msg" :class="`ai-msg-${msg.role}`">
+                    <div class="ai-chat-bubble">
+                        <div class="ai-chat-role">{{ msg.role === 'user' ? 'You' : 'AI' }}</div>
+                        <div class="ai-chat-text" v-html="formatMsg(msg.content)" />
                     </div>
                 </div>
-
-                <!-- ── Collapsible body ──────────────────────────────────── -->
-                <Transition name="ai-collapse">
-                    <div v-if="!isMinimized" class="ai-body">
-
-                        <!-- Toolbar: modes + tone + source -->
-                        <div class="ai-toolbar">
-                            <button v-for="m in MODES" :key="m.id" class="ai-mode-btn"
-                                :class="{ active: mode === m.id }" @click="mode = m.id" :title="m.label"
-                                :aria-pressed="mode === m.id">
-                                <i :class="m.icon" />
-                                <span>{{ m.label }}</span>
-                            </button>
-
-                            <div class="ai-toolbar-sep" aria-hidden="true" />
-
-                            <select v-model="tone" class="ai-mini-select" aria-label="Tone">
-                                <option value="professional">Professional</option>
-                                <option value="casual">Casual</option>
-                                <option value="persuasive">Persuasive</option>
-                                <option value="technical">Technical</option>
-                            </select>
-
-                            <select v-model="length" class="ai-mini-select" aria-label="Length">
-                                <option value="short">Short</option>
-                                <option value="medium">Medium</option>
-                                <option value="long">Detailed</option>
-                            </select>
-
-                            <div class="ai-toolbar-sep" aria-hidden="true" />
-
-                            <select v-model="source" class="ai-mini-select" aria-label="AI source">
-                                <option value="local">Local API</option>
-                                <option value="pollinations">Pollinations</option>
-                            </select>
-
-                            <button class="ai-icon-btn" @click="clearChat" title="Clear conversation"
-                                aria-label="Clear conversation">
-                                <i class="fa-solid fa-broom" />
-                            </button>
-                            <button class="ai-icon-btn" @click="exportChat" title="Export chat"
-                                aria-label="Export conversation">
-                                <i class="fa-solid fa-download" />
-                            </button>
-                        </div>
-
-                        <!-- History panel -->
-                        <Transition name="ai-collapse">
-                            <div v-if="showHistory" class="ai-history" role="region" aria-label="Chat history">
-                                <div class="ai-history-header">Recent Conversations</div>
-                                <div v-if="chatHistory.length" class="ai-history-list">
-                                    <div v-for="(h, hi) in chatHistory" :key="hi" class="ai-history-item"
-                                        @click="loadHistory(hi)" role="button"
-                                        :aria-label="`Load conversation: ${h.preview}`">
-                                        <span class="ai-history-preview">{{ h.preview }}</span>
-                                        <span class="ai-history-date">{{ h.date }}</span>
-                                        <button class="ai-history-del" @click.stop="deleteHistory(hi)"
-                                            aria-label="Delete this conversation">
-                                            <i class="fa-solid fa-xmark" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div v-else class="ai-history-empty">No saved conversations</div>
-                            </div>
-                        </Transition>
-
-                        <!-- Messages -->
-                        <div class="ai-messages" ref="messagesRef" role="log" aria-live="polite"
-                            aria-label="AI conversation">
-
-                            <!-- Welcome screen (no messages) -->
-                            <Transition name="ai-fade">
-                                <div v-if="!messages.length && !showHistory" class="ai-welcome">
-                                    <div class="ai-welcome-icon" aria-hidden="true">
-                                        <div class="ai-welcome-grid">
-                                            <span v-for="n in 9" :key="n" :style="`--i:${n}`" />
-                                        </div>
-                                        <i class="fa-solid fa-wand-magic-sparkles ai-welcome-wand" />
-                                    </div>
-                                    <h3>What can I help you build?</h3>
-                                    <p>Generate content, charts, headlines, or enhance existing text for your report.
-                                    </p>
-                                    <div class="ai-chips" role="list">
-                                        <button v-for="s in SUGGESTIONS" :key="s.text" class="ai-chip"
-                                            @click="useSuggestion(s)" role="listitem"
-                                            :aria-label="`Quick prompt: ${s.text}`">
-                                            <span class="ai-chip-emoji" aria-hidden="true">{{ s.emoji }}</span>
-                                            <span>{{ s.text }}</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </Transition>
-
-                            <!-- Message list -->
-                            <TransitionGroup name="ai-msg" tag="div" class="ai-msg-list">
-                                <div v-for="msg in messages" :key="msg.id" class="ai-msg-wrap"
-                                    :class="msg.role === 'user' ? 'ai-msg-wrap--user' : 'ai-msg-wrap--ai'">
-                                    <div class="ai-avatar"
-                                        :class="msg.role === 'user' ? 'ai-avatar--user' : 'ai-avatar--ai'"
-                                        aria-hidden="true">
-                                        <i
-                                            :class="msg.role === 'user' ? 'fa-solid fa-user' : 'fa-solid fa-wand-magic-sparkles'" />
-                                    </div>
-                                    <div class="ai-msg-body">
-                                        <div class="ai-bubble"
-                                            :class="msg.role === 'user' ? 'ai-bubble--user' : 'ai-bubble--ai'"
-                                            v-html="renderMd(msg.content)" />
-
-                                        <!-- AI message actions -->
-                                        <div v-if="msg.role === 'assistant'" class="ai-msg-actions">
-                                            <button v-for="action in (msg.actions || [])" :key="action.label"
-                                                class="ai-action-pill"
-                                                :class="action.primary && 'ai-action-pill--primary'"
-                                                @click="handleAction(action)" :aria-label="action.label">
-                                                <i :class="action.icon" aria-hidden="true" />
-                                                {{ action.label }}
-                                            </button>
-
-                                            <div class="ai-feedback" aria-label="Rate this response">
-                                                <button class="ai-feedback-btn"
-                                                    :class="msg.feedback === 'up' && 'active'" @click="rate(msg, 'up')"
-                                                    title="Helpful" aria-label="Mark as helpful">👍</button>
-                                                <button class="ai-feedback-btn"
-                                                    :class="msg.feedback === 'down' && 'active'"
-                                                    @click="rate(msg, 'down')" title="Not helpful"
-                                                    aria-label="Mark as not helpful">👎</button>
-                                                <button class="ai-feedback-btn" @click="regenerate(msg)"
-                                                    title="Regenerate" aria-label="Regenerate response">
-                                                    🔄
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="ai-msg-time" aria-label="Sent at">{{ msg.time }}</div>
-                                    </div>
-                                </div>
-                            </TransitionGroup>
-
-                            <!-- Typing indicator -->
-                            <div v-if="isLoading" class="ai-msg-wrap ai-msg-wrap--ai" aria-label="AI is thinking">
-                                <div class="ai-avatar ai-avatar--ai" aria-hidden="true"><i
-                                        class="fa-solid fa-wand-magic-sparkles" /></div>
-                                <div class="ai-msg-body">
-                                    <div class="ai-bubble ai-bubble--ai ai-bubble--typing" aria-label="Typing">
-                                        <span class="ai-dots"><span /><span /><span /></span>
-                                        <span class="ai-thinking-label">{{ thinkingLabel }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Input area -->
-                        <div class="ai-input-area">
-                            <!-- Quick prompts row -->
-                            <div v-if="QUICK_PROMPTS[mode]" class="ai-quick-row" aria-label="Quick prompts">
-                                <button v-for="q in QUICK_PROMPTS[mode]" :key="q" class="ai-quick-pill"
-                                    @click="prompt = q" :aria-label="`Use quick prompt: ${q}`">{{ q }}</button>
-                            </div>
-
-                            <div class="ai-input-box" :class="focused && 'ai-input-box--focused'">
-                                <div class="ai-mode-stripe" :class="`ai-stripe--${mode}`" aria-hidden="true" />
-                                <textarea ref="textareaRef" v-model="prompt" class="ai-textarea"
-                                    :placeholder="PLACEHOLDERS[mode]" rows="3" maxlength="1500"
-                                    :aria-label="`AI prompt — ${PLACEHOLDERS[mode]}`"
-                                    @keydown.enter.exact.prevent="send" @keydown.enter.shift.exact="prompt += '\n'"
-                                    @focus="focused = true" @blur="focused = false" @input="growTextarea" />
-                                <div class="ai-input-footer">
-                                    <span class="ai-char-count" :class="prompt.length > 1200 && 'warn'">
-                                        {{ prompt.length }}/1500
-                                    </span>
-                                    <div class="ai-input-btns">
-                                        <button class="ai-attach-btn" @click="startVoice"
-                                            :class="isRecording && 'recording'"
-                                            :title="isRecording ? 'Stop recording' : 'Voice input'"
-                                            :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
-                                            <i
-                                                :class="isRecording ? 'fa-solid fa-microphone' : 'fa-solid fa-microphone-lines'" />
-                                        </button>
-                                        <button class="ai-attach-btn" @click="attachCtx" title="Attach canvas context"
-                                            aria-label="Add canvas context to prompt">
-                                            <i class="fa-solid fa-paperclip" />
-                                        </button>
-                                        <button class="ai-send-btn"
-                                            :class="prompt.trim() && !isLoading && 'ai-send-btn--ready'"
-                                            :disabled="!prompt.trim() || isLoading" @click="send"
-                                            :aria-label="isLoading ? 'AI is generating' : 'Send message'">
-                                            <i v-if="!isLoading" class="fa-solid fa-paper-plane" />
-                                            <i v-else class="fa-solid fa-spinner fa-spin" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="ai-hint-row" aria-hidden="true">
-                                <span><kbd>↵</kbd> Send</span>
-                                <span><kbd>⇧↵</kbd> New line</span>
-                                <span class="ai-model-label">{{ source === 'pollinations' ? 'Pollinations AI' : 'Local API' }}</span>
-                            </div>
-                        </div>
+                <div v-if="isLoading" class="ai-chat-msg ai-msg-assistant">
+                    <div class="ai-chat-bubble ai-loading-bubble">
+                        <span class="ai-dot" /><span class="ai-dot" /><span class="ai-dot" />
                     </div>
-                </Transition>
-
-                <!-- Resize handle -->
-                <div v-if="!isMinimized && !isMaximized" class="ai-resize-handle" @mousedown.stop="startResize"
-                    aria-hidden="true" />
+                </div>
             </div>
-        </Transition>
-    </Teleport>
+
+            <!-- Response area (non-chat modes) -->
+            <div v-else-if="response" class="ai-response-area">
+                <div class="ai-response-header">
+                    <span class="ai-response-label"><i class="fa-solid fa-sparkles" /> Response</span>
+                    <button class="ai-copy-btn" @click="copyResponse" :title="copied ? 'Copied!' : 'Copy'">
+                        <i :class="copied ? 'fa-solid fa-check' : 'fa-regular fa-copy'" />
+                        {{ copied ? 'Copied' : 'Copy' }}
+                    </button>
+                </div>
+                <div class="ai-response-text" v-html="formatMsg(response)" />
+
+                <!-- Action row -->
+                <div class="ai-action-row">
+                    <button class="ai-action-btn ai-btn-insert" @click="insertToCanvas">
+                        <i class="fa-solid fa-plus-circle" /> Insert to Canvas
+                    </button>
+                    <button v-if="selectedEl" class="ai-action-btn ai-btn-apply" @click="applyToElement">
+                        <i class="fa-solid fa-wand-magic-sparkles" /> Apply to Element
+                    </button>
+                    <button class="ai-action-btn" @click="response = ''; prompt = ''">
+                        <i class="fa-solid fa-rotate" /> Try Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Translate: language selector -->
+            <div v-if="activeMode === 'translate'" class="ai-field">
+                <label class="ai-label">Translate to</label>
+                <select class="ai-select" v-model="translateLang">
+                    <option v-for="l in LANGUAGES" :key="l" :value="l">{{ l }}</option>
+                </select>
+            </div>
+
+            <!-- Prompt input -->
+            <div class="ai-input-area">
+                <textarea v-model="prompt" class="ai-textarea" :placeholder="modeMeta[activeMode].placeholder" rows="3"
+                    @keydown.ctrl.enter="generate" @keydown.meta.enter="generate" aria-label="AI prompt" />
+                <div class="ai-input-footer">
+                    <span class="ai-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to send</span>
+                    <button class="ai-send-btn" @click="generate" :disabled="!prompt.trim() || isLoading"
+                        aria-label="Send prompt">
+                        <i v-if="isLoading" class="fa-solid fa-spinner fa-spin" />
+                        <i v-else class="fa-solid fa-paper-plane" />
+                        {{ isLoading ? 'Thinking…' : 'Generate' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── RESIZE HANDLE ──────────────────────────────────────────── -->
+        <div class="ai-resize-handle" @mousedown.prevent="startResize" title="Drag to resize" aria-hidden="true" />
+    </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
+// ── Props / Emits ───────────────────────────────────────────────────
 const props = defineProps({
-    visible: { type: Boolean, default: true },
-    report: { type: Object, required: true },
     isDark: { type: Boolean, default: false },
-    selectedElement: { type: Object, default: null },
+    report: { type: Object, required: true },
+    selectedEl: { type: Object, default: null },
+    settings: { type: Object, required: true },
 })
 
-const emit = defineEmits(['close', 'insert-content', 'insert-chart'])
+const emit = defineEmits(['close', 'insert-content', 'apply-suggestion'])
 
-// ── Refs ───────────────────────────────────────────────────────────────
-const panelRef = ref(null)
-const messagesRef = ref(null)
-const textareaRef = ref(null)
+// ── Panel position / size ────────────────────────────────────────────
+const pos = reactive({ x: window.innerWidth - 380, y: 80 })
+const size = reactive({ w: 360, h: 560 })
 
-// ── Panel state ────────────────────────────────────────────────────────
-const pos = reactive({ x: 0, y: 0 })
-const size = reactive({ w: 420, h: 580 })
-const isMaximized = ref(false)
-const isMinimized = ref(false)
-const showHistory = ref(false)
-const focused = ref(false)
+const panelStyle = computed(() => ({
+    position: 'fixed',
+    left: pos.x + 'px',
+    top: pos.y + 'px',
+    width: size.w + 'px',
+    height: size.h + 'px',
+    zIndex: 500,
+}))
 
-// ── Chat state ─────────────────────────────────────────────────────────
-const messages = ref([])
+// ── Mode ─────────────────────────────────────────────────────────────
+const activeMode = ref('generate')
+
+const modeMeta = {
+    generate: { label: 'Generate', icon: 'fa-solid fa-pen-nib', placeholder: 'Describe what you want to write… (e.g. "Write an executive summary for a charity annual report")' },
+    improve: { label: 'Improve', icon: 'fa-solid fa-arrow-trend-up', placeholder: 'Paste or describe text to improve… (e.g. "Make this more professional")' },
+    summarize: { label: 'Summarize', icon: 'fa-solid fa-align-left', placeholder: 'Paste text to summarize…' },
+    translate: { label: 'Translate', icon: 'fa-solid fa-language', placeholder: 'Paste text to translate…' },
+    chat: { label: 'Chat', icon: 'fa-solid fa-comments', placeholder: 'Ask anything about your report…' },
+}
+
+const LANGUAGES = [
+    'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch',
+    'Arabic', 'Chinese (Simplified)', 'Japanese', 'Korean', 'Russian',
+    'Hindi', 'Turkish', 'Polish', 'Swedish', 'Norwegian',
+]
+
+// ── State ─────────────────────────────────────────────────────────────
 const prompt = ref('')
+const response = ref('')
 const isLoading = ref(false)
-const isRecording = ref(false)
-const mode = ref('generate')
-const tone = ref('professional')
-const length = ref('medium')
-const source = ref('local')
+const copied = ref(false)
+const translateLang = ref('Spanish')
 const chatHistory = ref([])
-let msgId = 0
-let thinkTimer = null
+const chatHistoryRef = ref(null)
+const panelRef = ref(null)
 
-const THINKING_LABELS = ['Thinking…', 'Generating…', 'Crafting…', 'Analyzing…', 'Writing…']
-const thinkingLabel = ref(THINKING_LABELS[0])
+// ── Drag ──────────────────────────────────────────────────────────────
+let dragOffX = 0, dragOffY = 0
 
-const tokenEstimate = computed(() =>
-    Math.ceil((messages.value.reduce((s, m) => s + m.content.length, 0) + prompt.value.length) / 4)
-)
-
-// ── Constants ──────────────────────────────────────────────────────────
-const MODES = [
-    { id: 'generate', label: 'Generate', icon: 'fa-solid fa-star' },
-    { id: 'enhance', label: 'Enhance', icon: 'fa-solid fa-chart-line' },
-    { id: 'summarize', label: 'Summarize', icon: 'fa-solid fa-align-left' },
-    { id: 'chart', label: 'Chart', icon: 'fa-solid fa-chart-bar' },
-    { id: 'translate', label: 'Translate', icon: 'fa-solid fa-language' },
-]
-
-const PLACEHOLDERS = {
-    generate: '✦ Describe the content you want to create…',
-    enhance: '✦ Paste text to improve professionally…',
-    summarize: '✦ Paste text to summarize into key points…',
-    chart: '✦ Describe the data you want to visualize…',
-    translate: '✦ Paste text and specify the target language…',
-}
-
-const QUICK_PROMPTS = {
-    generate: ['Executive summary', 'Key findings', 'Introduction', 'Conclusion'],
-    enhance: ['Make professional', 'Fix grammar', 'More persuasive', 'Simplify'],
-    summarize: ['Bullet points', '3 sentences', 'Key metrics', 'TL;DR'],
-    chart: ['Q4 revenue data', 'User growth 6 months', 'Market share pie', 'Sales vs target'],
-    translate: ['To Spanish', 'To French', 'To Arabic', 'To German'],
-}
-
-const SUGGESTIONS = [
-    { emoji: '📊', text: 'Q4 business report executive summary', mode: 'generate' },
-    { emoji: '📈', text: 'Revenue trend chart for last 6 months', mode: 'chart' },
-    { emoji: '✍️', text: 'Professional headline about market growth', mode: 'generate' },
-    { emoji: '🔍', text: 'Summarize KPIs into 3 bullet points', mode: 'summarize' },
-    { emoji: '⚡', text: 'Enhance this paragraph professionally', mode: 'enhance' },
-    
-]
-
-// ── Panel position ─────────────────────────────────────────────────────
-const panelStyle = computed(() => {
-    if (isMaximized.value) return { inset: '16px', width: 'auto', height: 'auto' }
-    return {
-        transform: `translate(${pos.x}px, ${pos.y}px)`,
-        width: size.w + 'px',
-        height: isMinimized.value ? 'auto' : size.h + 'px',
-    }
-})
-
-// Drag
-let dragging = false, dragOff = { x: 0, y: 0 }
 function startDrag(e) {
-    if (isMaximized.value || e.target.closest('.ai-ctrl')) return
-    dragging = true
-    dragOff = { x: e.clientX - pos.x, y: e.clientY - pos.y }
-    document.addEventListener('mousemove', onDrag)
-    document.addEventListener('mouseup', stopDrag)
-}
-function onDrag(e) {
-    if (!dragging) return
-    pos.x = Math.max(0, Math.min(e.clientX - dragOff.x, window.innerWidth - size.w))
-    pos.y = Math.max(0, Math.min(e.clientY - dragOff.y, window.innerHeight - 60))
-}
-function stopDrag() {
-    dragging = false
-    document.removeEventListener('mousemove', onDrag)
-    document.removeEventListener('mouseup', stopDrag)
+    dragOffX = e.clientX - pos.x
+    dragOffY = e.clientY - pos.y
+    const move = (ev) => {
+        pos.x = Math.max(0, Math.min(ev.clientX - dragOffX, window.innerWidth - size.w))
+        pos.y = Math.max(0, Math.min(ev.clientY - dragOffY, window.innerHeight - 100))
+    }
+    const up = () => {
+        document.removeEventListener('mousemove', move)
+        document.removeEventListener('mouseup', up)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
 }
 
-// Touch drag
-let tDragging = false, tOff = { x: 0, y: 0 }
-function startDragTouch(e) {
-    if (isMaximized.value) return
-    tDragging = true
-    const t = e.touches[0]
-    tOff = { x: t.clientX - pos.x, y: t.clientY - pos.y }
-    document.addEventListener('touchmove', onDragTouch, { passive: false })
-    document.addEventListener('touchend', stopDragTouch)
-}
-function onDragTouch(e) {
-    e.preventDefault()
-    if (!tDragging) return
-    const t = e.touches[0]
-    pos.x = Math.max(0, t.clientX - tOff.x)
-    pos.y = Math.max(0, t.clientY - tOff.y)
-}
-function stopDragTouch() {
-    tDragging = false
-    document.removeEventListener('touchmove', onDragTouch)
-    document.removeEventListener('touchend', stopDragTouch)
-}
-
-// Resize
-let resizing = false, rOff = { x: 0, y: 0, w: 0, h: 0 }
+// ── Resize ────────────────────────────────────────────────────────────
 function startResize(e) {
-    resizing = true
-    rOff = { x: e.clientX, y: e.clientY, w: size.w, h: size.h }
-    document.addEventListener('mousemove', onResize)
-    document.addEventListener('mouseup', stopResize)
-}
-function onResize(e) {
-    if (!resizing) return
-    size.w = Math.max(300, rOff.w + (e.clientX - rOff.x))
-    size.h = Math.max(360, rOff.h + (e.clientY - rOff.y))
-}
-function stopResize() {
-    resizing = false
-    document.removeEventListener('mousemove', onResize)
-    document.removeEventListener('mouseup', stopResize)
+    const startX = e.clientX, startY = e.clientY
+    const startW = size.w, startH = size.h
+    const move = (ev) => {
+        size.w = Math.max(300, startW + (ev.clientX - startX))
+        size.h = Math.max(400, startH + (ev.clientY - startY))
+    }
+    const up = () => {
+        document.removeEventListener('mousemove', move)
+        document.removeEventListener('mouseup', up)
+    }
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', up)
 }
 
-// ── Markdown renderer ──────────────────────────────────────────────────
-function renderMd(text) {
-    return text
-        .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
-            `<pre class="ai-code"><code>${esc(code.trim())}</code></pre>`)
-        .replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/^#{1,3}\s+(.+)/gm, '<p class="ai-md-h">$1</p>')
-        .replace(/^[-•]\s+(.+)/gm, '<li>$1</li>')
-        .replace(/(<li>[\s\S]+?<\/li>)/g, '<ul class="ai-md-ul">$1</ul>')
-        .replace(/\n{2,}/g, '</p><p>')
-        .replace(/\n/g, '<br>')
+// ── Mode switch ───────────────────────────────────────────────────────
+function switchMode(mode) {
+    activeMode.value = mode
+    response.value = ''
 }
 
-function esc(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// ── Prefill from element ──────────────────────────────────────────────
+function prefillFromEl() {
+    if (!props.selectedEl?.content) return
+    prompt.value = String(props.selectedEl.content).replace(/<[^>]+>/g, '').trim()
 }
 
-// ── Send message ───────────────────────────────────────────────────────
-async function send() {
-    const text = prompt.value.trim()
-    if (!text || isLoading.value) return
+// ── Generate ──────────────────────────────────────────────────────────
+async function generate() {
+    const p = prompt.value.trim()
+    if (!p || isLoading.value) return
 
-    messages.value.push({ id: ++msgId, role: 'user', content: text, time: now() })
-    prompt.value = ''
     isLoading.value = true
-    let li = 0
-    thinkTimer = setInterval(() => {
-        li = (li + 1) % THINKING_LABELS.length
-        thinkingLabel.value = THINKING_LABELS[li]
-    }, 1100)
-    scrollBottom()
+
+    if (activeMode.value === 'chat') {
+        chatHistory.value.push({ role: 'user', content: p })
+        prompt.value = ''
+        await nextTick()
+        scrollChat()
+    } else {
+        response.value = ''
+    }
+
+    const systemPrompts = {
+        generate: `You are a professional report writer for ${props.report?.title || 'a business report'}. Write clear, concise, professional content. Return plain text only, no markdown headers.`,
+        improve: 'You are an expert editor. Improve the provided text to be clearer, more professional, and more impactful. Return only the improved text.',
+        summarize: 'You are a skilled summarizer. Create a concise, accurate summary of the provided text. Return only the summary.',
+        translate: `Translate the following text to ${translateLang.value}. Return only the translated text.`,
+        chat: `You are a helpful AI assistant for a report editing application. The current report is titled "${props.report?.title || 'Untitled'}". Be concise and helpful.`,
+    }
+
+    const messages = activeMode.value === 'chat'
+        ? chatHistory.value.map(m => ({ role: m.role, content: m.content }))
+        : [{ role: 'user', content: p }]
+
+    let result = ''
 
     try {
-        let result = ''
-        let chartData = null
-        const apiType = { generate: 'text', enhance: 'text', summarize: 'summary', chart: 'chart_data', translate: 'text' }[mode.value] || 'text'
-
-        if (source.value === 'pollinations') {
-            const sysPrompt = `You are a ${mode.value} AI for business reports. Tone: ${tone.value}. Length: ${length.value}.`
-            const res = await fetch(
-                `https://text.pollinations.ai/${encodeURIComponent(`${sysPrompt}\n\nUser: ${text}`)}`,
-                { signal: AbortSignal.timeout(28000) }
-            )
-            if (res.ok) result = await res.text()
-            else throw new Error('Pollinations failed')
-        } else {
-            const res = await fetch('/api/ai/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': getCsrf(),
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ prompt: text, type: apiType, tone: tone.value, length: length.value }),
-                signal: AbortSignal.timeout(18000),
-            })
-            const data = await res.json()
-            if (apiType === 'chart_data') {
-                chartData = data
-                result = buildChartPreview(data)
-            } else {
-                result = data.result || data.enhanced || data.summary || 'No response.'
-            }
-        }
-
-        clearInterval(thinkTimer)
-        const actions = []
-
-        if (chartData) {
-            actions.push({ label: 'Insert Chart', icon: 'fa-solid fa-chart-bar', action: 'insert-chart', data: chartData, primary: true })
-        } else {
-            actions.push({ label: 'Insert', icon: 'fa-solid fa-plus', action: 'insert-text', data: result, primary: true })
-            actions.push({ label: 'Copy', icon: 'fa-solid fa-copy', action: 'copy', data: result })
-        }
-
-        messages.value.push({ id: ++msgId, role: 'assistant', content: result, actions, time: now(), feedback: null })
-        saveHistory()
-    } catch (err) {
-        clearInterval(thinkTimer)
-        messages.value.push({
-            id: ++msgId, role: 'assistant',
-            content: err.name === 'TimeoutError' ? '⏱️ Request timed out. Try a shorter prompt.' : '❌ Connection failed. Please try again.',
-            actions: [], time: now(), feedback: null,
+        // Try local endpoint first
+        const localRes = await fetch('/api/ai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrf() },
+            body: JSON.stringify({ prompt: p, mode: activeMode.value, messages, system: systemPrompts[activeMode.value] }),
         })
+
+        if (localRes.ok) {
+            result = await localRes.text()
+        } else {
+            throw new Error('local endpoint unavailable')
+        }
+    } catch {
+        // Fallback: Pollinations free API (no key required)
+        try {
+            const encodedSystem = encodeURIComponent(systemPrompts[activeMode.value])
+            const encodedPrompt = encodeURIComponent(p)
+            const pollRes = await fetch(
+                `https://text.pollinations.ai/${encodedPrompt}?model=openai&system=${encodedSystem}&seed=42`,
+                { headers: { 'Accept': 'text/plain' } }
+            )
+            result = pollRes.ok ? await pollRes.text() : 'AI service is currently unavailable. Please try again.'
+        } catch {
+            result = 'Unable to reach AI service. Check your internet connection.'
+        }
     }
 
     isLoading.value = false
-    scrollBottom()
-}
+    result = result.trim()
 
-function buildChartPreview(d) {
-    return `**Chart Generated!**\n\n**Title:** ${d.title || 'Chart'}\n**Type:** ${d.suggested_chart_type || 'bar-chart'}\n**Labels:** ${(d.labels || []).join(', ')}\n**Values:** ${(d.values || []).join(', ')}\n\n${d.insights || ''}`
-}
-
-// ── Actions ────────────────────────────────────────────────────────────
-function handleAction(action) {
-    if (action.action === 'insert-text') {
-        emit('insert-content', { type: 'text', content: action.data })
-    } else if (action.action === 'insert-chart') {
-        emit('insert-chart', action.data)
-    } else if (action.action === 'copy') {
-        navigator.clipboard.writeText(stripMd(action.data))
-        // brief feedback via toast (parent handles)
+    if (activeMode.value === 'chat') {
+        chatHistory.value.push({ role: 'assistant', content: result })
+        await nextTick(); scrollChat()
+    } else {
+        response.value = result
     }
 }
 
-function stripMd(t) {
-    return t.replace(/```[\s\S]*?```/g, m => m.slice(3, -3)).replace(/[`*#_~]/g, '')
+// ── Actions ───────────────────────────────────────────────────────────
+function insertToCanvas() {
+    const content = response.value || chatHistory.value.at(-1)?.content || ''
+    if (!content) return
+    emit('insert-content', {
+        content: content.replace(/\n/g, '<br>'),
+        type: 'text',
+        w: 400, h: 120,
+    })
 }
 
-function rate(msg, r) { msg.feedback = r }
-
-function regenerate(msg) {
-    const userMsg = [...messages.value].reverse().find(m => m.role === 'user')
-    if (userMsg) { prompt.value = userMsg.content; send() }
+function applyToElement() {
+    const content = response.value || chatHistory.value.at(-1)?.content || ''
+    if (!content || !props.selectedEl) return
+    emit('apply-suggestion', { prop: 'content', value: content })
 }
 
-// ── Chat history ───────────────────────────────────────────────────────
-function saveHistory() {
-    if (messages.value.length < 2) return
-    const preview = messages.value[0]?.content.replace(/<[^>]*>/g, '').trim().substring(0, 50) || 'Conversation'
-    const entry = { preview, date: new Date().toLocaleDateString(), messages: JSON.parse(JSON.stringify(messages.value)) }
-    chatHistory.value = [entry, ...chatHistory.value.filter(h => h.preview !== preview)].slice(0, 20)
-    localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory.value))
+async function copyResponse() {
+    const text = response.value || ''
+    try { await navigator.clipboard.writeText(text) } catch { }
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
 }
 
-function loadHistory(i) {
-    messages.value = JSON.parse(JSON.stringify(chatHistory.value[i].messages))
-    showHistory.value = false
-    scrollBottom()
+function clearAll() {
+    prompt.value = ''
+    response.value = ''
+    chatHistory.value = []
 }
 
-function deleteHistory(i) {
-    chatHistory.value.splice(i, 1)
-    localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory.value))
+// ── Helpers ───────────────────────────────────────────────────────────
+function formatMsg(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>')
 }
 
-function loadChatHistory() {
-    try { chatHistory.value = JSON.parse(localStorage.getItem('ai_chat_history') || '[]') } catch { }
+function getCsrf() {
+    return document.querySelector('meta[name="csrf-token"]')?.content || ''
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────
-function useSuggestion(s) { mode.value = s.mode; prompt.value = s.text; nextTick(() => textareaRef.value?.focus()) }
-function clearChat() { messages.value = [] }
-function exportChat() {
-    const text = messages.value.map(m => `[${m.role.toUpperCase()}] ${m.time}\n${stripMd(m.content)}`).join('\n\n---\n\n')
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text])), download: 'ai-chat.txt' })
-    a.click()
-}
-function scrollBottom() { nextTick(() => { if (messagesRef.value) messagesRef.value.scrollTop = messagesRef.value.scrollHeight }) }
-function now() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-function getCsrf() { return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '' }
-function growTextarea() {
-    const el = textareaRef.value; if (!el) return
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 130) + 'px'
-}
-function attachCtx() {
-    let ctx = props.report?.title ? `[Report: "${props.report.title}"] ` : ''
-    if (props.selectedElement?.content) {
-        const t = props.selectedElement.content.replace(/<[^>]*>/g, '').trim().substring(0, 400)
-        if (t) ctx += `[Selected: "${t}"] `
+function scrollChat() {
+    if (chatHistoryRef.value) {
+        chatHistoryRef.value.scrollTop = chatHistoryRef.value.scrollHeight
     }
-    prompt.value = ctx + prompt.value
-    textareaRef.value?.focus()
-}
-function startVoice() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) return
-    const r = new SR()
-    r.lang = 'en-US'; r.interimResults = false
-    isRecording.value = true
-    r.start()
-    r.onresult = e => { prompt.value += e.results[0][0].transcript; isRecording.value = false }
-    r.onerror = r.onend = () => { isRecording.value = false }
 }
 
-// ── Init ───────────────────────────────────────────────────────────────
-onMounted(() => {
-    pos.x = window.innerWidth - size.w - 20
-    pos.y = window.innerHeight - size.h - 20
-    loadChatHistory()
-    nextTick(() => textareaRef.value?.focus())
-})
-
-onBeforeUnmount(() => {
-    clearInterval(thinkTimer)
-    stopDrag(); stopDragTouch(); stopResize()
-})
+// ── Close on Esc ─────────────────────────────────────────────────────
+function onKey(e) { if (e.key === 'Escape') emit('close') }
+onMounted(() => document.addEventListener('keydown', onKey))
+onBeforeUnmount(() => document.removeEventListener('keydown', onKey))
 </script>
 
 <style scoped>
-/* ── Root variables ─────────────────────────────────────────────────── */
+/* ═══ PANEL ══════════════════════════════════════════════════════════ */
 .ai-panel {
     --ai-bg: #ffffff;
     --ai-bg2: #f8fafc;
@@ -625,856 +372,490 @@ onBeforeUnmount(() => {
     --ai-text3: #94a3b8;
     --ai-accent: #6366f1;
     --ai-accent2: #8b5cf6;
-    --ai-accent-l: rgba(99, 102, 241, .08);
-    --ai-user-bg: #6366f1;
-    --ai-shadow: 0 24px 80px rgba(0, 0, 0, .16), 0 4px 20px rgba(0, 0, 0, .08);
-    --ai-radius: 18px;
+    --ai-accent-l: rgba(99, 102, 241, .1);
 
-    position: fixed;
-    z-index: 9000;
     background: var(--ai-bg);
     border: 1px solid var(--ai-border);
-    border-radius: var(--ai-radius);
-    box-shadow: var(--ai-shadow);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .2), 0 4px 16px rgba(0, 0, 0, .1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    will-change: transform;
     user-select: none;
-    min-width: 300px;
-    min-height: 60px;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    animation: aiIn .22s cubic-bezier(.16, 1, .3, 1);
 }
 
 .ai-dark {
-    --ai-bg: #18181b;
-    --ai-bg2: #27272a;
-    --ai-bg3: #3f3f46;
-    --ai-border: #3f3f46;
-    --ai-text: #f4f4f5;
-    --ai-text2: #a1a1aa;
-    --ai-text3: #71717a;
+    --ai-bg: #111827;
+    --ai-bg2: #1a2236;
+    --ai-bg3: #0f172a;
+    --ai-border: #1e2d45;
+    --ai-text: #e2e8f0;
+    --ai-text2: #94a3b8;
+    --ai-text3: #475569;
     --ai-accent: #818cf8;
-    --ai-shadow: 0 24px 80px rgba(0, 0, 0, .5);
+    --ai-accent-l: rgba(129, 140, 248, .12);
 }
 
-.ai-maximized {
-    border-radius: 12px !important;
-}
-
-/* top accent bar */
-.ai-panel::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--ai-accent), var(--ai-accent2), var(--ai-accent));
-    background-size: 200%;
-    animation: shimmer 3s linear infinite;
-    z-index: 1;
-}
-
-@keyframes shimmer {
+@keyframes aiIn {
     from {
-        background-position: -200%
+        opacity: 0;
+        transform: scale(.94) translateY(10px);
     }
 
     to {
-        background-position: 200%
+        opacity: 1;
+        transform: scale(1) translateY(0);
     }
 }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
+/* ═══ HEADER ═════════════════════════════════════════════════════════ */
 .ai-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--ai-border);
+    justify-content: space-between;
+    padding: 14px 16px 12px;
     cursor: grab;
     flex-shrink: 0;
-    background: linear-gradient(135deg, var(--ai-accent-l), transparent 60%);
+    background: linear-gradient(135deg, var(--ai-accent), var(--ai-accent2));
+    border-radius: 16px 16px 0 0;
 }
 
 .ai-header:active {
     cursor: grabbing;
 }
 
-.ai-orb {
-    width: 32px;
-    height: 32px;
+.ai-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ai-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ai-logo {
+    width: 36px;
+    height: 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--ai-accent), var(--ai-accent2));
+    background: rgba(255, 255, 255, .2);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 16px;
     color: #fff;
-    position: relative;
-    flex-shrink: 0;
-}
-
-.ai-orb-ring {
-    position: absolute;
-    inset: -4px;
-    border-radius: 14px;
-    border: 1px solid var(--ai-accent);
-    opacity: 0;
-    animation: orbPulse 2.4s ease-out infinite;
-}
-
-.ai-orb-icon {
-    font-size: 14px;
-}
-
-@keyframes orbPulse {
-    0% {
-        transform: scale(.85);
-        opacity: .6
-    }
-
-    100% {
-        transform: scale(1.4);
-        opacity: 0
-    }
-}
-
-.ai-title-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
 }
 
 .ai-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
-    color: var(--ai-text);
+    color: #fff;
 }
 
-.ai-status {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--ai-text3);
-}
-
-.ai-status-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #22c55e;
-    animation: statusPulse 2s ease-in-out infinite;
-}
-
-.ai-status--busy .ai-status-dot {
-    background: var(--ai-accent);
-    animation: spin .8s linear infinite;
-}
-
-@keyframes statusPulse {
-
-    0%,
-    100% {
-        opacity: 1
-    }
-
-    50% {
-        opacity: .4
-    }
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg)
-    }
-}
-
-.ai-header-controls {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex-shrink: 0;
-}
-
-.ai-token-count {
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--ai-text3);
-    padding: 2px 7px;
-    background: var(--ai-bg3);
-    border: 1px solid var(--ai-border);
-    border-radius: 99px;
-    margin-right: 4px;
-}
-
-.ai-ctrl {
-    width: 26px;
-    height: 26px;
-    border: none;
-    background: transparent;
-    border-radius: 7px;
-    cursor: pointer;
-    color: var(--ai-text3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    transition: all .14s;
-}
-
-.ai-ctrl:hover {
-    background: var(--ai-bg3);
-    color: var(--ai-text);
-}
-
-.ai-ctrl--close:hover {
-    background: #fee2e2;
-    color: #ef4444;
-}
-
-/* ── Body ───────────────────────────────────────────────────────────── */
-.ai-body {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-}
-
-/* ── Toolbar ────────────────────────────────────────────────────────── */
-.ai-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 7px 8px 5px;
-    border-bottom: 1px solid var(--ai-border);
-    flex-shrink: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.ai-toolbar::-webkit-scrollbar {
-    display: none;
-}
-
-.ai-mode-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    background: transparent;
-    cursor: pointer;
+.ai-subtitle {
     font-size: 10px;
-    font-weight: 600;
-    color: var(--ai-text3);
-    white-space: nowrap;
-    transition: all .14s;
-    font-family: inherit;
-    flex-shrink: 0;
-}
-
-.ai-mode-btn:hover {
-    background: var(--ai-bg3);
-    color: var(--ai-text2);
-}
-
-.ai-mode-btn.active {
-    background: var(--ai-accent-l);
-    color: var(--ai-accent);
-    border-color: var(--ai-accent);
-}
-
-.ai-toolbar-sep {
-    width: 1px;
-    height: 16px;
-    background: var(--ai-border);
-    margin: 0 4px;
-    flex-shrink: 0;
-}
-
-.ai-mini-select {
-    appearance: none;
-    padding: 3px 20px 3px 8px;
-    border: 1px solid var(--ai-border);
-    border-radius: 7px;
-    background: var(--ai-bg2);
-    color: var(--ai-text2);
-    font-size: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    outline: none;
-    flex-shrink: 0;
-}
-
-.ai-mini-select:focus {
-    border-color: var(--ai-accent);
+    color: rgba(255, 255, 255, .7);
+    margin-top: 1px;
 }
 
 .ai-icon-btn {
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     border: none;
-    background: transparent;
-    border-radius: 7px;
+    background: rgba(255, 255, 255, .15);
     cursor: pointer;
-    color: var(--ai-text3);
+    color: #fff;
+    font-size: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    transition: all .14s;
-    flex-shrink: 0;
+    transition: background .14s;
 }
 
 .ai-icon-btn:hover {
-    background: var(--ai-bg3);
-    color: var(--ai-text);
+    background: rgba(255, 255, 255, .28);
 }
 
-/* ── History ────────────────────────────────────────────────────────── */
-.ai-history {
-    max-height: 180px;
-    overflow-y: auto;
+/* ═══ MODES ══════════════════════════════════════════════════════════ */
+.ai-modes {
+    display: flex;
+    gap: 0;
+    padding: 10px 12px 0;
     border-bottom: 1px solid var(--ai-border);
-    padding: 8px;
-}
-
-.ai-history-header {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--ai-text3);
-    margin-bottom: 6px;
-}
-
-.ai-history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.ai-history-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 10px;
-    transition: all .1s;
-}
-
-.ai-history-item:hover {
-    background: var(--ai-bg3);
-}
-
-.ai-history-preview {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--ai-text2);
-}
-
-.ai-history-date {
-    font-size: 9px;
-    color: var(--ai-text3);
+    overflow-x: auto;
+    scrollbar-width: none;
     flex-shrink: 0;
 }
 
-.ai-history-del {
-    opacity: 0;
-    width: 16px;
-    height: 16px;
+.ai-modes::-webkit-scrollbar {
+    display: none;
+}
+
+.ai-mode-tab {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 10px;
     border: none;
     background: transparent;
     cursor: pointer;
     color: var(--ai-text3);
-    font-size: 9px;
-    transition: all .1s;
-    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    border-bottom: 2px solid transparent;
+    transition: all .14s;
+    font-family: inherit;
+    white-space: nowrap;
+    border-radius: 6px 6px 0 0;
 }
 
-.ai-history-item:hover .ai-history-del {
-    opacity: 1;
+.ai-mode-tab:hover {
+    color: var(--ai-accent);
+    background: var(--ai-accent-l);
 }
 
-.ai-history-del:hover {
-    color: #ef4444;
+.ai-mode-tab.active {
+    color: var(--ai-accent);
+    border-bottom-color: var(--ai-accent);
 }
 
-.ai-history-empty {
-    text-align: center;
-    padding: 12px;
-    font-size: 10px;
-    color: var(--ai-text3);
-}
-
-/* ── Messages ───────────────────────────────────────────────────────── */
-.ai-messages {
+/* ═══ BODY ═══════════════════════════════════════════════════════════ */
+.ai-body {
     flex: 1;
-    overflow-y: auto;
-    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 10px;
+    padding: 12px;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* ── Context strip ── */
+.ai-context-strip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    background: var(--ai-accent-l);
+    border: 1px solid rgba(99, 102, 241, .2);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--ai-accent);
+    flex-shrink: 0;
+}
+
+.ai-context-strip i {
+    font-size: 10px;
+}
+
+.ai-context-strip span {
+    flex: 1;
+}
+
+.ai-ctx-use {
+    padding: 2px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--ai-accent);
+    background: transparent;
+    color: var(--ai-accent);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: inherit;
+}
+
+.ai-ctx-use:hover {
+    background: var(--ai-accent);
+    color: #fff;
+}
+
+/* ── Chat history ── */
+.ai-chat-history {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0;
+    min-height: 0;
     scrollbar-width: thin;
     scrollbar-color: var(--ai-border) transparent;
 }
 
-.ai-messages::-webkit-scrollbar {
-    width: 3px;
-}
-
-.ai-messages::-webkit-scrollbar-thumb {
-    background: var(--ai-border);
-    border-radius: 99px;
-}
-
-/* Welcome */
-.ai-welcome {
+.ai-chat-msg {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 12px 8px;
-    gap: 10px;
 }
 
-.ai-welcome-icon {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.ai-msg-user {
+    justify-content: flex-end;
 }
 
-.ai-welcome-grid {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
+.ai-msg-assistant {
+    justify-content: flex-start;
 }
 
-.ai-welcome-grid span {
-    background: var(--ai-accent);
-    border-radius: 4px;
-    opacity: 0;
-    animation: cellFade .6s ease forwards;
-    animation-delay: calc(var(--i)*.05s);
-}
-
-@keyframes cellFade {
-    from {
-        opacity: 0;
-        transform: scale(.5)
-    }
-
-    to {
-        opacity: .08;
-        transform: scale(1)
-    }
-}
-
-.ai-welcome-wand {
-    position: relative;
-    z-index: 1;
-    font-size: 24px;
-    color: var(--ai-accent);
-}
-
-.ai-welcome h3 {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--ai-text);
-    margin: 0;
-}
-
-.ai-welcome p {
-    font-size: 11px;
-    color: var(--ai-text3);
-    line-height: 1.5;
-    margin: 0;
-}
-
-.ai-chips {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 5px;
-    width: 100%;
-}
-
-.ai-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 10px;
-    border: 1px solid var(--ai-border);
-    border-radius: 10px;
-    background: var(--ai-bg2);
-    cursor: pointer;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--ai-text2);
-    text-align: left;
-    transition: all .15s;
-    font-family: inherit;
-}
-
-.ai-chip:hover {
-    border-color: var(--ai-accent);
-    color: var(--ai-accent);
-    background: var(--ai-accent-l);
-    transform: translateY(-1px);
-}
-
-.ai-chip-emoji {
-    font-size: 13px;
-    flex-shrink: 0;
-}
-
-/* Msg list */
-.ai-msg-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.ai-msg-wrap {
-    display: flex;
-    gap: 8px;
-}
-
-.ai-msg-wrap--user {
-    flex-direction: row-reverse;
-}
-
-.ai-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-.ai-avatar--user {
-    background: var(--ai-user-bg);
-    color: #fff;
-}
-
-.ai-avatar--ai {
-    background: var(--ai-accent-l);
-    color: var(--ai-accent);
-}
-
-.ai-msg-body {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+.ai-chat-bubble {
     max-width: 85%;
-}
-
-.ai-msg-wrap--user .ai-msg-body {
-    align-items: flex-end;
-}
-
-.ai-bubble {
-    padding: 8px 12px;
-    border-radius: 12px;
+    padding: 9px 13px;
+    border-radius: 14px;
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.5;
+}
+
+.ai-msg-user .ai-chat-bubble {
+    background: var(--ai-accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+}
+
+.ai-msg-assistant .ai-chat-bubble {
+    background: var(--ai-bg2);
+    color: var(--ai-text);
+    border: 1px solid var(--ai-border);
+    border-bottom-left-radius: 4px;
+}
+
+.ai-chat-role {
+    font-size: 9px;
+    font-weight: 700;
+    opacity: .6;
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.ai-chat-text {
     word-break: break-word;
 }
 
-.ai-bubble--user {
-    background: var(--ai-user-bg);
-    color: #fff;
-    border-radius: 12px 12px 3px 12px;
-}
-
-.ai-bubble--ai {
-    background: var(--ai-bg2);
-    color: var(--ai-text);
-    border: 1px solid var(--ai-border);
-    border-radius: 12px 12px 12px 3px;
-}
-
-.ai-bubble--typing {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
-}
-
-:deep(.ai-bubble .ai-code) {
-    background: #1e293b;
-    color: #34d399;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 11px;
-    font-family: monospace;
-    overflow-x: auto;
-    margin: 6px 0;
-}
-
-:deep(.ai-bubble .ai-inline-code) {
-    background: rgba(99, 102, 241, .12);
-    color: var(--ai-accent);
+.ai-chat-text code {
+    background: rgba(0, 0, 0, .08);
     padding: 1px 5px;
     border-radius: 4px;
+    font-family: monospace;
     font-size: 11px;
 }
 
-:deep(.ai-bubble .ai-md-h) {
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--ai-accent);
-    margin: 4px 0 2px;
-}
-
-:deep(.ai-bubble .ai-md-ul) {
-    padding-left: 14px;
-    margin: 4px 0;
-}
-
-:deep(.ai-bubble li) {
-    font-size: 11.5px;
-    margin: 2px 0;
-}
-
-:deep(.ai-bubble strong) {
-    font-weight: 700;
-}
-
-/* Typing dots */
-.ai-dots {
+.ai-loading-bubble {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 5px;
+    padding: 12px 16px;
 }
 
-.ai-dots span {
-    width: 5px;
-    height: 5px;
+.ai-dot {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: var(--ai-accent);
-    animation: typBounce 1.2s ease-in-out infinite;
+    background: var(--ai-text3);
+    animation: dotBounce 1.2s ease-in-out infinite;
 }
 
-.ai-dots span:nth-child(2) {
+.ai-dot:nth-child(2) {
     animation-delay: .2s;
 }
 
-.ai-dots span:nth-child(3) {
+.ai-dot:nth-child(3) {
     animation-delay: .4s;
 }
 
-@keyframes typBounce {
+@keyframes dotBounce {
 
     0%,
-    60%,
+    80%,
     100% {
-        transform: translateY(0);
+        transform: scale(.7);
         opacity: .5
     }
 
-    30% {
-        transform: translateY(-5px);
+    40% {
+        transform: scale(1);
         opacity: 1
     }
 }
 
-.ai-thinking-label {
-    font-size: 10px;
-    color: var(--ai-text3);
-    font-style: italic;
-}
-
-/* Msg actions */
-.ai-msg-actions {
+/* ── Response area ── */
+.ai-response-area {
+    flex: 1;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--ai-bg2);
+    border: 1px solid var(--ai-border);
+    border-radius: 10px;
+    padding: 10px;
+    overflow: hidden;
+    min-height: 0;
 }
 
-.ai-action-pill {
-    display: inline-flex;
+.ai-response-header {
+    display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border: 1px solid var(--ai-border);
-    border-radius: 99px;
-    background: var(--ai-bg);
-    color: var(--ai-accent);
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.ai-response-label {
     font-size: 10px;
     font-weight: 700;
+    color: var(--ai-accent);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ai-copy-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border: 1px solid var(--ai-border);
+    border-radius: 6px;
+    background: var(--ai-bg);
     cursor: pointer;
+    color: var(--ai-text2);
+    font-size: 10px;
+    font-family: inherit;
     transition: all .14s;
+}
+
+.ai-copy-btn:hover {
+    border-color: var(--ai-accent);
+    color: var(--ai-accent);
+}
+
+.ai-response-text {
+    flex: 1;
+    font-size: 12px;
+    color: var(--ai-text);
+    line-height: 1.6;
+    overflow-y: auto;
+    word-break: break-word;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--ai-border) transparent;
+}
+
+.ai-response-text code {
+    background: rgba(99, 102, 241, .08);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.ai-action-row {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.ai-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--ai-border);
+    background: var(--ai-bg);
+    cursor: pointer;
+    color: var(--ai-text2);
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 600;
+    transition: all .14s;
+}
+
+.ai-action-btn:hover {
+    border-color: var(--ai-accent);
+    color: var(--ai-accent);
+    background: var(--ai-accent-l);
+}
+
+.ai-btn-insert {
+    background: var(--ai-accent);
+    color: #fff;
+    border-color: var(--ai-accent);
+}
+
+.ai-btn-insert:hover {
+    background: #4f46e5;
+    border-color: #4f46e5;
+    color: #fff;
+}
+
+.ai-btn-apply {
+    background: var(--ai-accent2);
+    color: #fff;
+    border-color: var(--ai-accent2);
+}
+
+.ai-btn-apply:hover {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+}
+
+/* ── Translate language ── */
+.ai-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.ai-label {
+    font-size: 11px;
+    color: var(--ai-text2);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ai-select {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--ai-border);
+    border-radius: 7px;
+    background: var(--ai-bg2);
+    color: var(--ai-text);
+    font-size: 11px;
+    outline: none;
     font-family: inherit;
 }
 
-.ai-action-pill--primary {
-    background: var(--ai-accent-l);
+.ai-select:focus {
     border-color: var(--ai-accent);
 }
 
-.ai-action-pill:hover {
-    background: var(--ai-accent);
-    color: #fff;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, .3);
-}
-
-.ai-feedback {
-    display: flex;
-    gap: 3px;
-}
-
-.ai-feedback-btn {
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--ai-border);
-    border-radius: 6px;
-    background: transparent;
-    cursor: pointer;
-    font-size: 11px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all .1s;
-}
-
-.ai-feedback-btn:hover {
-    background: var(--ai-bg3);
-}
-
-.ai-feedback-btn.active {
-    background: var(--ai-accent-l);
-    border-color: var(--ai-accent);
-}
-
-.ai-msg-time {
-    font-size: 9px;
-    color: var(--ai-text3);
-    padding: 0 2px;
-}
-
-/* ── Input area ─────────────────────────────────────────────────────── */
+/* ── Input area ── */
 .ai-input-area {
-    border-top: 1px solid var(--ai-border);
-    padding: 8px 10px 10px;
     display: flex;
     flex-direction: column;
     gap: 6px;
     flex-shrink: 0;
 }
 
-.ai-quick-row {
-    display: flex;
-    gap: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-}
-
-.ai-quick-row::-webkit-scrollbar {
-    display: none;
-}
-
-.ai-quick-pill {
-    white-space: nowrap;
-    padding: 3px 9px;
-    border: 1px solid var(--ai-border);
-    border-radius: 99px;
-    background: var(--ai-bg2);
-    color: var(--ai-text3);
-    font-size: 9px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all .14s;
-    flex-shrink: 0;
-}
-
-.ai-quick-pill:hover {
-    border-color: var(--ai-accent);
-    color: var(--ai-accent);
-    background: var(--ai-accent-l);
-}
-
-.ai-input-box {
-    border: 1px solid var(--ai-border);
-    border-radius: 12px;
-    background: var(--ai-bg2);
-    overflow: hidden;
-    transition: border-color .15s, box-shadow .15s;
-    position: relative;
-}
-
-.ai-input-box--focused {
-    border-color: var(--ai-accent);
-    box-shadow: 0 0 0 3px var(--ai-accent-l);
-}
-
-.ai-mode-stripe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    border-radius: 12px 12px 0 0;
-}
-
-.ai-stripe--generate {
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
-}
-
-.ai-stripe--enhance {
-    background: linear-gradient(90deg, #10b981, #06b6d4);
-}
-
-.ai-stripe--summarize {
-    background: linear-gradient(90deg, #f59e0b, #ef4444);
-}
-
-.ai-stripe--chart {
-    background: linear-gradient(90deg, #3b82f6, #06b6d4);
-}
-
-.ai-stripe--translate {
-    background: linear-gradient(90deg, #ec4899, #8b5cf6);
-}
-
 .ai-textarea {
     width: 100%;
-    padding: 10px 12px 6px;
-    background: transparent;
-    border: none;
-    outline: none;
-    resize: none;
+    padding: 9px 12px;
+    border: 1px solid var(--ai-border);
+    border-radius: 10px;
+    background: var(--ai-bg2);
     color: var(--ai-text);
     font-size: 12px;
-    line-height: 1.5;
     font-family: inherit;
-    min-height: 50px;
-    max-height: 130px;
-    box-sizing: border-box;
+    resize: none;
+    outline: none;
+    line-height: 1.5;
+    transition: border-color .14s;
+}
+
+.ai-textarea:focus {
+    border-color: var(--ai-accent);
 }
 
 .ai-textarea::placeholder {
@@ -1485,122 +866,55 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 10px 8px;
 }
 
-.ai-char-count {
+.ai-hint {
+    font-size: 10px;
+    color: var(--ai-text3);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ai-hint kbd {
     font-size: 9px;
-    color: var(--ai-text3);
-    font-weight: 600;
-}
-
-.ai-char-count.warn {
-    color: #ef4444;
-}
-
-.ai-input-btns {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-}
-
-.ai-attach-btn {
-    width: 28px;
-    height: 28px;
-    border: none;
+    padding: 1px 5px;
+    border-radius: 4px;
     background: var(--ai-bg3);
-    border-radius: 8px;
+    border: 1px solid var(--ai-border);
     color: var(--ai-text3);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    transition: all .14s;
-}
-
-.ai-attach-btn:hover {
-    background: var(--ai-accent-l);
-    color: var(--ai-accent);
-}
-
-.ai-attach-btn.recording {
-    background: #ef4444 !important;
-    color: #fff !important;
-    animation: recPulse 1s ease-in-out infinite;
-}
-
-@keyframes recPulse {
-
-    0%,
-    100% {
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, .4)
-    }
-
-    50% {
-        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0)
-    }
+    font-family: inherit;
 }
 
 .ai-send-btn {
-    width: 30px;
-    height: 30px;
-    border: none;
-    background: var(--ai-bg3);
-    border-radius: 9px;
-    color: var(--ai-text3);
-    cursor: pointer;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    transition: all .15s;
-}
-
-.ai-send-btn--ready {
-    background: var(--ai-accent);
+    gap: 6px;
+    padding: 7px 16px;
+    border: none;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--ai-accent), var(--ai-accent2));
     color: #fff;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, .35);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: all .14s;
+    box-shadow: 0 2px 10px rgba(99, 102, 241, .35);
 }
 
-.ai-send-btn--ready:hover {
-    transform: scale(1.07);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, .45);
+.ai-send-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, .45);
 }
 
 .ai-send-btn:disabled {
-    opacity: .4;
+    opacity: .55;
     cursor: not-allowed;
+    transform: none;
 }
 
-.ai-hint-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-    color: var(--ai-text3);
-}
-
-.ai-hint-row kbd {
-    padding: 1px 4px;
-    border-radius: 3px;
-    background: var(--ai-bg3);
-    border: 1px solid var(--ai-border);
-    font-family: inherit;
-    font-size: 9px;
-}
-
-.ai-model-label {
-    margin-left: auto;
-    font-weight: 700;
-    font-size: 9px;
-    background: linear-gradient(90deg, var(--ai-accent), var(--ai-accent2));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-/* ── Resize handle ──────────────────────────────────────────────────── */
+/* ═══ RESIZE HANDLE ══════════════════════════════════════════════════ */
 .ai-resize-handle {
     position: absolute;
     bottom: 0;
@@ -1609,91 +923,10 @@ onBeforeUnmount(() => {
     height: 18px;
     cursor: se-resize;
     background: linear-gradient(135deg, transparent 50%, var(--ai-border) 50%);
-    border-radius: 0 0 18px 0;
+    border-radius: 0 0 16px 0;
 }
 
-/* ── Transitions ────────────────────────────────────────────────────── */
-.ai-emerge-enter-active {
-    animation: aiEmerge .35s cubic-bezier(.16, 1, .3, 1);
-}
-
-.ai-emerge-leave-active {
-    animation: aiEmerge .2s ease reverse;
-}
-
-@keyframes aiEmerge {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(.94)
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1)
-    }
-}
-
-.ai-collapse-enter-active {
-    transition: all .28s cubic-bezier(.16, 1, .3, 1);
-}
-
-.ai-collapse-leave-active {
-    transition: all .18s ease;
-}
-
-.ai-collapse-enter-from,
-.ai-collapse-leave-to {
-    opacity: 0;
-    transform: translateY(-8px);
-    max-height: 0;
-}
-
-.ai-fade-enter-active {
-    transition: opacity .3s, transform .3s;
-}
-
-.ai-fade-leave-active {
-    transition: opacity .2s;
-}
-
-.ai-fade-enter-from,
-.ai-fade-leave-to {
-    opacity: 0;
-    transform: translateY(6px);
-}
-
-.ai-msg-enter-active {
-    transition: all .28s cubic-bezier(.16, 1, .3, 1);
-}
-
-.ai-msg-enter-from {
-    opacity: 0;
-    transform: translateY(10px) scale(.97);
-}
-
-/* ── Mobile ─────────────────────────────────────────────────────────── */
-@media (max-width: 520px) {
-    .ai-panel {
-        bottom: 0 !important;
-        right: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        transform: none !important;
-        border-radius: 18px 18px 0 0;
-        min-width: unset;
-        max-height: 70vh;
-    }
-
-    .ai-chips {
-        grid-template-columns: 1fr;
-    }
-
-    .ai-header {
-        cursor: default;
-    }
-
-    .ai-resize-handle {
-        display: none;
-    }
+.ai-resize-handle:hover {
+    background: linear-gradient(135deg, transparent 50%, var(--ai-accent) 50%);
 }
 </style>
